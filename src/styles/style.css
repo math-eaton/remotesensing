@@ -1,0 +1,135 @@
+:root {
+  --font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  --color-light: #fdfaed;
+  --color-dark: #3e1c0a;
+  --color-primary: #db9825;
+  --color-primary-hover: #c1761e;
+  --color-secondary: #a1571c;
+  --color-logo-shadow: #646cffaa;
+  --color-logo-vanilla-shadow: #f7df1eaa;
+  --color-button-light: #f3e5ab;
+  --color-button-dark: #db9825;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 20rem;
+  min-height: 100vh;
+  font-family: var(--font-family);
+}
+
+h1 {
+  font-size: 3.2rem;
+  line-height: 1.1;
+}
+
+#app {
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.logo {
+  height: 12rem;
+  padding: 1.5rem;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2rem var(--color-logo-shadow));
+}
+.logo.vanilla:hover {
+  filter: drop-shadow(0 0 2rem var(--color-logo-vanilla-shadow));
+}
+
+.card {
+  padding: 2rem;
+}
+
+.card #counter {
+  margin-right: 0.5rem;
+}
+
+@media (max-width: 360px) {
+  .card #counter {
+    margin-bottom: 0.5rem;
+    margin-right: 0;
+    padding-bottom: 0;
+  }
+}
+
+.tags {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.tags p {
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 1rem;
+  padding: 0.2rem 0.5rem;
+  color: var(--color-secondary);
+  background-color: var(--color-primary);
+}
+
+.read-the-docs {
+  color: #888;
+}
+
+.author {
+  font-weight: 500;
+  color: var(--color-primary);
+  text-decoration: inherit;
+}
+.author:hover {
+  color: var(--color-primary-hover);
+}
+.author:active {
+  color: var(--color-secondary);
+}
+
+button,
+.gitRepo {
+  border-radius: 3.125rem;
+  border: 1px solid transparent;
+  padding: 0.6rem 1.2rem;
+  font-size: 1rem;
+  font-weight: 500;
+  font-family: var(--font-family);
+  background-color: var(--color-button-dark);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.25s;
+}
+button:hover,
+.gitRepo:hover {
+  border-color: var(--color-primary-hover);
+}
+button:focus,
+button:focus-visible,
+.gitRepo:focus,
+.gitRepo:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: var(--color-dark);
+    background-color: var(--color-light);
+  }
+  .author:hover {
+    color: var(--color-primary-hover);
+  }
+  button,
+  .gitRepo {
+    background-color: var(--color-button-light);
+  }
+}
