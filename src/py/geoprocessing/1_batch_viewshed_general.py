@@ -21,7 +21,7 @@ arcpy.CheckOutExtension("Spatial")
 # Define input and output parameters
 in_raster = "output_USGS_150m_resample_NYS_contourExtent_NAD83_20240227"
 observer_points = "Cellular_Towers_NYS_DEM_clip_20231126"
-batch_size = 32  # Process N inputs per batch
+batch_size = 32  # Process N inputs per batch >>>>>>> nb: 32 is max for viewshed2
 
 # Optional: Set maximum number of batches to process for testing
 batch_limit = None  # Set to None to process all batches

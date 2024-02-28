@@ -124,8 +124,8 @@ def main():
 
 if __name__ == "__main__":
     base_raster_path = r"D:\mheaton\cartography\gsapp\colloquium_processing\downsampled_features\input.gdb\output_USGS_750m_NYS_contourExtent_NAD83_20231126"
-    # workspace = r"D:\mheaton\cartography\gsapp\colloquium_processing\downsampled_features\input.gdb"
-    workspace = r"D:\mheaton\cartography\gsapp\colloquium_processing\downsampled_features\footprints.gdb"
+    workspace = r"D:\mheaton\cartography\gsapp\colloquium_processing\downsampled_features\input.gdb"
+    # workspace = r"D:\mheaton\cartography\gsapp\colloquium_processing\downsampled_features\footprints.gdb"
     scratch_workspace = r"D:\mheaton\cartography\gsapp\colloquium_processing\downsampled_features\rasters.gdb"
     output_workspace = r"D:\mheaton\cartography\gsapp\colloquium_processing\downsampled_features\output.gdb"
     arcpy.env.workspace = workspace

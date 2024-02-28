@@ -31,7 +31,7 @@ def process_rasters(workspace, base_raster_path, output_workspace):
         # Check if the CRS matches the base raster's CRS
         if raster_crs.name != base_raster_crs.name:
             # CRS does not match, reproject raster
-            raster_name = os.path.splitext(raster)[0] + "_reprojected"
+            raster_name = os.path.splitext(raster)[0] + "_alignedReprojected"
             output_raster_path = os.path.join(output_workspace, raster_name)
             
             arcpy.management.ProjectRaster(in_raster=raster_path,
@@ -42,9 +42,10 @@ def process_rasters(workspace, base_raster_path, output_workspace):
             print(f"Reprojected raster: {raster} to match the base raster CRS.")
         else:
             # CRS matches, no need to reproject, just copy to the output workspace
-            output_raster_path = os.path.join(output_workspace, os.path.splitext(raster)[0])
+            raster_name = os.path.splitext(raster)[0] + "_aligned"
+            output_raster_path = os.path.join(output_workspace, raster_name)
             arcpy.management.CopyRaster(in_raster=raster_path, out_rasterdataset=output_raster_path)
-            print(f"Copied raster without reprojection: {raster}")
+            print(f"Copied raster without reprojection: {raster_name}")
 
 
 def main():
