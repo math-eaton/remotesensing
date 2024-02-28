@@ -10,7 +10,7 @@ def set_environment_settings(raster_path):
     arcpy.env.snapRaster = raster_path
 
 def add_and_calculate_fields(feature_class, base_name):
-    """Add 'radio' and 'gen' fields and calculate them based on the feature class filename."""
+    """Add fields and calculate them based on the feature class filename."""
     parts = base_name.split("_")
     field1_value = parts[0] if len(parts) > 0 else ""
     field2_value = parts[1] if len(parts) > 1 else ""
@@ -41,15 +41,17 @@ def features_to_raster(feature_class, output_raster_path, cell_size, feature_typ
     
     # Continue with the existing logic to convert features to raster
     if feature_type == 'Polygon':
+        print(f"processing {feature_class}")
         arcpy.conversion.PolygonToRaster(
             in_features=feature_class,
             value_field=value_field,
             out_rasterdataset=output_raster_path,
-            cell_assignment="CELL_CENTER",
-            priority_field="NONE",
+            cell_assignment="MAXIMUM_COMBINED_AREA",
+            priority_field="Shape_Area",
             cellsize=cell_size
         )
     elif feature_type == 'Polyline':
+        print(f"processing {feature_class}")
         arcpy.conversion.PolylineToRaster(
             in_features=feature_class,
             value_field=value_field,
@@ -59,6 +61,7 @@ def features_to_raster(feature_class, output_raster_path, cell_size, feature_typ
             cellsize=cell_size
         )
     else:  # Assumes 'Point' or other types default to point conversion
+        print(f"processing {feature_class}")
         arcpy.conversion.PointToRaster(
             in_features=feature_class,
             value_field=value_field,
@@ -121,8 +124,9 @@ def main():
 
 if __name__ == "__main__":
     base_raster_path = r"D:\mheaton\cartography\gsapp\colloquium_processing\downsampled_features\input.gdb\output_USGS_750m_NYS_contourExtent_NAD83_20231126"
-    workspace = r"D:\mheaton\cartography\gsapp\colloquium_processing\downsampled_features\input.gdb"
-    scratch_workspace = r"D:\mheaton\cartography\gsapp\colloquium_processing\downsampled_features\scratch.gdb"
+    # workspace = r"D:\mheaton\cartography\gsapp\colloquium_processing\downsampled_features\input.gdb"
+    workspace = r"D:\mheaton\cartography\gsapp\colloquium_processing\downsampled_features\footprints.gdb"
+    scratch_workspace = r"D:\mheaton\cartography\gsapp\colloquium_processing\downsampled_features\rasters.gdb"
     output_workspace = r"D:\mheaton\cartography\gsapp\colloquium_processing\downsampled_features\output.gdb"
     arcpy.env.workspace = workspace
     arcpy.env.scratchWorkspace = scratch_workspace
