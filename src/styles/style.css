@@ -20,6 +20,7 @@ body {
   min-height: 100vh;
   font-family: var(--font-family);
   overflow: hidden;
+  background-color: black;
 }
 
 h1 {

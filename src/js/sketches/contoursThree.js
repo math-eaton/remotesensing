@@ -5,6 +5,7 @@ export function contoursThree(containerId) {
   let scene;
   let camera;
   let renderer;
+  let circlesGroup; // Now accessible to the update function
   const container = document.getElementById(containerId);
 
   const noise2D = createNoise2D();
@@ -14,45 +15,36 @@ export function contoursThree(containerId) {
     return;
   }
 
-  // Ensure the container has a non-zero height; adjust as needed.
   if (container.clientHeight === 0) {
-    container.style.height = '100vh'; // Example: Full viewport height. Adjust based on your layout needs.
+    container.style.height = '100vh';
   }
 
   const width = container.clientWidth;
   const height = container.clientHeight;
 
-  function onMouseMove(event) {
-    const rect = container.getBoundingClientRect();
-    const mouseX = ((event.clientX - rect.left) / width) * 2 - 1;
-    const mouseY = -((event.clientY - rect.top) / height) * 2 + 1;
+  const initialOvalWidth = 750;
+  const initialOvalHeight = 750;
+  const decrement = width / 66.6;
 
-    const vector = new THREE.Vector3(mouseX, mouseY, 0);
-    vector.unproject(camera);
-
-    const dir = vector.sub(camera.position).normalize();
-    const distance = -camera.position.z / dir.z;
-    const pos = camera.position.clone().add(dir.multiplyScalar(distance));
-
-    // Move the group of circles based on mouse position
-    if (window.circlesGroup) {
-      window.circlesGroup.position.x = pos.x;
-      window.circlesGroup.position.y = pos.y;
-    }
-  }
-
-  function createDeformedOval(ovalWidth, ovalHeight, segments = 100) {
+  function createDeformedOval(
+    ovalWidth,
+    ovalHeight,
+    noiseOffset = 0,
+    segments = 50,
+  ) {
     const shape = new THREE.Shape();
-    const noiseScale = 0.5; // Adjust for more or less noise
-    const amplitude = 10; // Adjust for bigger or smaller deformations
+
+    const noiseScale = 0.95;
+    const amplitude = 7;
 
     for (let i = 0; i <= segments; i++) {
       const angle = (i / segments) * Math.PI * 2;
       const x = (Math.cos(angle) * ovalWidth) / 2;
       const y = (Math.sin(angle) * ovalHeight) / 2;
 
-      // Apply Perlin noise to the exterior shape only
-      const noise = noise2D(x * noiseScale, y * noiseScale) * amplitude;
+      const noise =
+        noise2D(x * noiseScale + noiseOffset, y * noiseScale + noiseOffset) *
+        amplitude;
       const nx = x + noise;
       const ny = y + noise;
 
@@ -64,6 +56,43 @@ export function contoursThree(containerId) {
     }
 
     return shape;
+  }
+
+  function updateContours(noiseOffset) {
+    circlesGroup.clear(); // Remove all objects from the group
+
+    // Re-create and deform the exterior oval with the new noise offset
+    const exteriorShape = createDeformedOval(
+      initialOvalWidth,
+      initialOvalHeight,
+      noiseOffset,
+    );
+    const exteriorGeometry = new THREE.ShapeGeometry(exteriorShape);
+    const exteriorEdges = new THREE.EdgesGeometry(exteriorGeometry);
+    const exteriorLine = new THREE.LineSegments(
+      exteriorEdges,
+      new THREE.LineBasicMaterial({ color: 0xffffff }),
+    );
+    circlesGroup.add(exteriorLine);
+
+    // Re-create interior concentric circles by scaling the exterior shape
+    let scale = 1 - decrement / Math.max(initialOvalWidth, initialOvalHeight);
+    for (
+      let ovalWidth = initialOvalWidth - decrement,
+        ovalHeight = initialOvalHeight - decrement;
+      ovalWidth > 1 && ovalHeight > 1;
+      ovalWidth -= decrement,
+        ovalHeight -= decrement,
+        scale -= decrement / Math.max(initialOvalWidth, initialOvalHeight)
+    ) {
+      const scaledGeometry = exteriorGeometry.clone().scale(scale, scale, 1);
+      const scaledEdges = new THREE.EdgesGeometry(scaledGeometry);
+      const scaledLine = new THREE.LineSegments(
+        scaledEdges,
+        new THREE.LineBasicMaterial({ color: 0xffffff }),
+      );
+      circlesGroup.add(scaledLine);
+    }
   }
 
   function init() {
@@ -80,51 +109,39 @@ export function contoursThree(containerId) {
 
     renderer = new THREE.WebGLRenderer({ alpha: true });
     renderer.setSize(width, height);
+    renderer.setClearColor(0x000000, 0);
     container.appendChild(renderer.domElement);
 
-    const circlesGroup = new THREE.Group();
-    const initialOvalWidth = 500;
-    const initialOvalHeight = 500;
-    const decrement = 25;
+    circlesGroup = new THREE.Group();
+    scene.add(circlesGroup); // Add the empty group to the scene
 
-    // Create and deform the exterior oval
-    const exteriorShape = createDeformedOval(
-      initialOvalWidth,
-      initialOvalHeight,
-    );
-    const exteriorGeometry = new THREE.ShapeGeometry(exteriorShape);
-    const exteriorEdges = new THREE.EdgesGeometry(exteriorGeometry);
-    const exteriorLine = new THREE.LineSegments(
-      exteriorEdges,
-      new THREE.LineBasicMaterial({ color: 0x000000 }),
-    );
-    circlesGroup.add(exteriorLine);
-
-    // Create interior concentric circles by scaling the exterior shape
-    let scale = 1 - decrement / Math.max(initialOvalWidth, initialOvalHeight);
-    for (
-      let ovalWidth = initialOvalWidth - decrement,
-        ovalHeight = initialOvalHeight - decrement;
-      ovalWidth > 1 && ovalHeight > 1;
-      ovalWidth -= decrement,
-        ovalHeight -= decrement,
-        scale -= decrement / Math.max(initialOvalWidth, initialOvalHeight)
-    ) {
-      const scaledGeometry = exteriorGeometry.clone().scale(scale, scale, 1);
-      const scaledEdges = new THREE.EdgesGeometry(scaledGeometry);
-      const scaledLine = new THREE.LineSegments(
-        scaledEdges,
-        new THREE.LineBasicMaterial({ color: 0x000000 }),
-      );
-      circlesGroup.add(scaledLine);
-    }
-
-    scene.add(circlesGroup); // Add the group to the scene
+    updateContours(0); // Initialize contours with zero offset
 
     document.addEventListener('mousemove', onMouseMove, false);
 
-    // Assign the group to a global variable or within a scope accessible by onMouseMove
-    window.circlesGroup = circlesGroup;
+    let noiseOffset = 0;
+    setInterval(() => {
+      noiseOffset += 0.1; // Increment the noise offset for each update
+      updateContours(noiseOffset); // Update contours with the new noise offset
+    }, 25); // Update N times per second
+  }
+
+  function onMouseMove(event) {
+    const rect = container.getBoundingClientRect();
+    const mouseX = ((event.clientX - rect.left) / width) * 2 - 1;
+    const mouseY = -((event.clientY - rect.top) / height) * 2 + 1;
+
+    const vector = new THREE.Vector3(mouseX, mouseY, 0);
+    vector.unproject(camera);
+
+    const dir = vector.sub(camera.position).normalize();
+    const distance = -camera.position.z / dir.z;
+    const pos = camera.position.clone().add(dir.multiplyScalar(distance));
+
+    if (circlesGroup) {
+      circlesGroup.position.x = pos.x;
+      circlesGroup.position.y = pos.y;
+    }
   }
 
   function animate() {
