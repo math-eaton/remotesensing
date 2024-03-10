@@ -39,6 +39,7 @@ h1 {
   width: 100%;
   height: auto;
   cursor: none;
+  image-rendering: pixelated !important;
 }
 
 .logo {
