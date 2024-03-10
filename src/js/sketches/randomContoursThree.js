@@ -24,9 +24,11 @@ export function randomContoursThree(containerId) {
 
   const initialOvalWidth = width;
   const initialOvalHeight = height;
-  const decrement = 30;
+  const decrement = 50;
 
-  function createDeformedOval(diameter, noiseOffset = 0, segments = 50) {
+  let noiseOffset = 0;
+
+  function createDeformedOval(diameter, noiseOffset, segments = 50) {
     const radius = diameter / 2;
     const shape = new THREE.Shape();
 
@@ -122,6 +124,19 @@ export function randomContoursThree(containerId) {
     updateContours(0, circleDiameter / 2); // Use this line if your shapes' sizes depend on container size
   }
 
+  let tick = 0;
+
+  function animateEffect(minScale, maxScale) {
+    // Oscillating pattern within the range [minScale, maxScale]
+    const range = maxScale - minScale;
+    const midPoint = (maxScale + minScale) / 2;
+    noiseOffset = Math.sin(tick) * (range / 2) + midPoint;
+
+    updateContours(noiseOffset);
+
+    tick += 0.1;
+  }
+
   function init() {
     scene = new THREE.Scene();
     camera = new THREE.OrthographicCamera(
@@ -163,11 +178,16 @@ export function randomContoursThree(containerId) {
 
     // document.addEventListener('mousemove', onMouseMove, false);
 
-    let noiseOffset = 0;
+    // let noiseOffset = 0;
+    // setInterval(() => {
+    //   noiseOffset += 0.5; // Increment the noise offset for each update
+    //   updateContours(noiseOffset); // Update contours with the new noise offset
+    // }, 100); // Update N times per second (e.g. 100 = 10fps)
+
+    // rescaled and period effect to animate over time
     setInterval(() => {
-      noiseOffset += 0.5; // Increment the noise offset for each update
-      updateContours(noiseOffset); // Update contours with the new noise offset
-    }, 100); // Update N times per second (e.g. 100 = 10fps)
+      animateEffect(7, 70);
+    }, 100);
 
     // Set up the resize event listener
     window.addEventListener('resize', function () {
