@@ -22,17 +22,16 @@ export function randomContoursThree(containerId) {
   const width = container.clientWidth;
   const height = container.clientHeight;
 
-  const initialOvalWidth = width * Math.PI;
-  const initialOvalHeight = height * Math.PI;
-  // const initialOvalHeight = 750;
+  const initialOvalWidth = width;
+  const initialOvalHeight = height;
   const decrement = 50;
 
   function createDeformedOval(diameter, noiseOffset = 0, segments = 50) {
-    const radius = diameter / 10;
+    const radius = diameter / 2;
     const shape = new THREE.Shape();
 
-    const noiseScale = 0.85;
-    const amplitude = 10;
+    const noiseScale = 0.3;
+    const amplitude = 5;
 
     for (let i = 0; i <= segments; i++) {
       const angle = (i / segments) * Math.PI * 2;
@@ -72,15 +71,15 @@ export function randomContoursThree(containerId) {
     circlesGroup.add(exteriorLine);
 
     // Re-create interior concentric circles by scaling the exterior shape
-    let scale =
-      0.95 - decrement / Math.max(initialOvalWidth, initialOvalHeight);
+    let scale = 1 - decrement / Math.max(initialOvalWidth, initialOvalHeight);
+
     for (
       let ovalWidth = initialOvalWidth - decrement,
         ovalHeight = initialOvalHeight - decrement;
       ovalWidth > 1 && ovalHeight > 1;
       ovalWidth -= decrement,
         ovalHeight -= decrement,
-        scale -= decrement / Math.max(initialOvalWidth, initialOvalHeight)
+        scale -= decrement / Math.min(initialOvalWidth, initialOvalHeight)
     ) {
       const scaledGeometry = exteriorGeometry.clone().scale(scale, scale, 1);
       const scaledEdges = new THREE.EdgesGeometry(scaledGeometry);
