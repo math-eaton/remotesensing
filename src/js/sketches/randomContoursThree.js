@@ -24,14 +24,14 @@ export function randomContoursThree(containerId) {
 
   const initialOvalWidth = width;
   const initialOvalHeight = height;
-  const decrement = 50;
+  const decrement = 30;
 
   function createDeformedOval(diameter, noiseOffset = 0, segments = 50) {
     const radius = diameter / 2;
     const shape = new THREE.Shape();
 
     const noiseScale = 0.3;
-    const amplitude = 5;
+    const amplitude = 20;
 
     for (let i = 0; i <= segments; i++) {
       const angle = (i / segments) * Math.PI * 2;
@@ -65,7 +65,11 @@ export function randomContoursThree(containerId) {
     const exteriorEdges = new THREE.EdgesGeometry(exteriorGeometry);
     const exteriorLine = new THREE.LineSegments(
       exteriorEdges,
-      new THREE.LineBasicMaterial({ color: 0xffffff }),
+      new THREE.LineBasicMaterial({
+        color: 0xffffff,
+        linewidth: 1,
+        scale: 1,
+      }),
     );
     circlesGroup.position.set(0, 0, 0); // Explicitly center the group at the origin
     circlesGroup.add(exteriorLine);
@@ -85,8 +89,15 @@ export function randomContoursThree(containerId) {
       const scaledEdges = new THREE.EdgesGeometry(scaledGeometry);
       const scaledLine = new THREE.LineSegments(
         scaledEdges,
-        new THREE.LineBasicMaterial({ color: 0xffffff }),
+        new THREE.LineDashedMaterial({
+          color: 0xffffff,
+          linewidth: 1,
+          scale: 2,
+          dashSize: 2,
+          gapSize: 4,
+        }),
       );
+      scaledLine.computeLineDistances();
       circlesGroup.add(scaledLine);
     }
   }
@@ -121,10 +132,10 @@ export function randomContoursThree(containerId) {
       1,
       500,
     );
-    camera.position.z = 10;
+    camera.position.z = 1;
 
     // Define a constant pixelation factor
-    var pixelationFactor = 0.5; // Lower values result in more pixelation
+    var pixelationFactor = 0.333; // Lower values result in more pixelation
 
     // Calculate low-resolution dimensions based on the pixelation factor
     var pixelatedWidth = window.innerWidth * pixelationFactor;
@@ -167,6 +178,7 @@ export function randomContoursThree(containerId) {
     updateDimensions(); // Initial setup
   }
 
+  // fn for following mouse cursor - keep for later
   // function onMouseMove(event) {
   //   const rect = container.getBoundingClientRect();
   //   const mouseX = ((event.clientX - rect.left) / width) * 2 - 1;
