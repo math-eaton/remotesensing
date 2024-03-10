@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 import { createNoise2D } from 'simplex-noise';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-export function randomContoursThree(containerId) {
+export function noisyContoursThree(containerId) {
   let scene;
   let camera;
+  let controls;
   let renderer;
   // Define a constant pixelation factor
-  let pixelationFactor = 0.666; // Lower values result in more pixelation
+  let pixelationFactor = 0.7; // Lower values result in more pixelation
   let circlesGroup; // Now accessible to the update function
   const container = document.getElementById(containerId);
 
@@ -26,7 +28,7 @@ export function randomContoursThree(containerId) {
 
   const initialOvalWidth = width;
   const initialOvalHeight = height;
-  const decrement = 35;
+  const decrement = 13;
 
   let noiseOffset = 0;
 
@@ -114,8 +116,8 @@ export function randomContoursThree(containerId) {
           color: 0xffffff,
           linewidth: 1,
           scale: 2,
-          dashSize: 3,
-          gapSize: 3,
+          dashSize: 0,
+          gapSize: 0,
         }),
       );
       scaledLine.computeLineDistances();
@@ -156,7 +158,7 @@ export function randomContoursThree(containerId) {
     noiseOffset = Math.sin(scaleModFreq) * (range / offsetAmp) + midPoint;
 
     // Increment segModFreq
-    segModFreq += 0.005; // Adjust this value to control the coin toss rate
+    segModFreq += 0.001; // Adjust this value to control the coin toss rate
 
     // Oscillate segment count - greater resolution means noise is more obv
     // "Coin toss" to decide whether to add or subtract a segment
@@ -181,8 +183,8 @@ export function randomContoursThree(containerId) {
       window.innerWidth / 2,
       window.innerHeight / 2,
       window.innerHeight / -2,
-      1,
-      500,
+      0.00001,
+      5000,
     );
     camera.position.z = 1;
 
@@ -207,6 +209,11 @@ export function randomContoursThree(containerId) {
     renderer.domElement.style.width = `${window.innerWidth}px`;
     renderer.domElement.style.height = `${window.innerHeight}px`;
     container.style.overflow = 'hidden'; // Prevent scrollbars from appearing
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+
+    controls.update();
+    camera.position.set(0, 20, 1000);
 
     circlesGroup = new THREE.Group();
     scene.add(circlesGroup); // Add the empty group to the scene
@@ -258,6 +265,7 @@ export function randomContoursThree(containerId) {
   function animate() {
     requestAnimationFrame(animate);
     renderer.render(scene, camera);
+    controls.update();
   }
 
   init();
