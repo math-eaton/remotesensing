@@ -5,6 +5,8 @@ export function randomContoursThree(containerId) {
   let scene;
   let camera;
   let renderer;
+  // Define a constant pixelation factor
+  let pixelationFactor = 0.666; // Lower values result in more pixelation
   let circlesGroup; // Now accessible to the update function
   const container = document.getElementById(containerId);
 
@@ -24,16 +26,32 @@ export function randomContoursThree(containerId) {
 
   const initialOvalWidth = width;
   const initialOvalHeight = height;
-  const decrement = 50;
+  const decrement = 25;
 
   let noiseOffset = 0;
 
-  function createDeformedOval(diameter, noiseOffset, segments = 50) {
+  function createDeformedOval(
+    diameter,
+    noiseOffset,
+    pixelationFactor,
+    segments = 100,
+  ) {
     const radius = diameter / 2;
     const shape = new THREE.Shape();
 
-    const noiseScale = 0.3;
-    const amplitude = 20;
+    const aspectRatio = width / height;
+    // const sizeMod = 0.0006;
+    // const sizeFactor = sizeMod * Math.sqrt(width * height);
+    // const noiseScale = sizeFactor * (aspectRatio > 1 ? 0.75 : 1.25);
+    // const amplitude = noiseScale * 20;
+
+    const pixelationEffect = 1 / pixelationFactor; // Higher values mean more pixelation
+    const baseSize = Math.sqrt(width * height) * pixelationEffect; // Adjust base size based on pixelation
+    const noiseScale = 0.002 * baseSize * (aspectRatio > 1 ? 0.75 : 1.25);
+    const amplitude = noiseScale * 10;
+
+    // const noiseScale = 0.0001 * (width * height);
+    // const amplitude = noiseScale * 20;
 
     for (let i = 0; i <= segments; i++) {
       const angle = (i / segments) * Math.PI * 2;
@@ -95,8 +113,8 @@ export function randomContoursThree(containerId) {
           color: 0xffffff,
           linewidth: 1,
           scale: 2,
-          dashSize: 2,
-          gapSize: 4,
+          dashSize: 3,
+          gapSize: 3,
         }),
       );
       scaledLine.computeLineDistances();
@@ -130,11 +148,12 @@ export function randomContoursThree(containerId) {
     // Oscillating pattern within the range [minScale, maxScale]
     const range = maxScale - minScale;
     const midPoint = (maxScale + minScale) / 2;
-    noiseOffset = Math.sin(tick) * (range / 2) + midPoint;
+    const offsetAmp = 10;
+    noiseOffset = Math.sin(tick) * (range / offsetAmp) + midPoint;
 
     updateContours(noiseOffset);
 
-    tick += 0.1;
+    tick += 0.05;
   }
 
   function init() {
@@ -149,8 +168,8 @@ export function randomContoursThree(containerId) {
     );
     camera.position.z = 1;
 
-    // Define a constant pixelation factor
-    var pixelationFactor = 0.333; // Lower values result in more pixelation
+    // // Define a constant pixelation factor
+    // var pixelationFactor = 0.666; // Lower values result in more pixelation
 
     // Calculate low-resolution dimensions based on the pixelation factor
     var pixelatedWidth = window.innerWidth * pixelationFactor;
@@ -186,7 +205,7 @@ export function randomContoursThree(containerId) {
 
     // rescaled and period effect to animate over time
     setInterval(() => {
-      animateEffect(7, 70);
+      animateEffect(3, 5);
     }, 100);
 
     // Set up the resize event listener
