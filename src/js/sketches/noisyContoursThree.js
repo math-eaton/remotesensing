@@ -38,90 +38,76 @@ export function noisyContoursThree(containerId) {
     pixelationFactor,
     segments,
   ) {
+    const vertices = [];
     const radius = diameter / 2;
-    const shape = new THREE.Shape();
+    const zNoiseAmplitude = 10; // Control the Z-axis noise amplitude
 
     const aspectRatio = width / height;
-    // const sizeMod = 0.0006;
-    // const sizeFactor = sizeMod * Math.sqrt(width * height);
-    // const noiseScale = sizeFactor * (aspectRatio > 1 ? 0.75 : 1.25);
-    // const amplitude = noiseScale * 20;
-
-    const pixelationEffect = 1 / pixelationFactor; // Higher values mean more pixelation
-    const baseSize = Math.sqrt(width * height) * pixelationEffect; // Adjust base size based on pixelation
+    const baseSize = Math.sqrt(width * height) * (1 / pixelationFactor);
     const noiseScale = 0.002 * baseSize * (aspectRatio > 1 ? 0.75 : 1.25);
     const amplitude = noiseScale * 10;
 
-    // const noiseScale = 0.0001 * (width * height);
-    // const amplitude = noiseScale * 20;
-
     for (let i = 0; i <= segments; i++) {
       const angle = (i / segments) * Math.PI * 2;
-      const x = Math.cos(angle) * radius * noiseScale;
-      const y = Math.sin(angle) * radius * noiseScale;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius;
 
-      const noise = noise2D(x + noiseOffset, y + noiseOffset) * amplitude;
-      const nx = x + noise;
-      const ny = y + noise;
+      // Original noise for X and Y
+      const noiseXY =
+        noise2D(x * noiseScale + noiseOffset, y * noiseScale + noiseOffset) *
+        amplitude;
+      const nx = x + noiseXY;
+      const ny = y + noiseXY;
 
-      if (i === 0) {
-        shape.moveTo(nx, ny);
-      } else {
-        shape.lineTo(nx, ny);
-      }
+      // Additional noise for Z
+      const nz =
+        (noise2D(y * noiseScale + noiseOffset, x * noiseScale + noiseOffset) -
+          -5) *
+        zNoiseAmplitude;
+
+      // Push the deformed vertex to the vertices array
+      vertices.push(new THREE.Vector3(nx, ny, nz));
     }
 
-    return shape;
+    // Create a geometry and add vertices
+    const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
+
+    // Create a line material
+    const material = new THREE.LineBasicMaterial({ color: 0xffffff });
+
+    // Create a line segment mesh
+    const lineSegments = new THREE.LineLoop(geometry, material);
+
+    return lineSegments;
   }
 
-  function updateContours(noiseOffset) {
+  function updateContours(noiseOffset, segments) {
     circlesGroup.clear(); // Remove all objects from the group
 
-    // Re-create and deform the exterior oval with the new noise offset
-    const exteriorShape = createDeformedOval(
+    // Primary shape creation with Z-axis deformation
+    const primaryShape = createDeformedOval(
       initialOvalWidth,
-      initialOvalHeight,
       noiseOffset,
+      pixelationFactor,
       segments,
     );
-    const exteriorGeometry = new THREE.ShapeGeometry(exteriorShape);
-    const exteriorEdges = new THREE.EdgesGeometry(exteriorGeometry);
-    const exteriorLine = new THREE.LineSegments(
-      exteriorEdges,
-      new THREE.LineBasicMaterial({
-        color: 0xffffff,
-        linewidth: 1,
-        scale: 1,
-      }),
-    );
-    circlesGroup.position.set(0, 0, 0); // Explicitly center the group at the origin
-    circlesGroup.add(exteriorLine);
+    circlesGroup.add(primaryShape); // Add the primary shape directly to the group
 
-    // Re-create interior concentric circles by scaling the exterior shape
-    let scale = 1 - decrement / Math.max(initialOvalWidth, initialOvalHeight);
-
+    // Generate interior concentric shapes by scaling
+    let scale = 1 - decrement / Math.min(initialOvalWidth, initialOvalHeight);
     for (
       let ovalWidth = initialOvalWidth - decrement,
         ovalHeight = initialOvalHeight - decrement;
-      ovalWidth > 1 && ovalHeight > 1;
+      ovalWidth > 0 && ovalHeight > 0;
       ovalWidth -= decrement,
         ovalHeight -= decrement,
         scale -= decrement / Math.min(initialOvalWidth, initialOvalHeight)
     ) {
-      const scaledGeometry = exteriorGeometry.clone().scale(scale, scale, 1);
-      const scaledEdges = new THREE.EdgesGeometry(scaledGeometry);
-      const scaledLine = new THREE.LineSegments(
-        scaledEdges,
-        new THREE.LineDashedMaterial({
-          color: 0xffffff,
-          linewidth: 1,
-          scale: 2,
-          dashSize: 0,
-          gapSize: 0,
-        }),
-      );
-      scaledLine.computeLineDistances();
-      circlesGroup.add(scaledLine);
+      // Clone the primary shape for each concentric shape
+      let shapeClone = primaryShape.clone();
+      // Apply scaling to create the concentric effect
+      shapeClone.scale.set(scale, scale, scale);
+      circlesGroup.add(shapeClone);
     }
   }
 
@@ -158,7 +144,7 @@ export function noisyContoursThree(containerId) {
     noiseOffset = Math.sin(scaleModFreq) * (range / offsetAmp) + midPoint;
 
     // Increment segModFreq
-    segModFreq += 0.001; // Adjust this value to control the coin toss rate
+    segModFreq += 0.0025; // Adjust this value to control the coin toss rate
 
     // Oscillate segment count - greater resolution means noise is more obv
     // "Coin toss" to decide whether to add or subtract a segment
@@ -173,7 +159,7 @@ export function noisyContoursThree(containerId) {
 
     updateContours(noiseOffset, segments);
 
-    scaleModFreq += 0.005; // Continue to adjust scale modulation frequency as before
+    scaleModFreq += 0.025; // Continue to adjust scale modulation frequency as before
   }
 
   function init() {
@@ -186,7 +172,7 @@ export function noisyContoursThree(containerId) {
       0.00001,
       5000,
     );
-    camera.position.z = 1;
+    camera.position.z = 1000;
 
     // // Define a constant pixelation factor
     // var pixelationFactor = 0.666; // Lower values result in more pixelation
@@ -211,8 +197,8 @@ export function noisyContoursThree(containerId) {
     container.style.overflow = 'hidden'; // Prevent scrollbars from appearing
 
     const controls = new OrbitControls(camera, renderer.domElement);
-
     controls.update();
+
     camera.position.set(0, 20, 1000);
 
     circlesGroup = new THREE.Group();
@@ -241,6 +227,7 @@ export function noisyContoursThree(containerId) {
     });
 
     updateDimensions(); // Initial setup
+    animate();
   }
 
   // fn for following mouse cursor - keep for later
