@@ -26,7 +26,7 @@ export function randomContoursThree(containerId) {
 
   const initialOvalWidth = width;
   const initialOvalHeight = height;
-  const decrement = 25;
+  const decrement = 35;
 
   let noiseOffset = 0;
 
@@ -34,7 +34,7 @@ export function randomContoursThree(containerId) {
     diameter,
     noiseOffset,
     pixelationFactor,
-    segments = 100,
+    segments,
   ) {
     const radius = diameter / 2;
     const shape = new THREE.Shape();
@@ -80,6 +80,7 @@ export function randomContoursThree(containerId) {
       initialOvalWidth,
       initialOvalHeight,
       noiseOffset,
+      segments,
     );
     const exteriorGeometry = new THREE.ShapeGeometry(exteriorShape);
     const exteriorEdges = new THREE.EdgesGeometry(exteriorGeometry);
@@ -142,18 +143,35 @@ export function randomContoursThree(containerId) {
     updateContours(0, circleDiameter / 2); // Use this line if your shapes' sizes depend on container size
   }
 
-  let tick = 0;
+  let scaleModFreq = 0;
+  let segModFreq = 0;
+  const segModThreshold = 1; // Threshold to trigger a coin toss event
+  let segments = 100;
 
-  function animateEffect(minScale, maxScale) {
-    // Oscillating pattern within the range [minScale, maxScale]
+  function animateEffect(minScale, maxScale, minSegments, maxSegments) {
+    // Oscillating noise deformation + shape scaling within the range [minScale, maxScale]
     const range = maxScale - minScale;
     const midPoint = (maxScale + minScale) / 2;
     const offsetAmp = 10;
-    noiseOffset = Math.sin(tick) * (range / offsetAmp) + midPoint;
+    noiseOffset = Math.sin(scaleModFreq) * (range / offsetAmp) + midPoint;
 
-    updateContours(noiseOffset);
+    // Increment segModFreq
+    segModFreq += 0.005; // Adjust this value to control the coin toss rate
 
-    tick += 0.05;
+    // Oscillate segment count - greater resolution means noise is more obv
+    // "Coin toss" to decide whether to add or subtract a segment
+    if (segModFreq >= segModThreshold) {
+      const coinToss = Math.random() > 0.5 ? 1 : -1;
+      segments += coinToss;
+      segments = Math.max(minSegments, Math.min(maxSegments, segments));
+
+      // Reset segModFreq after the coin toss
+      segModFreq = 0;
+    }
+
+    updateContours(noiseOffset, segments);
+
+    scaleModFreq += 0.005; // Continue to adjust scale modulation frequency as before
   }
 
   function init() {
@@ -203,10 +221,11 @@ export function randomContoursThree(containerId) {
     //   updateContours(noiseOffset); // Update contours with the new noise offset
     // }, 100); // Update N times per second (e.g. 100 = 10fps)
 
-    // rescaled and period effect to animate over time
+    // rescaled and period effect to animate over time - scales with modFreq + amp
+    // first two args is noise scaling, second two are segment mod ranges
     setInterval(() => {
-      animateEffect(3, 5);
-    }, 100);
+      animateEffect(2, 5, 10, 200);
+    }, 80);
 
     // Set up the resize event listener
     window.addEventListener('resize', function () {
