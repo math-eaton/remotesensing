@@ -22,17 +22,17 @@ export function randomContoursThree(containerId) {
   const width = container.clientWidth;
   const height = container.clientHeight;
 
-  const initialOvalWidth = (width * Math.PI) / 6;
-  const initialOvalHeight = (height * Math.PI) / 4;
+  const initialOvalWidth = width * Math.PI;
+  const initialOvalHeight = height * Math.PI;
   // const initialOvalHeight = 750;
-  const decrement = 25;
+  const decrement = 50;
 
   function createDeformedOval(diameter, noiseOffset = 0, segments = 50) {
-    const radius = diameter / 2;
+    const radius = diameter / 10;
     const shape = new THREE.Shape();
 
-    const noiseScale = 0.95;
-    const amplitude = 12;
+    const noiseScale = 0.85;
+    const amplitude = 10;
 
     for (let i = 0; i <= segments; i++) {
       const angle = (i / segments) * Math.PI * 2;
@@ -68,10 +68,12 @@ export function randomContoursThree(containerId) {
       exteriorEdges,
       new THREE.LineBasicMaterial({ color: 0xffffff }),
     );
+    circlesGroup.position.set(0, 0, 0); // Explicitly center the group at the origin
     circlesGroup.add(exteriorLine);
 
     // Re-create interior concentric circles by scaling the exterior shape
-    let scale = 1 - decrement / Math.max(initialOvalWidth, initialOvalHeight);
+    let scale =
+      0.95 - decrement / Math.max(initialOvalWidth, initialOvalHeight);
     for (
       let ovalWidth = initialOvalWidth - decrement,
         ovalHeight = initialOvalHeight - decrement;
@@ -91,15 +93,23 @@ export function randomContoursThree(containerId) {
   }
 
   function updateDimensions() {
-    // Dynamically calculate dimensions to keep the circle's diameter 80% of the container's smaller dimension
+    // Adjust the renderer size to match the new container size
+    renderer.setSize(container.clientWidth, container.clientHeight);
+
+    // Update camera aspect based on new dimensions
+    camera.left = -container.clientWidth / 2;
+    camera.right = container.clientWidth / 2;
+    camera.top = container.clientHeight / 2;
+    camera.bottom = -container.clientHeight / 2;
+    camera.updateProjectionMatrix();
+
+    // Recalculate dimensions for your shapes based on the new size, if necessary
     const smallerDimension = Math.min(
       container.clientWidth,
       container.clientHeight,
     );
-    const circleDiameter = smallerDimension * 0.8;
-
-    // Update the dimensions used for creating the circle
-    updateContours(circleDiameter / 2); // Pass the radius to updateContours
+    const circleDiameter = smallerDimension * 0.5;
+    updateContours(0, circleDiameter / 2); // Use this line if your shapes' sizes depend on container size
   }
 
   function init() {
@@ -110,12 +120,12 @@ export function randomContoursThree(containerId) {
       window.innerHeight / 2,
       window.innerHeight / -2,
       1,
-      1000,
+      500,
     );
-    camera.position.z = 500;
+    camera.position.z = 10;
 
     // Define a constant pixelation factor
-    var pixelationFactor = 0.75; // Lower values result in more pixelation
+    var pixelationFactor = 0.5; // Lower values result in more pixelation
 
     // Calculate low-resolution dimensions based on the pixelation factor
     var pixelatedWidth = window.innerWidth * pixelationFactor;
@@ -128,8 +138,8 @@ export function randomContoursThree(containerId) {
 
     // Scale the canvas to fit the full browser width while keeping the pixelated effect
     var scale = 1 / pixelationFactor;
+    renderer.domElement.style.transformOrigin = 'center';
     renderer.domElement.style.transform = `scale(${scale})`;
-    renderer.domElement.style.transformOrigin = 'top left';
 
     // Adjust the renderer and container size
     renderer.domElement.style.width = `${window.innerWidth}px`;
@@ -141,13 +151,13 @@ export function randomContoursThree(containerId) {
 
     updateContours(0); // Initialize contours with zero offset
 
-    document.addEventListener('mousemove', onMouseMove, false);
+    // document.addEventListener('mousemove', onMouseMove, false);
 
     let noiseOffset = 0;
     setInterval(() => {
-      noiseOffset += 0.1; // Increment the noise offset for each update
+      noiseOffset += 0.5; // Increment the noise offset for each update
       updateContours(noiseOffset); // Update contours with the new noise offset
-    }, 50); // Update N times per second (e.g. 100 = 10fps)
+    }, 100); // Update N times per second (e.g. 100 = 10fps)
 
     // Set up the resize event listener
     window.addEventListener('resize', function () {
@@ -158,23 +168,23 @@ export function randomContoursThree(containerId) {
     updateDimensions(); // Initial setup
   }
 
-  function onMouseMove(event) {
-    const rect = container.getBoundingClientRect();
-    const mouseX = ((event.clientX - rect.left) / width) * 2 - 1;
-    const mouseY = -((event.clientY - rect.top) / height) * 2 + 1;
+  // function onMouseMove(event) {
+  //   const rect = container.getBoundingClientRect();
+  //   const mouseX = ((event.clientX - rect.left) / width) * 2 - 1;
+  //   const mouseY = -((event.clientY - rect.top) / height) * 2 + 1;
 
-    const vector = new THREE.Vector3(mouseX, mouseY, 0);
-    vector.unproject(camera);
+  //   const vector = new THREE.Vector3(mouseX, mouseY, 0);
+  //   vector.unproject(camera);
 
-    const dir = vector.sub(camera.position).normalize();
-    const distance = -camera.position.z / dir.z;
-    const pos = camera.position.clone().add(dir.multiplyScalar(distance));
+  //   const dir = vector.sub(camera.position).normalize();
+  //   const distance = -camera.position.z / dir.z;
+  //   const pos = camera.position.clone().add(dir.multiplyScalar(distance));
 
-    if (circlesGroup) {
-      circlesGroup.position.x = pos.x;
-      circlesGroup.position.y = pos.y;
-    }
-  }
+  //   if (circlesGroup) {
+  //     circlesGroup.position.x = pos.x;
+  //     circlesGroup.position.y = pos.y;
+  //   }
+  // }
 
   function animate() {
     requestAnimationFrame(animate);
