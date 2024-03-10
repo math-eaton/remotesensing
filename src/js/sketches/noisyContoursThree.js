@@ -28,7 +28,7 @@ export function noisyContoursThree(containerId) {
 
   const initialOvalWidth = width;
   const initialOvalHeight = height;
-  const decrement = 13;
+  const decrement = 25;
 
   let noiseOffset = 0;
 
@@ -40,12 +40,12 @@ export function noisyContoursThree(containerId) {
   ) {
     const vertices = [];
     const radius = diameter / 2;
-    const zNoiseAmplitude = 10; // Control the Z-axis noise amplitude
+    const zNoiseAmplitude = 1; // Control the Z-axis noise amplitude
 
     const aspectRatio = width / height;
     const baseSize = Math.sqrt(width * height) * (1 / pixelationFactor);
-    const noiseScale = 0.002 * baseSize * (aspectRatio > 1 ? 0.75 : 1.25);
-    const amplitude = noiseScale * 10;
+    const noiseScale = 0.001 * baseSize * (aspectRatio > 1 ? 0.75 : 1.25);
+    const amplitude = noiseScale * 2;
 
     for (let i = 0; i <= segments; i++) {
       const angle = (i / segments) * Math.PI * 2;
@@ -61,8 +61,7 @@ export function noisyContoursThree(containerId) {
 
       // Additional noise for Z
       const nz =
-        (noise2D(y * noiseScale + noiseOffset, x * noiseScale + noiseOffset) -
-          -5) *
+        noise2D(y * noiseScale + noiseOffset, x * noiseScale + noiseOffset) *
         zNoiseAmplitude;
 
       // Push the deformed vertex to the vertices array
@@ -84,30 +83,34 @@ export function noisyContoursThree(containerId) {
   function updateContours(noiseOffset, segments) {
     circlesGroup.clear(); // Remove all objects from the group
 
-    // Primary shape creation with Z-axis deformation
+    // Add the primary shape directly to the group
     const primaryShape = createDeformedOval(
       initialOvalWidth,
       noiseOffset,
       pixelationFactor,
       segments,
     );
-    circlesGroup.add(primaryShape); // Add the primary shape directly to the group
+    circlesGroup.add(primaryShape);
 
-    // Generate interior concentric shapes by scaling
+    // Generate interior concentric shapes with unique Z noise
     let scale = 1 - decrement / Math.min(initialOvalWidth, initialOvalHeight);
     for (
-      let ovalWidth = initialOvalWidth - decrement,
-        ovalHeight = initialOvalHeight - decrement;
-      ovalWidth > 0 && ovalHeight > 0;
-      ovalWidth -= decrement,
-        ovalHeight -= decrement,
-        scale -= decrement / Math.min(initialOvalWidth, initialOvalHeight)
+      let scaledWidth = initialOvalWidth * scale,
+        scaledHeight = initialOvalHeight * scale;
+      scaledWidth > 0 && scaledHeight > 0;
+      scaledWidth *= scale,
+        scaledHeight *= scale,
+        scale = 1 - decrement / Math.min(scaledWidth, scaledHeight)
     ) {
-      // Clone the primary shape for each concentric shape
-      let shapeClone = primaryShape.clone();
-      // Apply scaling to create the concentric effect
-      shapeClone.scale.set(scale, scale, scale);
-      circlesGroup.add(shapeClone);
+      const concentricShape = createDeformedOval(
+        Math.min(scaledWidth, scaledHeight), // Use the smaller dimension to maintain aspect ratio
+        noiseOffset, // Keep the same noise offset for X and Y
+        pixelationFactor,
+        segments, // Keep the same segment count
+        true, // Indicate this is a clone to apply unique Z noise
+      );
+      // Note: No need to scale here as we're directly adjusting the dimensions
+      circlesGroup.add(concentricShape);
     }
   }
 
@@ -134,7 +137,7 @@ export function noisyContoursThree(containerId) {
   let scaleModFreq = 0;
   let segModFreq = 0;
   const segModThreshold = 1; // Threshold to trigger a coin toss event
-  let segments = 100;
+  let segments = 50;
 
   function animateEffect(minScale, maxScale, minSegments, maxSegments) {
     // Oscillating noise deformation + shape scaling within the range [minScale, maxScale]
@@ -172,7 +175,7 @@ export function noisyContoursThree(containerId) {
       0.00001,
       5000,
     );
-    camera.position.z = 1000;
+    camera.position.z = 250;
 
     // // Define a constant pixelation factor
     // var pixelationFactor = 0.666; // Lower values result in more pixelation
@@ -199,7 +202,7 @@ export function noisyContoursThree(containerId) {
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.update();
 
-    camera.position.set(0, 20, 1000);
+    camera.position.set(0, 20, 500);
 
     circlesGroup = new THREE.Group();
     scene.add(circlesGroup); // Add the empty group to the scene
