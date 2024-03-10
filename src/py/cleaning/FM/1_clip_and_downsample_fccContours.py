@@ -98,6 +98,6 @@ def process_data(input_filename, output_filename, aoi_geojson, limit=None, downs
 
 # Example usage
 input_filename = '/Users/matthewheaton/Documents/GitHub/remotesensing/src/assets/data/fcc/fm/raw/FM_service_contour_current.txt'
-output_filename = '/Users/matthewheaton/Documents/GitHub/remotesensing/src/assets/data/fcc/fm/processed/FM_service_contour_testClean.txt'
+output_filename = '/Users/matthewheaton/Documents/GitHub/remotesensing/src/assets/data/fcc/fm/processed/FM_service_contour_testClean.json'
 aoi_geojson = '/Users/matthewheaton/Documents/GitHub/remotesensing/src/assets/data/fcc/fm/aoi_northeast_geojson_20240310.geojson'
 process_data(input_filename, output_filename, aoi_geojson, limit=20)
