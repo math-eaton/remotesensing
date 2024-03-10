@@ -27,12 +27,8 @@ export function randomContoursThree(containerId) {
   // const initialOvalHeight = 750;
   const decrement = 25;
 
-  function createDeformedOval(
-    ovalWidth,
-    ovalHeight,
-    noiseOffset = 0,
-    segments = 50,
-  ) {
+  function createDeformedOval(diameter, noiseOffset = 0, segments = 50) {
+    const radius = diameter / 2;
     const shape = new THREE.Shape();
 
     const noiseScale = 0.95;
@@ -40,12 +36,10 @@ export function randomContoursThree(containerId) {
 
     for (let i = 0; i <= segments; i++) {
       const angle = (i / segments) * Math.PI * 2;
-      const x = (Math.cos(angle) * ovalWidth) / 2;
-      const y = (Math.sin(angle) * ovalHeight) / 2;
+      const x = Math.cos(angle) * radius * noiseScale;
+      const y = Math.sin(angle) * radius * noiseScale;
 
-      const noise =
-        noise2D(x * noiseScale + noiseOffset, y * noiseScale + noiseOffset) *
-        amplitude;
+      const noise = noise2D(x + noiseOffset, y + noiseOffset) * amplitude;
       const nx = x + noise;
       const ny = y + noise;
 
@@ -96,6 +90,18 @@ export function randomContoursThree(containerId) {
     }
   }
 
+  function updateDimensions() {
+    // Dynamically calculate dimensions to keep the circle's diameter 80% of the container's smaller dimension
+    const smallerDimension = Math.min(
+      container.clientWidth,
+      container.clientHeight,
+    );
+    const circleDiameter = smallerDimension * 0.8;
+
+    // Update the dimensions used for creating the circle
+    updateContours(circleDiameter / 2); // Pass the radius to updateContours
+  }
+
   function init() {
     scene = new THREE.Scene();
     camera = new THREE.OrthographicCamera(
@@ -109,7 +115,7 @@ export function randomContoursThree(containerId) {
     camera.position.z = 500;
 
     // Define a constant pixelation factor
-    var pixelationFactor = 0.7; // Lower values result in more pixelation
+    var pixelationFactor = 0.75; // Lower values result in more pixelation
 
     // Calculate low-resolution dimensions based on the pixelation factor
     var pixelatedWidth = window.innerWidth * pixelationFactor;
@@ -142,6 +148,14 @@ export function randomContoursThree(containerId) {
       noiseOffset += 0.1; // Increment the noise offset for each update
       updateContours(noiseOffset); // Update contours with the new noise offset
     }, 50); // Update N times per second (e.g. 100 = 10fps)
+
+    // Set up the resize event listener
+    window.addEventListener('resize', function () {
+      // Adjust camera, renderer, and circle dimensions on window resize
+      updateDimensions();
+    });
+
+    updateDimensions(); // Initial setup
   }
 
   function onMouseMove(event) {
