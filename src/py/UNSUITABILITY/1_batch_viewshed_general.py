@@ -8,9 +8,9 @@ from arcpy.sa import *
 
 # Setting the environment
 arcpy.env.parallelProcessingFactor = "100%"
-workspace = r"D:\mheaton\cartography\gsapp\colloquium_processing\cell_viewsheds\viewshed_input.gdb"
-scratch_workspace = r"D:\mheaton\cartography\gsapp\colloquium_processing\cell_viewsheds\scratch.gdb"  # Define scratch workspace
-output_workspace = r"D:\mheaton\cartography\gsapp\colloquium_processing\cell_viewsheds\viewshed_output.gdb"  # Define output workspace
+workspace = r"D:\mheaton\cartography\gsapp\colloquium_processing\cell_viewsheds\openCellid\viewshed_input.gdb"
+scratch_workspace = r"D:\mheaton\cartography\gsapp\colloquium_processing\cell_viewsheds\openCellid\scratch.gdb"  # Define scratch workspace
+output_workspace = r"D:\mheaton\cartography\gsapp\colloquium_processing\cell_viewsheds\openCellid\viewshed_output.gdb"  # Define output workspace
 arcpy.env.workspace = workspace
 arcpy.env.scratchWorkspace = scratch_workspace  # Set scratch workspace in the environment
 arcpy.env.overwriteOutput = True
@@ -20,11 +20,15 @@ arcpy.CheckOutExtension("Spatial")
 
 # Define input and output parameters
 in_raster = "output_USGS_150m_resample_NYS_contourExtent_NAD83_20240227"
-observer_points = "Cellular_Towers_NYS_DEM_clip_20231126"
+observer_points = "NR"
 batch_size = 32  # Process N inputs per batch >>>>>>> nb: 32 is max for viewshed2
 
 # Optional: Set maximum number of batches to process for testing
-batch_limit = None  # Set to None to process all batches
+batch_limit = 2  # Set to None to process all batches
+
+# Function to format the current date in YYYYMMDD format
+def get_current_date_format():
+    return datetime.now().strftime('%Y%m%d')
 
 # Function to validate and repair geometries
 def validate_geometries(feature_class):
@@ -86,12 +90,26 @@ except Exception as e:
     arcpy.AddError(f"Error in preparing observer points: {e}")
     raise
 
+def process_observer_points(observer_fc):
+    # Determine the outer_radius based on the feature class name
+    if "CDMA_GSM" in observer_fc:
+        outer_radius = "50 Kilometers"
+    elif "UMTS" in observer_fc:
+        outer_radius = "30 Kilometers"
+    elif "LTE" in observer_fc:
+        outer_radius = "15 Kilometers"
+    elif "NR" in observer_fc:
+        outer_radius = "3 Kilometers"
+    else:
+        outer_radius = "45 Miles"  # Default value
+    return outer_radius
+
 
 # Function to process viewshed in batches
-def process_batch(batch):
+def process_batch(batch, outer_radius):
     try:
         batch_name = f"batch_{batch}"
-        out_raster = os.path.join(scratch_workspace, f"CellTowers_NYS_viewshed_{batch_name}_20231128")
+        out_raster = os.path.join(scratch_workspace, f"{observer_points}_{batch_name}_{get_current_date_format()}")
         arcpy.ddd.Viewshed2(
             in_raster=in_raster,
             in_observer_features=batch_name,
@@ -103,10 +121,12 @@ def process_batch(batch):
             refractivity_coefficient=0.13,
             surface_offset="0 Meters",
             observer_elevation=None,
-            observer_offset="AllStruc",
+            observer_offset=None,
+            # if using FCC towers data, add structure height as additional z offset
+            # observer_offset="AllStruc",
             inner_radius=None,
             inner_radius_is_3d="GROUND",
-            outer_radius="45 Miles",
+            outer_radius=outer_radius,
             outer_radius_is_3d="GROUND",
             horizontal_start_angle=0,
             horizontal_end_angle=360,
@@ -146,6 +166,9 @@ def clear_relationship_tables(workspace, text_pattern):
 # Validate and repair observer points geometry
 observer_points = validate_geometries(observer_points)
 
+# define outer radius for active observer fc
+outer_radius = process_observer_points(observer_points)
+
 # Determine the total number of batches needed
 with arcpy.da.SearchCursor(observer_points, ["OBJECTID"]) as cursor:
     total_points = sum(1 for _ in cursor)
@@ -170,7 +193,7 @@ for batch in range(total_batches):
     arcpy.management.MakeFeatureLayer(observer_points, batch_layer, batch_query)
     
     # Process the current batch
-    output_raster = process_batch(batch)
+    output_raster = process_batch(batch, outer_radius)  # Pass outer_radius to process_batch
     if output_raster:
         output_rasters.append(output_raster)
 
@@ -188,26 +211,28 @@ else:
 
     # Temporarily switch to scratch workspace for listing rasters
     arcpy.env.workspace = scratch_workspace
-    raster_datasets = arcpy.ListRasters("CellTowers_NYS_viewshed_batch_*", "ALL")
+    observer_name = "NR"
+    print(f"observer name: {observer_name}")
+    raster_datasets = arcpy.ListRasters(f"{observer_name}_*", "ALL")
     
     # Switch back to the primary workspace if needed or continue with the scratch workspace
-    # arcpy.env.workspace = workspace  # Uncomment if you need to switch back for subsequent operations
+    arcpy.env.workspace = workspace  # Uncomment if you need to switch back for subsequent operations
 
     # Validate the existence of rasters in the scratch workspace
     valid_rasters = [os.path.join(scratch_workspace, raster) for raster in raster_datasets if arcpy.Exists(os.path.join(scratch_workspace, raster))]
     arcpy.AddMessage(f"Valid rasters identified for merging: {valid_rasters}")
 
     # Construct the output raster name and path
-    current_date = datetime.now().strftime("%Y%m%d")
-    merged_output_name = "Merged_CellTowers_NYS_Viewshed_" + current_date
-    merged_output_path = os.path.join(output_workspace, merged_output_name)
+    current_date = get_current_date_format()
+    merged_output_name = f"{observer_points}_merged_" + current_date
+    merged_output_path = os.path.join(scratch_workspace, merged_output_name)
 
     # Proceed with merging if valid rasters are found
     if valid_rasters:
         arcpy.AddMessage("Merging valid raster datasets...")
         arcpy.management.MosaicToNewRaster(
             input_rasters=valid_rasters,
-            output_location=output_workspace,
+            output_location=scratch_workspace,
             raster_dataset_name_with_extension=os.path.basename(merged_output_path),
             pixel_type="32_BIT_FLOAT",
             number_of_bands=1
@@ -233,6 +258,9 @@ else:
 
         # Check the Spatial Analyst extension back in after processing
         arcpy.CheckInExtension("Spatial")
+
+        arcpy.AddMessage("done.")
+
 
     else:
         arcpy.AddError("No valid raster datasets were found for merging.")

@@ -35,13 +35,16 @@ reclassified_rasters = []  # List to store paths of reclassified rasters
 # Loop through each raster in the geodatabase
 for raster in arcpy.ListRasters():
     match_found = False  # Flag to track if a match is found
-    default_value = 1
+
+    # Create a Raster object to perform conditional checks
+    raster_obj = arcpy.Raster(raster)
 
     for search_term, value in search_dict.items():
         if search_term in raster:
             match_found = True
             print(f"match found for {raster} ... reclass to value: {value}")
-            outCon = arcpy.sa.Con(arcpy.sa.IsNull(raster), 0, value)
+            # Reclassify: NODATA and 0 to 0, >0 to `value`
+            outCon = arcpy.sa.Con((raster_obj > 0), value, 0)
             reclassified_path = os.path.join(scratch_workspace, raster)
             outCon.save(reclassified_path)
             reclassified_rasters.append(reclassified_path)
@@ -49,8 +52,10 @@ for raster in arcpy.ListRasters():
             break
 
     if not match_found:
-        outConFallback = arcpy.sa.Con(arcpy.sa.IsNull(raster), 0, default_value)
+        default_value = 1  # Set the default value for non-matching rasters
         print(f"no match found for {raster} ... reclass to default value: {default_value}")
+        # Reclassify: NODATA and 0 to 0, >0 to `default_value`
+        outConFallback = arcpy.sa.Con((raster_obj > 0), default_value, 0)
         reclassified_path_fallback = os.path.join(scratch_workspace, "fallback_" + raster)
         outConFallback.save(reclassified_path_fallback)
         reclassified_rasters.append(reclassified_path_fallback)

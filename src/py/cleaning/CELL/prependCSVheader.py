@@ -2,7 +2,7 @@ import os
 import csv
 
 # Set the path to your directory with the CSV files
-directory_path = r'D:\mheaton\cartography\gsapp\colloquium_iii\data\openCellID'
+directory_path = r'D:\mheaton\cartography\gsapp\colloquium_iii\data\openCellID\merged'
 
 # Name of the CSV file from which to take the headers row
 headers_csv = 'headers.csv'
