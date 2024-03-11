@@ -40,45 +40,66 @@ export function noisyContoursThree(containerId) {
   ) {
     const vertices = [];
     const radius = diameter / 2;
-    const zNoiseAmplitude = 10; // Control the Z-axis noise amplitude
+    const zNoiseAmplitude = 50;
 
     const aspectRatio = width / height;
     const baseSize = Math.sqrt(width * height) * (1 / pixelationFactor);
     const noiseScale = 0.002 * baseSize * (aspectRatio > 1 ? 0.75 : 1.25);
     const amplitude = noiseScale * 10;
 
+    // Generate original vertices
     for (let i = 0; i <= segments; i++) {
       const angle = (i / segments) * Math.PI * 2;
       const x = Math.cos(angle) * radius;
       const y = Math.sin(angle) * radius;
 
-      // Original noise for X and Y
       const noiseXY =
         noise2D(x * noiseScale + noiseOffset, y * noiseScale + noiseOffset) *
         amplitude;
       const nx = x + noiseXY;
       const ny = y + noiseXY;
-
-      // Additional noise for Z
       const nz =
         (noise2D(y * noiseScale + noiseOffset, x * noiseScale + noiseOffset) -
-          -5) *
+          0.5) *
         zNoiseAmplitude;
 
-      // Push the deformed vertex to the vertices array
       vertices.push(new THREE.Vector3(nx, ny, nz));
     }
 
-    // Create a geometry and add vertices
-    const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
+    // Use vertices to create Bezier curves
+    const curveVertices = [];
+    for (let i = 0; i < vertices.length - 1; i++) {
+      const start = vertices[i];
+      const end = vertices[i + 1];
+
+      // Simple control points calculation (you could improve this for smoother curves)
+      const cp1 = new THREE.Vector3(
+        (start.x + end.x) / 2,
+        start.y,
+        (start.z + end.z) / 2,
+      );
+      const cp2 = new THREE.Vector3(
+        (start.x + end.x) / 2,
+        end.y,
+        (start.z + end.z) / 2,
+      );
+
+      const curve = new THREE.CubicBezierCurve3(start, cp1, cp2, end);
+
+      // Sample points from the curve
+      curveVertices.push(...curve.getPoints(30)); // Increase the number for smoother curves
+    }
+
+    // Create a geometry from the curve vertices
+    const geometry = new THREE.BufferGeometry().setFromPoints(curveVertices);
 
     // Create a line material
     const material = new THREE.LineBasicMaterial({ color: 0xffffff });
 
-    // Create a line segment mesh
-    const lineSegments = new THREE.LineLoop(geometry, material);
+    // Create a line mesh
+    const line = new THREE.Line(geometry, material);
 
-    return lineSegments;
+    return line;
   }
 
   function updateContours(noiseOffset, segments) {
@@ -131,35 +152,54 @@ export function noisyContoursThree(containerId) {
     updateContours(0, circleDiameter / 2); // Use this line if your shapes' sizes depend on container size
   }
 
-  let scaleModFreq = 0;
+  // let scaleModFreq = 0;
   let segModFreq = 0;
   const segModThreshold = 1; // Threshold to trigger a coin toss event
   let segments = 100;
 
+  // Linear interpolation function
+  function lerp(start, end, t) {
+    return start * (1 - t) + end * t;
+  }
+
+  // Generate a series of noise points to interpolate between
+  const noisePoints = [];
+  const noisePointsCount = 10; // Number of points to generate
+  for (let i = 0; i < noisePointsCount; i++) {
+    noisePoints.push(Math.random());
+  }
+
+  let currentNoiseIndex = 0;
+  let lerpProgress = 0;
+
   function animateEffect(minScale, maxScale, minSegments, maxSegments) {
-    // Oscillating noise deformation + shape scaling within the range [minScale, maxScale]
     const range = maxScale - minScale;
     const midPoint = (maxScale + minScale) / 2;
     const offsetAmp = 10;
-    noiseOffset = Math.sin(scaleModFreq) * (range / offsetAmp) + midPoint;
 
-    // Increment segModFreq
-    segModFreq += 0.0025; // Adjust this value to control the coin toss rate
+    // Calculate noiseOffset using Lerp Noise
+    const lerpStart = noisePoints[currentNoiseIndex % noisePointsCount];
+    const lerpEnd = noisePoints[(currentNoiseIndex + 1) % noisePointsCount];
+    noiseOffset =
+      lerp(lerpStart, lerpEnd, lerpProgress) * (range / offsetAmp) + midPoint;
 
-    // Oscillate segment count - greater resolution means noise is more obv
-    // "Coin toss" to decide whether to add or subtract a segment
+    // Increment lerpProgress and update currentNoiseIndex if necessary
+    lerpProgress += 0.025; // Adjust this value to control the speed of interpolation
+    if (lerpProgress >= 1) {
+      lerpProgress = 0;
+      currentNoiseIndex++;
+    }
+
+    // Your existing code for segment modulation remains unchanged
+    segModFreq += 0.0025;
     if (segModFreq >= segModThreshold) {
       const coinToss = Math.random() > 0.5 ? 1 : -1;
       segments += coinToss;
       segments = Math.max(minSegments, Math.min(maxSegments, segments));
-
-      // Reset segModFreq after the coin toss
       segModFreq = 0;
     }
 
     updateContours(noiseOffset, segments);
-
-    scaleModFreq += 0.025; // Continue to adjust scale modulation frequency as before
   }
 
   function init() {
