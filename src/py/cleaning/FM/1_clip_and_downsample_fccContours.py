@@ -36,7 +36,7 @@ def is_in_aoi(coords, aoi_boundary):
     return False
 
 # process intput rows with optional downsample factor ie remove every N coordinates from the output
-def process_data(input_filename, output_filename, aoi_geojson, limit=None, downsample_factor=3, downsample_limit=120):
+def process_data(input_filename, output_filename, aoi_geojson, limit=None, downsample_factor=3, downsample_limit=None):
     # Load AOI boundary from the GeoJSON file
     aoi_boundary_gdf = gpd.read_file(aoi_geojson)
     aoi_boundary = aoi_boundary_gdf.unary_union
@@ -100,4 +100,4 @@ def process_data(input_filename, output_filename, aoi_geojson, limit=None, downs
 input_filename = '/Users/matthewheaton/Documents/GitHub/remotesensing/src/assets/data/fcc/fm/raw/FM_service_contour_current.txt'
 output_filename = '/Users/matthewheaton/Documents/GitHub/remotesensing/src/assets/data/fcc/fm/processed/FM_service_contour_testClean.json'
 aoi_geojson = '/Users/matthewheaton/Documents/GitHub/remotesensing/src/assets/data/fcc/fm/aoi_northeast_geojson_20240310.geojson'
-process_data(input_filename, output_filename, aoi_geojson, limit=20)
+process_data(input_filename, output_filename, aoi_geojson, limit=None)

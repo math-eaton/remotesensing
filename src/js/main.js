@@ -13,11 +13,15 @@ import '../styles/style.css';
 //   'CSS Reset',
 // ];
 
-import { contoursThree } from './sketches/contoursThree';
+// import { contourPlotsThree } from './sketches/contourPlotsThree';
+// import { contourSuccession } from './sketches/contourSuccession';
+import { noisyContoursThree } from './sketches/noisyContoursThree';
 
 window.onload = () => {
   setTimeout(() => {
-    contoursThree('contoursThreeContainer1');
+    // contourPlotsThree('contoursThreeContainer1');
+    // contourSuccession('contoursThreeContainer1');
+    noisyContoursThree('contoursThreeContainer1');
   }, 500);
 };
 
