@@ -25,3 +25,14 @@ dist-ssr
 
 data
 secret.js
+presentations
+src/js/sketches/dataContoursThree.js
+src/js/sketches/contoursThree.js
+src/js/sketches/contourPlotsThree.js
+src/js/main.js
+public/vite.svg
+public/screenshot.png
+src/js/sketches/contoursThree.js
+src/js/main.js
+public/vite.svg
+public/screenshot.png

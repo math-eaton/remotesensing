@@ -6,7 +6,6 @@
     "node": true
   },
   "extends": [
-    "airbnb-base",
     "eslint:recommended",
     "plugin:import/recommended",
     "plugin:prettier/recommended",
@@ -27,7 +26,8 @@
   },
   "rules": {
     "prettier/prettier": "error",
-    "no-console": "error",
+    "no-console": "off",
+    "import/prefer-default-export": "off",
     "import/no-extraneous-dependencies": [
       "error",
       {

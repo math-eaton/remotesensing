@@ -2,6 +2,7 @@
   "name": "vite-vanilla-js-template",
   "description": "ViteJS starter template for vanilla JavaScript with some basic dependencies.",
   "version": "1.0.0",
+  "homepage": "https://math-eaton.github.io/remotesensing/",
   "type": "module",
   "keywords": [
     "vanilla",
@@ -26,12 +27,13 @@
     "format": "prettier --write \"./**/*.{js,jsx,json,css}\"",
     "build": "vite build",
     "preview": "vite preview --open",
-    "buildpreview": "vite build && vite preview --open"
+    "buildpreview": "vite build && vite preview --open",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.17",
     "cssnano": "^6.0.3",
-    "eslint": "^8.56.0",
     "eslint-config-airbnb-base": "^15.0.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-import": "^2.29.1",
@@ -43,6 +45,10 @@
     "vite-plugin-eslint": "^1.8.1"
   },
   "dependencies": {
-    "the-new-css-reset": "^1.11.2"
+    "eslint": "^8.57.0",
+    "proj4": "^2.10.0",
+    "simplex-noise": "^4.0.1",
+    "the-new-css-reset": "^1.11.2",
+    "three": "^0.162.0"
   }
 }

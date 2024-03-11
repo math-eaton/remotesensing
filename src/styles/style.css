@@ -19,6 +19,8 @@ body {
   min-width: 20rem;
   min-height: 100vh;
   font-family: var(--font-family);
+  overflow: hidden;
+  background-color: black;
 }
 
 h1 {
@@ -31,6 +33,13 @@ h1 {
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
+}
+
+#contoursThreeContainer1{
+  width: 100%;
+  height: auto;
+  cursor: none;
+  image-rendering: pixelated !important;
 }
 
 .logo {
