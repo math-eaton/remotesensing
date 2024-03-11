@@ -8,7 +8,7 @@ export function noisyContoursThree(containerId) {
   let controls;
   let renderer;
   // Define a constant pixelation factor
-  let pixelationFactor = 0.7; // Lower values result in more pixelation
+  let pixelationFactor = 0.35; // Lower values result in more pixelation
   let circlesGroup; // Now accessible to the update function
   const container = document.getElementById(containerId);
 
@@ -28,7 +28,7 @@ export function noisyContoursThree(containerId) {
 
   const initialOvalWidth = width;
   const initialOvalHeight = height;
-  const decrement = 13;
+  const decrement = 26;
 
   let noiseOffset = 0;
 
@@ -40,12 +40,13 @@ export function noisyContoursThree(containerId) {
   ) {
     const vertices = [];
     const radius = diameter / 2;
-    const zNoiseAmplitude = 50;
 
     const aspectRatio = width / height;
     const baseSize = Math.sqrt(width * height) * (1 / pixelationFactor);
     const noiseScale = 0.002 * baseSize * (aspectRatio > 1 ? 0.75 : 1.25);
-    const amplitude = noiseScale * 10;
+    const xyNoiseAmplitude = noiseScale * 2;
+
+    const zNoiseAmplitude = xyNoiseAmplitude / 1.5;
 
     // Generate original vertices
     for (let i = 0; i <= segments; i++) {
@@ -55,7 +56,7 @@ export function noisyContoursThree(containerId) {
 
       const noiseXY =
         noise2D(x * noiseScale + noiseOffset, y * noiseScale + noiseOffset) *
-        amplitude;
+        xyNoiseAmplitude;
       const nx = x + noiseXY;
       const ny = y + noiseXY;
       const nz =
@@ -87,7 +88,7 @@ export function noisyContoursThree(containerId) {
       const curve = new THREE.CubicBezierCurve3(start, cp1, cp2, end);
 
       // Sample points from the curve
-      curveVertices.push(...curve.getPoints(30)); // Increase the number for smoother curves
+      curveVertices.push(...curve.getPoints(1000)); // Increase the number for smoother curves
     }
 
     // Create a geometry from the curve vertices
@@ -162,13 +163,24 @@ export function noisyContoursThree(containerId) {
     return start * (1 - t) + end * t;
   }
 
-  // Generate a series of noise points to interpolate between
-  const noisePoints = [];
-  const noisePointsCount = 10; // Number of points to generate
-  for (let i = 0; i < noisePointsCount; i++) {
-    noisePoints.push(Math.random());
+  //  step function for interpolation
+  function stepSlewed(edge0, edge1, x) {
+    // Scale, and clamp x to 0..1 range
+    x = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+    // Evaluate polynomial
+    return x * x * x * (x * (x * 6 - 15) + 10);
   }
 
+  // Generate smooth series of noise points
+  function generateNoisePoints(count) {
+    const points = [];
+    for (let i = 0; i < count; i++) {
+      points.push(Math.random());
+    }
+    return points;
+  }
+
+  const noisePoints = generateNoisePoints(10);
   let currentNoiseIndex = 0;
   let lerpProgress = 0;
 
@@ -177,20 +189,20 @@ export function noisyContoursThree(containerId) {
     const midPoint = (maxScale + minScale) / 2;
     const offsetAmp = 10;
 
-    // Calculate noiseOffset using Lerp Noise
-    const lerpStart = noisePoints[currentNoiseIndex % noisePointsCount];
-    const lerpEnd = noisePoints[(currentNoiseIndex + 1) % noisePointsCount];
+    // Calculate noiseOffset using smoother interpolation
+    const lerpStart = noisePoints[currentNoiseIndex % noisePoints.length];
+    const lerpEnd = noisePoints[(currentNoiseIndex + 1) % noisePoints.length];
+    const smoothProgress = stepSlewed(0, 1, lerpProgress);
     noiseOffset =
-      lerp(lerpStart, lerpEnd, lerpProgress) * (range / offsetAmp) + midPoint;
+      lerp(lerpStart, lerpEnd, smoothProgress) * (range / offsetAmp) + midPoint;
 
     // Increment lerpProgress and update currentNoiseIndex if necessary
-    lerpProgress += 0.025; // Adjust this value to control the speed of interpolation
+    lerpProgress += 0.01; // lerp speed
     if (lerpProgress >= 1) {
       lerpProgress = 0;
       currentNoiseIndex++;
     }
 
-    // Your existing code for segment modulation remains unchanged
     segModFreq += 0.0025;
     if (segModFreq >= segModThreshold) {
       const coinToss = Math.random() > 0.5 ? 1 : -1;
@@ -212,10 +224,7 @@ export function noisyContoursThree(containerId) {
       0.00001,
       5000,
     );
-    camera.position.z = 1000;
-
-    // // Define a constant pixelation factor
-    // var pixelationFactor = 0.666; // Lower values result in more pixelation
+    camera.position.z = 2000;
 
     // Calculate low-resolution dimensions based on the pixelation factor
     var pixelatedWidth = window.innerWidth * pixelationFactor;
@@ -239,7 +248,7 @@ export function noisyContoursThree(containerId) {
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.update();
 
-    camera.position.set(0, 20, 1000);
+    camera.position.set(0, 0, 2000);
 
     circlesGroup = new THREE.Group();
     scene.add(circlesGroup); // Add the empty group to the scene
@@ -257,7 +266,7 @@ export function noisyContoursThree(containerId) {
     // rescaled and period effect to animate over time - scales with modFreq + amp
     // first two args is noise scaling, second two are segment mod ranges
     setInterval(() => {
-      animateEffect(2, 5, 10, 200);
+      animateEffect(2, 10, 25, 200);
     }, 80);
 
     // Set up the resize event listener
