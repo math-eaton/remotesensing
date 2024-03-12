@@ -56,8 +56,10 @@ for index, row in data.iterrows():
         print(f"Error parsing coordinates at row {index}: {e}")
         continue
 
-    properties = row.to_dict()
-    properties.pop('coordinates', None)  # Remove 'coordinates' from properties
+    properties = {
+        'transmitter_site': row['transmitter_site'],
+        'lms_application_id': row['lms_application_id']
+    }
 
     coordinates = [tuple(map(float, v.split(','))) for v in coords_dict.values()]
 
