@@ -91,20 +91,49 @@ export async function dataContoursThree(containerId) {
 
   // Function to create a contour line from a GeoJSON feature
   function createContourFromFeature(feature) {
-    const coordinates = feature.geometry.coordinates[0]; // Assuming a simple polygon
+    const geometry = feature.geometry;
+    if (geometry.type !== 'Polygon') {
+      console.error('Unsupported geometry type:', geometry.type);
+      return;
+    }
+
+    // Assuming the first linear ring is the exterior boundary
+    const exteriorCoords = geometry.coordinates[0];
     const elevationData = feature.properties.elevation_data;
-    const vertices = coordinates.map((coord, index) => {
-      const elevation = elevationData[index];
+
+    const vertices = exteriorCoords.map((coord, index) => {
+      // Use elevation for each coordinate or default to 0 if not available
+      const elevation =
+        elevationData && elevationData.length > index
+          ? elevationData[index]
+          : 0;
       return wgs84ToNAD83Threejs(coord[0], coord[1], elevation);
     });
 
-    // Create geometry and line from vertices
-    const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
+    // Create a BufferGeometry instance from the vertices
+    const lineGeometry = new THREE.BufferGeometry().setFromPoints(vertices);
     const material = new THREE.LineBasicMaterial({ color: 0xffffff });
-    const line = new THREE.Line(geometry, material);
+    const line = new THREE.Line(lineGeometry, material);
 
-    // Add the line to the scene
-    scene.add(line);
+    return line;
+  }
+
+  (async () => {
+    try {
+      const filePath =
+        'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_processed_trunc.geojson';
+
+      await initSceneWithGeoJSON(filePath, scene);
+      animate();
+    } catch (error) {
+      console.error('Initialization failed:', error);
+    }
+  })();
+
+  function animate() {
+    requestAnimationFrame(animate);
+    renderer.render(scene, camera);
+    controls.update();
   }
 
   // Resize event listener to adjust camera and renderer on window resize
@@ -122,22 +151,4 @@ export async function dataContoursThree(containerId) {
     renderer.setSize(pixelatedWidth, pixelatedHeight);
     renderer.domElement.style.transform = `scale(${scale})`;
   });
-
-  function animate() {
-    requestAnimationFrame(animate);
-    renderer.render(scene, camera);
-    controls.update();
-  }
-
-  (async () => {
-    try {
-      // Initialize the scene with GeoJSON data
-      const filePath =
-        'assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_processed_trunc.geojson';
-      await initSceneWithGeoJSON(filePath, scene);
-      animate();
-    } catch (error) {
-      console.error('Initialization failed:', error);
-    }
-  })();
 }
