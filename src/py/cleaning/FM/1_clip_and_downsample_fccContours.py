@@ -3,6 +3,7 @@ import geopandas as gpd
 from shapely.geometry import Point
 from tqdm import tqdm
 import json
+import warnings
 
 def clean_text(input_text):
     """
@@ -36,7 +37,7 @@ def is_in_aoi(coords, aoi_boundary):
     return False
 
 # process intput rows with optional downsample factor ie remove every N coordinates from the output
-def process_data(input_filename, output_filename, aoi_geojson, limit=None, downsample_factor=6, downsample_limit=None, proximity_threshold=500):
+def process_data(input_filename, output_filename, aoi_geojson, limit=None, downsample_factor=6, downsample_limit=None, proximity_threshold=50):
     
     # Load AOI boundary from the GeoJSON file
     aoi_boundary_gdf = gpd.read_file(aoi_geojson)
@@ -58,9 +59,13 @@ def process_data(input_filename, output_filename, aoi_geojson, limit=None, downs
             chunk['geometry'] = chunk['transmitter_site'].apply(lambda x: Point([float(coord) for coord in x.split(',')][::-1]))
             current_chunk_gdf = gpd.GeoDataFrame(chunk, geometry='geometry')
 
+            print(f"Number of features before distance filtering: {len(current_chunk_gdf)}")
+
             if not transmitter_sites.empty:
                 distances = current_chunk_gdf.geometry.apply(lambda x: transmitter_sites.distance(x).min())
-                current_chunk_gdf = current_chunk_gdf.loc[distances > proximity_threshold / 100000]  # Adjust distance calculation as needed
+                filtered_chunk_gdf = current_chunk_gdf.loc[distances > proximity_threshold / 100000]  # Adjust based on the CRS
+                print(f"Number of features removed due to proximity threshold ({proximity_threshold} meters): {len(current_chunk_gdf) - len(filtered_chunk_gdf)}")
+                current_chunk_gdf = filtered_chunk_gdf
             
             transmitter_sites = pd.concat([transmitter_sites, current_chunk_gdf])
 
@@ -82,7 +87,10 @@ def process_data(input_filename, output_filename, aoi_geojson, limit=None, downs
                 # Calculate indices for downsampled coordinates
                 downsampled_indices = list(range(transmitter_site_index + 1, end_index, downsample_factor))[:downsample_limit]
                 downsampled_headers = [headers[i] for i in downsampled_indices]
-                polar_coordinates = [row[i] for i in range(transmitter_site_index + 1, end_index)]
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=FutureWarning)
+                    # The line or block of code that causes the warning goes here
+                    polar_coordinates = [row[i] for i in range(transmitter_site_index + 1, end_index)]
                 downsampled_coordinates = [reverse_coordinates(polar_coordinates[i]) for i in range(0, len(polar_coordinates), downsample_factor)][:downsample_limit]
 
                 record_dict = {
@@ -110,6 +118,8 @@ def process_data(input_filename, output_filename, aoi_geojson, limit=None, downs
 input_filename = '/Users/matthewheaton/Documents/GitHub/remotesensing/src/assets/data/fcc/fm/raw/FM_service_contour_current.txt'
 output_filename = '/Users/matthewheaton/Documents/GitHub/remotesensing/src/assets/data/fcc/fm/processed/FM_service_contour_testClean_reduceDupe.json'
 aoi_geojson = '/Users/matthewheaton/Documents/GitHub/remotesensing/src/assets/data/fcc/fm/aoi_northeast_geojson_20240310.geojson'
+
+
 
 
 try:
