@@ -15,13 +15,15 @@ import '../styles/style.css';
 
 // import { contourPlotsThree } from './sketches/contourPlotsThree';
 // import { contourSuccession } from './sketches/contourSuccession';
-import { noisyContoursThree } from './sketches/noisyContoursThree';
+// import { noisyContoursThree } from './sketches/noisyContoursThree';
+import { dataContoursThree } from './sketches/dataContoursThree';
 
 window.onload = () => {
   setTimeout(() => {
     // contourPlotsThree('contoursThreeContainer1');
     // contourSuccession('contoursThreeContainer1');
-    noisyContoursThree('contoursThreeContainer1');
+    // noisyContoursThree('contoursThreeContainer1');
+    dataContoursThree('contoursThreeContainer1');
   }, 500);
 };
 

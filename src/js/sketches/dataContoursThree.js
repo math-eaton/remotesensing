@@ -1,154 +1,127 @@
 import * as THREE from 'three';
-import { createNoise2D } from 'simplex-noise';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+// import { createNoise2D } from 'simplex-noise';
 
-export function dataContoursThree(containerId) {
-  let scene;
-  let camera;
-  let renderer;
-  let circlesGroup; // Now accessible to the update function
+export async function dataContoursThree(containerId) {
   const container = document.getElementById(containerId);
-
-  const noise2D = createNoise2D();
-
   if (!container) {
-    console.error('Container element not found');
+    console.error('Container not found');
     return;
   }
 
-  if (container.clientHeight === 0) {
-    container.style.height = '100vh';
+  // Define scene
+  const scene = new THREE.Scene();
+
+  // Orthographic camera setup
+  const camera = new THREE.OrthographicCamera(
+    container.offsetWidth / -2,
+    container.offsetWidth / 2,
+    container.offsetHeight / 2,
+    container.offsetHeight / -2,
+    0.00001,
+    5000,
+  );
+  camera.position.z = 2000; // Adjust as necessary
+
+  // Define a pixelation factor
+  let pixelationFactor = 0.35; // Lower values result in more pixelation, adjust as necessary
+
+  // Renderer with pixelated dimensions and scaling
+  const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false });
+  const pixelatedWidth = container.offsetWidth * pixelationFactor;
+  const pixelatedHeight = container.offsetHeight * pixelationFactor;
+  renderer.setSize(pixelatedWidth, pixelatedHeight);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  container.appendChild(renderer.domElement);
+
+  const scale = 1 / pixelationFactor;
+  renderer.domElement.style.transformOrigin = 'center';
+  renderer.domElement.style.transform = `scale(${scale})`;
+  container.style.overflow = 'hidden'; // Prevent scrollbars from appearing
+
+  // Controls setup
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.update();
+
+  // Function to initialize the scene with GeoJSON data
+  async function initSceneWithGeoJSON(filePath, scene) {
+    const geoData = await loadGeoJSON(filePath);
+    if (!geoData) {
+      console.error('Unable to load or parse the GeoJSON data.');
+      return;
+    }
+
+    geoData.features.forEach((feature) => {
+      const contourLine = createContourFromFeature(feature);
+      scene.add(contourLine);
+    });
   }
-
-  const width = container.clientWidth;
-  const height = container.clientHeight;
-
-  const initialOvalWidth = 750;
-  const initialOvalHeight = 750;
-  const decrement = width / 66.6;
-
-  function createDeformedOval(
-    ovalWidth,
-    ovalHeight,
-    noiseOffset = 0,
-    segments = 50,
-  ) {
-    const shape = new THREE.Shape();
-
-    const noiseScale = 0.95;
-    const amplitude = 7;
-
-    for (let i = 0; i <= segments; i++) {
-      const angle = (i / segments) * Math.PI * 2;
-      const x = (Math.cos(angle) * ovalWidth) / 2;
-      const y = (Math.sin(angle) * ovalHeight) / 2;
-
-      const noise =
-        noise2D(x * noiseScale + noiseOffset, y * noiseScale + noiseOffset) *
-        amplitude;
-      const nx = x + noise;
-      const ny = y + noise;
-
-      if (i === 0) {
-        shape.moveTo(nx, ny);
-      } else {
-        shape.lineTo(nx, ny);
+  // Define the asynchronous function to load and parse GeoJSON data
+  async function loadGeoJSON(filePath) {
+    try {
+      const response = await fetch(filePath);
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
       }
-    }
-
-    return shape;
-  }
-
-  function updateContours(noiseOffset) {
-    circlesGroup.clear(); // Remove all objects from the group
-
-    // Re-create and deform the exterior oval with the new noise offset
-    const exteriorShape = createDeformedOval(
-      initialOvalWidth,
-      initialOvalHeight,
-      noiseOffset,
-    );
-    const exteriorGeometry = new THREE.ShapeGeometry(exteriorShape);
-    const exteriorEdges = new THREE.EdgesGeometry(exteriorGeometry);
-    const exteriorLine = new THREE.LineSegments(
-      exteriorEdges,
-      new THREE.LineBasicMaterial({ color: 0xffffff }),
-    );
-    circlesGroup.add(exteriorLine);
-
-    // Re-create interior concentric circles by scaling the exterior shape
-    let scale = 1 - decrement / Math.max(initialOvalWidth, initialOvalHeight);
-    for (
-      let ovalWidth = initialOvalWidth - decrement,
-        ovalHeight = initialOvalHeight - decrement;
-      ovalWidth > 1 && ovalHeight > 1;
-      ovalWidth -= decrement,
-        ovalHeight -= decrement,
-        scale -= decrement / Math.max(initialOvalWidth, initialOvalHeight)
-    ) {
-      const scaledGeometry = exteriorGeometry.clone().scale(scale, scale, 1);
-      const scaledEdges = new THREE.EdgesGeometry(scaledGeometry);
-      const scaledLine = new THREE.LineSegments(
-        scaledEdges,
-        new THREE.LineBasicMaterial({ color: 0xffffff }),
-      );
-      circlesGroup.add(scaledLine);
+      const geoJsonData = await response.json();
+      console.log('GeoJSON data loaded successfully:', geoJsonData);
+      return geoJsonData;
+    } catch (error) {
+      console.error('Failed to load GeoJSON data:', error);
+      return null; // Return null in case of failure to indicate the error
     }
   }
 
-  function init() {
-    scene = new THREE.Scene();
-    camera = new THREE.OrthographicCamera(
-      width / -2,
-      width / 2,
-      height / 2,
-      height / -2,
-      1,
-      1000,
-    );
-    camera.position.z = 500;
-
-    renderer = new THREE.WebGLRenderer({ alpha: true });
-    renderer.setSize(width, height);
-    renderer.setClearColor(0x000000, 0);
-    container.appendChild(renderer.domElement);
-
-    circlesGroup = new THREE.Group();
-    scene.add(circlesGroup); // Add the empty group to the scene
-
-    updateContours(0); // Initialize contours with zero offset
-
-    document.addEventListener('mousemove', onMouseMove, false);
-
-    let noiseOffset = 0;
-    setInterval(() => {
-      noiseOffset += 0.1; // Increment the noise offset for each update
-      updateContours(noiseOffset); // Update contours with the new noise offset
-    }, 50); // Update N times per second (e.g. 100 = 10fps)
+  // Function to convert geographic coordinates (longitude, latitude) and elevation to Three.js scene coordinates
+  function geoCoordsToSceneCoords(longitude, latitude, elevation) {
+    // Placeholder transformation, replace with actual logic appropriate for your scene's scale and layout
+    const x = longitude; // Scale or offset as necessary
+    const y = elevation; // Scale elevation to match the scene's units
+    const z = latitude; // Scale or offset as necessary
+    return new THREE.Vector3(x, y, z);
   }
 
-  function onMouseMove(event) {
-    const rect = container.getBoundingClientRect();
-    const mouseX = ((event.clientX - rect.left) / width) * 2 - 1;
-    const mouseY = -((event.clientY - rect.top) / height) * 2 + 1;
+  // Function to create a contour line from a GeoJSON feature
+  function createContourFromFeature(feature) {
+    const coordinates = feature.geometry.coordinates[0]; // Assuming Polygon geometry
+    const elevationData = feature.properties.elevation_data;
+    const vertices = coordinates.map((coord, index) => {
+      const elevation = elevationData[index];
+      return geoCoordsToSceneCoords(coord[0], coord[1], elevation);
+    });
 
-    const vector = new THREE.Vector3(mouseX, mouseY, 0);
-    vector.unproject(camera);
-
-    const dir = vector.sub(camera.position).normalize();
-    const distance = -camera.position.z / dir.z;
-    const pos = camera.position.clone().add(dir.multiplyScalar(distance));
-
-    if (circlesGroup) {
-      circlesGroup.position.x = pos.x;
-      circlesGroup.position.y = pos.y;
-    }
+    // Create geometry and line from vertices
+    const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
+    const material = new THREE.LineBasicMaterial({ color: 0xffffff });
+    const line = new THREE.Line(geometry, material);
+    return line;
   }
+
+  // Resize event listener to adjust camera and renderer on window resize
+  window.addEventListener('resize', () => {
+    const aspect = container.offsetWidth / container.offsetHeight;
+    camera.left = -container.offsetWidth / 2;
+    camera.right = container.offsetWidth / 2;
+    camera.top = container.offsetWidth / (2 * aspect);
+    camera.bottom = -container.offsetWidth / (2 * aspect);
+    camera.updateProjectionMatrix();
+
+    // Update renderer size and scale
+    const pixelatedWidth = container.offsetWidth * pixelationFactor;
+    const pixelatedHeight = container.offsetHeight * pixelationFactor;
+    renderer.setSize(pixelatedWidth, pixelatedHeight);
+    renderer.domElement.style.transform = `scale(${scale})`;
+  });
+
+  // Initialize the scene with GeoJSON data
+  const filePath =
+    'assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_processed_trunc.geojson';
+  await initSceneWithGeoJSON(filePath, scene);
 
   function animate() {
     requestAnimationFrame(animate);
     renderer.render(scene, camera);
+    controls.update();
   }
-
-  init();
   animate();
 }
