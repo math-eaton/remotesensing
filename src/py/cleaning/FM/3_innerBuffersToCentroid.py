@@ -2,7 +2,7 @@ from shapely.geometry import shape, mapping
 from shapely.affinity import scale
 import geojson
 
-def create_concentric_polygons(geojson_input, num_rings=30, scale_factor=0.9):
+def create_concentric_polygons(geojson_input, num_rings=10, scale_factor=0.7):
     with open(geojson_input, 'r') as file:
         data = geojson.load(file)
     

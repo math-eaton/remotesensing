@@ -36,24 +36,35 @@ def is_in_aoi(coords, aoi_boundary):
     return False
 
 # process intput rows with optional downsample factor ie remove every N coordinates from the output
-def process_data(input_filename, output_filename, aoi_geojson, limit=None, downsample_factor=6, downsample_limit=None):
+def process_data(input_filename, output_filename, aoi_geojson, limit=None, downsample_factor=6, downsample_limit=None, proximity_threshold=500):
+    
     # Load AOI boundary from the GeoJSON file
     aoi_boundary_gdf = gpd.read_file(aoi_geojson)
     aoi_boundary = aoi_boundary_gdf.unary_union
 
+    transmitter_sites = gpd.GeoDataFrame(columns=['geometry'], geometry='geometry')
     records = []
 
     # Initialize progress bar
     total_rows = sum(1 for _ in open(input_filename, 'r'))
     pbar = tqdm(total=min(total_rows, limit) if limit else total_rows, desc='Processing', unit='rows')
 
+
     # Setting dtype=str to treat all columns as strings
     with pd.read_csv(input_filename, chunksize=1000, sep='|', dtype=str, iterator=True) as reader:
         for chunk in reader:
             chunk['transmitter_site'] = chunk['transmitter_site'].apply(reverse_coordinates)
             chunk = chunk[chunk['transmitter_site'].apply(lambda x: is_in_aoi(x, aoi_boundary))]
+            chunk['geometry'] = chunk['transmitter_site'].apply(lambda x: Point([float(coord) for coord in x.split(',')][::-1]))
+            current_chunk_gdf = gpd.GeoDataFrame(chunk, geometry='geometry')
 
-            for _, row in chunk.iterrows():
+            if not transmitter_sites.empty:
+                distances = current_chunk_gdf.geometry.apply(lambda x: transmitter_sites.distance(x).min())
+                current_chunk_gdf = current_chunk_gdf.loc[distances > proximity_threshold / 100000]  # Adjust distance calculation as needed
+            
+            transmitter_sites = pd.concat([transmitter_sites, current_chunk_gdf])
+
+            for _, row in current_chunk_gdf.iterrows():
                 if limit and len(records) >= limit:
                     break
 
@@ -97,7 +108,7 @@ def process_data(input_filename, output_filename, aoi_geojson, limit=None, downs
 
 
 input_filename = '/Users/matthewheaton/Documents/GitHub/remotesensing/src/assets/data/fcc/fm/raw/FM_service_contour_current.txt'
-output_filename = '/Users/matthewheaton/Documents/GitHub/remotesensing/src/assets/data/fcc/fm/processed/FM_service_contour_testClean.json'
+output_filename = '/Users/matthewheaton/Documents/GitHub/remotesensing/src/assets/data/fcc/fm/processed/FM_service_contour_testClean_reduceDupe.json'
 aoi_geojson = '/Users/matthewheaton/Documents/GitHub/remotesensing/src/assets/data/fcc/fm/aoi_northeast_geojson_20240310.geojson'
 
 

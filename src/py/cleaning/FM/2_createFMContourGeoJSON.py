@@ -5,7 +5,7 @@ import os
 import ast
 
 # Load the data from the JSON file
-input_file = 'src/assets/data/fcc/fm/processed/FM_service_contour_testClean.json'  
+input_file = 'src/assets/data/fcc/fm/processed/FM_service_contour_testClean_reduceDupe.json'  
 data = pd.read_json(input_file, dtype=str)
 
 # output info
