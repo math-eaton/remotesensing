@@ -36,7 +36,7 @@ def is_in_aoi(coords, aoi_boundary):
     return False
 
 # process intput rows with optional downsample factor ie remove every N coordinates from the output
-def process_data(input_filename, output_filename, aoi_geojson, limit=None, downsample_factor=3, downsample_limit=None):
+def process_data(input_filename, output_filename, aoi_geojson, limit=None, downsample_factor=6, downsample_limit=None):
     # Load AOI boundary from the GeoJSON file
     aoi_boundary_gdf = gpd.read_file(aoi_geojson)
     aoi_boundary = aoi_boundary_gdf.unary_union

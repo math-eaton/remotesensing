@@ -2,7 +2,7 @@ from shapely.geometry import shape, mapping
 from shapely.affinity import scale
 import geojson
 
-def create_concentric_polygons(geojson_input, num_rings=10, scale_factor=0.9):
+def create_concentric_polygons(geojson_input, num_rings=30, scale_factor=0.9):
     with open(geojson_input, 'r') as file:
         data = geojson.load(file)
     
@@ -24,12 +24,12 @@ def create_concentric_polygons(geojson_input, num_rings=10, scale_factor=0.9):
     new_feature_collection = geojson.FeatureCollection(new_features)
 
     # Write the modified polygons to a new GeoJSON file
-    output_file = 'concentric_polygons.geojson'
+    output_file = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_polygon_scaled.geojson'
     with open(output_file, 'w') as file:
         geojson.dump(new_feature_collection, file)
 
     print(f"Concentric polygons created and saved to {output_file}")
 
 # Example usage
-geojson_input = 'path/to/your/input.geojson'
+geojson_input = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_polygon.geojson'
 create_concentric_polygons(geojson_input)
