@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import proj4 from 'proj4';
 // import { createNoise2D } from 'simplex-noise';
 
 export async function dataContoursThree(containerId) {
@@ -12,6 +13,11 @@ export async function dataContoursThree(containerId) {
   // Define scene
   const scene = new THREE.Scene();
 
+  const WGS84 = 'EPSG:4326'; // WGS84 projection string
+
+  const NAD83 =
+    '+proj=longlat +lat_0=40 +lon_0=-76.58333333333333 +k=0.9999375 +x_0=249999.9998983998 +y_0=0 +ellps=GRS80 +datum=NAD83 +to_meter=0.3048006096012192 +no_defs';
+
   // Orthographic camera setup
   const camera = new THREE.OrthographicCamera(
     container.offsetWidth / -2,
@@ -21,6 +27,10 @@ export async function dataContoursThree(containerId) {
     0.00001,
     5000,
   );
+
+  camera.position.set(500000, 5000, 500000); // Example positions, adjust based on your data's scale and location
+  camera.lookAt(new THREE.Vector3(0, 0, 0));
+
   camera.position.z = 2000; // Adjust as necessary
 
   // Define a pixelation factor
@@ -42,6 +52,13 @@ export async function dataContoursThree(containerId) {
   // Controls setup
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.update();
+
+  function wgs84ToNAD83Threejs(lon, lat, elevation) {
+    const [x, y] = proj4(WGS84, NAD83, [lon, lat]);
+    const z = elevation; // Assuming elevation is in meters
+
+    return new THREE.Vector3(x, y, z);
+  }
 
   // Function to initialize the scene with GeoJSON data
   async function initSceneWithGeoJSON(filePath, scene) {
@@ -72,29 +89,22 @@ export async function dataContoursThree(containerId) {
     }
   }
 
-  // Function to convert geographic coordinates (longitude, latitude) and elevation to Three.js scene coordinates
-  function geoCoordsToSceneCoords(longitude, latitude, elevation) {
-    // Placeholder transformation, replace with actual logic appropriate for your scene's scale and layout
-    const x = longitude; // Scale or offset as necessary
-    const y = elevation; // Scale elevation to match the scene's units
-    const z = latitude; // Scale or offset as necessary
-    return new THREE.Vector3(x, y, z);
-  }
-
   // Function to create a contour line from a GeoJSON feature
   function createContourFromFeature(feature) {
-    const coordinates = feature.geometry.coordinates[0]; // Assuming Polygon geometry
+    const coordinates = feature.geometry.coordinates[0]; // Assuming a simple polygon
     const elevationData = feature.properties.elevation_data;
     const vertices = coordinates.map((coord, index) => {
       const elevation = elevationData[index];
-      return geoCoordsToSceneCoords(coord[0], coord[1], elevation);
+      return wgs84ToNAD83Threejs(coord[0], coord[1], elevation);
     });
 
     // Create geometry and line from vertices
     const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
     const material = new THREE.LineBasicMaterial({ color: 0xffffff });
     const line = new THREE.Line(geometry, material);
-    return line;
+
+    // Add the line to the scene
+    scene.add(line);
   }
 
   // Resize event listener to adjust camera and renderer on window resize
@@ -113,15 +123,21 @@ export async function dataContoursThree(containerId) {
     renderer.domElement.style.transform = `scale(${scale})`;
   });
 
-  // Initialize the scene with GeoJSON data
-  const filePath =
-    'assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_processed_trunc.geojson';
-  await initSceneWithGeoJSON(filePath, scene);
-
   function animate() {
     requestAnimationFrame(animate);
     renderer.render(scene, camera);
     controls.update();
   }
-  animate();
+
+  (async () => {
+    try {
+      // Initialize the scene with GeoJSON data
+      const filePath =
+        'assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_processed_trunc.geojson';
+      await initSceneWithGeoJSON(filePath, scene);
+      animate();
+    } catch (error) {
+      console.error('Initialization failed:', error);
+    }
+  })();
 }
