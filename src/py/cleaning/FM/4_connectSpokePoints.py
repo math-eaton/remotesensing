@@ -32,23 +32,30 @@ def group_and_sort_features(features):
     return groups
 
 def construct_polylines(groups):
-    polylines = []
+    polylines_with_elevation = []
     for key, features in groups.items():
-        points = [Point(feature['geometry']['coordinates']) for feature in features]
-        # Ensure the loop is closed by adding the first point at the end
-        if points[0] != points[-1]:
-            points.append(points[0])
-        polyline = Polygon([[point.x, point.y] for point in points])
-        polylines.append(polyline)
-    return polylines
+        points_with_elevation = [(feature['geometry']['coordinates'][0], feature['geometry']['coordinates'][1], feature['properties']['elevation']) for feature in features]
+        # Ensure the loop is closed by adding the first point at the end, including elevation
+        if points_with_elevation[0][:2] != points_with_elevation[-1][:2]:
+            points_with_elevation.append(points_with_elevation[0])
+        polyline_with_elevation = {"coordinates": points_with_elevation, "key": key}
+        polylines_with_elevation.append(polyline_with_elevation)
+    return polylines_with_elevation
 
-def generate_output_geojson(polylines):
+def generate_output_geojson(polylines_with_elevation):
     features = []
-    for polyline in polylines:
+    for polyline in polylines_with_elevation:
+        # Convert the list of (x, y, z) tuples into a polygon and a separate elevation array
+        polygon = Polygon([p[:2] for p in polyline["coordinates"]])
+        elevation_data = [p[2] for p in polyline["coordinates"]]
+        
         feature = {
             "type": "Feature",
-            "geometry": mapping(polyline),
-            "properties": {}
+            "geometry": mapping(polygon),
+            "properties": {
+                "elevation_data": elevation_data,
+                "key": polyline["key"]
+            }
         }
         features.append(feature)
     
