@@ -76,9 +76,9 @@ export function gfx() {
   //   let raycaster = new THREE.Raycaster();
   //   let mouse = new THREE.Vector2();
   //   let polygons = [];
-  let isCameraRotating = false; // Flag to track camera rotation
-  const rotationSpeed = 0.0005; // Define the speed of rotation
-  let pixelMod = 1; //  default value
+  let isCameraRotating = true; // Flag to track camera rotation
+  const rotationSpeed = 0.001; // Define the speed of rotation
+  let pixelationFactor = 1; //  default value
 
   // Create a material for the ray line
   const rayMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 }); // Red color for visibility
@@ -99,14 +99,13 @@ export function gfx() {
     // Create the renderer first
     renderer = new THREE.WebGLRenderer({ antialias: false });
 
-    var lowResScale = 0.1; // Adjust this for more or less resolution (lower value = lower resolution)
-    var lowResWidth = window.innerWidth * lowResScale;
-    var lowResHeight = window.innerHeight * lowResScale;
+    // var lowResScale = .01; // Adjust this for more or less resolution (lower value = lower resolution)
 
-    renderer.setSize(lowResWidth, lowResHeight, false);
-    renderer.setPixelRatio(window.devicePixelRatio * lowResScale);
+    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    renderer.setPixelRatio(1);
 
     document.getElementById('gfx').appendChild(renderer.domElement);
+    
 
     // Set initial positions - We'll update these later
     rayGeometry.setAttribute(
@@ -124,13 +123,12 @@ export function gfx() {
 
     // Set up the control parameters as needed for a mapping interface
     controls.screenSpacePanning = false;
-    controls.enableRotate = false; // typically map interfaces don't use rotation
+    controls.enablePan = true; // Enable panning
+    controls.enableRotate = true; // tilt up down
     controls.enableDamping = true; // an optional setting to give a smoother control feeling
     controls.dampingFactor = 0.05; // amount of damping (drag)
 
     // camera.up.set(0, 0, 1); 
-    controls.enablePan = true; // Enable panning
-    controls.enableRotate = true; // Disable rotation
 
 
     // Set the minimum and maximum polar angles (in radians) to prevent the camera from going over the vertical
@@ -185,16 +183,17 @@ export function gfx() {
     camera.updateProjectionMatrix();
     renderer.setSize(width, height);
 
-    // pixelMod is hardcoded rn for removal (fka sliderValue)
-    pixelMod = 0.5;
+    // pixelationFactor is hardcoded rn for removal (fka sliderValue)
+    pixelationFactor = 0.666;
 
     // Calculate new dimensions based on the slider value
-    var newWidth = Math.max(1, window.innerWidth * pixelMod);
-    var newHeight = Math.max(1, window.innerHeight * pixelMod);
+    var newWidth = Math.max(1, window.innerWidth * pixelationFactor);
+    var newHeight = Math.max(1, window.innerHeight * pixelationFactor);
+
 
     if (renderer && camera) {
       renderer.setSize(newWidth, newHeight, false);
-      renderer.setPixelRatio(window.devicePixelRatio * pixelMod);
+      renderer.setPixelRatio(1);
 
       // Update camera aspect ratio and projection matrix
       camera.aspect = newWidth / newHeight;
@@ -274,8 +273,8 @@ export function gfx() {
   async function initialize() {
     initThreeJS(); // Initialize Three.js
 
-    // Initialize pixelMod
-    pixelMod = 1;
+    // Initialize pixelationFactor
+    pixelationFactor = 1;
 
     onWindowResize(); // Update the resolution
 
