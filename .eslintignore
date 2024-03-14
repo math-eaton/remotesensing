@@ -3,3 +3,4 @@ dist
 node_modules
 vite.config.ts
 postcss.config.js
+gfx.js

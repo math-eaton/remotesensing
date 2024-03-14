@@ -1,15 +1,18 @@
-<!doctype html>
-<html lang="en">
+  <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="" />
+    <link rel="icon" type="image/svg+xml" href="/image/icon/icon.webp" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>"REMOTE SENSING"</title>
+    <title>iso 3D</title>
+    <link rel="stylesheet" type="text/css" href="src/css/style.css">
   </head>
-
   <body>
-    <!-- <div id="app"></div> -->
-    <div id="contoursThreeContainer1"></div>
+    <!-- three.js map -->
+    <div id="gfx" class="background crosshair">
+      <div id="three-container" class="pixelated"></div> 
+    </div>
+    <script type="module" src="/src/js/gfx.js" defer></script>
     <script type="module" src="/src/js/main.js" defer></script>
   </body>
-</html>
+  </html>
+  
