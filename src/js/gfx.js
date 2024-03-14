@@ -54,9 +54,13 @@ export function gfx() {
         `Invalid coordinates: longitude (${lon}), latitude (${lat})`,
       );
     }
-    return proj4('EPSG:2261').forward([lon, lat]);
+    const result = proj4('EPSG:2261').forward([lon, lat]);
+    if (!Number.isFinite(result[0]) || !Number.isFinite(result[1])) {
+      console.error(`Projection result is NaN for input: longitude (${lon}), latitude (${lat})`);
+    }
+    return result;
   }
-
+  
   // Function to calculate distance between two points in State Plane coordinates
   function distanceBetweenPoints(point1, point2) {
     const dx = point1.x - point2.x;
@@ -632,7 +636,8 @@ export function gfx() {
     });
   }
 
-  function addPolygons(geojson, stride = 10) {
+  // original radiating triangle fill polys
+  function addFilledPolygons(geojson, stride = 10) {
     return new Promise((resolve, reject) => {
       try {
         for (let i = 0; i < geojson.features.length; i += stride) {
@@ -698,14 +703,14 @@ export function gfx() {
             scene.add(mesh);
             propagationPolygons.add(mesh);
           } catch (error) {
-            // console.error(`Error processing feature at index ${i}:`, error);
+            console.error(`Error processing feature at index ${i}:`, error);
           }
         }
         // Add the propagationPolygons group to the scene
         scene.add(propagationPolygons);
 
         // Set the initial visibility of the fm propagation curves layer to false
-        propagationPolygons.visible = false;
+        propagationPolygons.visible = true;
 
         resolve(); // Resolve the promise when done
       } catch (error) {
@@ -713,6 +718,67 @@ export function gfx() {
       }
     });
   }
+
+
+  function addPolygons(geojson, stride = 5) {
+    return new Promise((resolve, reject) => {
+      try {
+        for (let i = 0; i < geojson.features.length; i += stride) {
+          const feature = geojson.features[i];
+  
+          // Create a new material for the outline
+          const material = new THREE.LineBasicMaterial({
+            color: colorScheme.polygonColor, // Adjust the color as needed
+            transparent: false,
+            opacity: 0.8, // Adjust opacity as needed
+          });
+  
+          try {
+            const shapeCoords = feature.geometry.coordinates[0]; // Assuming no holes in the polygon for simplicity
+            // console.log(shapeCoords)
+            const vertices = [];
+  
+            // Convert coordinates to vertices
+            shapeCoords.forEach((coord) => {
+              const [x, y] = toStatePlane(coord[0], coord[1]);
+              let globalMinElevation = 500;
+              let z = globalMinElevation * zScale; // Default Z value if not provided
+              console.log(z)
+              
+              // If there's a third element (elevation), and it's not null, use it
+              if (coord.length > 2 && coord[2] != null) {
+                  z = coord[2];
+              }
+              
+              vertices.push(new THREE.Vector3(x, y, z));
+          });
+            
+            // Create a geometry and add vertices to it
+            const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
+  
+            // Create a line loop with the geometry and material
+            const lineLoop = new THREE.LineLoop(geometry, material);
+            lineLoop.name = 'polygon-' + i;
+            scene.add(lineLoop);
+            propagationPolygons.add(lineLoop);
+          } catch (error) {
+            // console.error(`Error processing feature at index ${i}:`, error);
+          }
+        }
+        // Add the propagationPolygons group to the scene
+        scene.add(propagationPolygons);
+        // console.log(propagationPolygons)
+  
+        // Set the initial visibility of the fm propagation curves layer to false
+        propagationPolygons.visible = true;
+  
+        resolve(); // Resolve the promise when done
+      } catch (error) {
+        // reject(`Error in addPolygons: ${error.message}`);
+      }
+    });
+  }
+  
 
   function addFMTowerPts(geojson) {
     return new Promise((resolve, reject) => {
@@ -1126,7 +1192,7 @@ export function gfx() {
     const urls = [
       'src/assets/data/colloquium_ii_data/stanford_contours_simplified1000m_20231124.geojson',
       'src/assets/data/colloquium_ii_data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson',
-      'src/assets/data/FM_contours_NYS_clip_20231101.geojson',
+      'src/assets/data/fcc/fm/processed/FM_contours_AOI_polygon_scaled.geojson',
       'src/assets/data/colloquium_ii_data/FmTowers_FeaturesToJSON_AOI_20231204.geojson',
       'src/assets/data/colloquium_ii_data/study_area_admin0clip.geojson',
       'src/assets/data/colloquium_ii_data/cellServiceCentroids_2000m_20231210.geojson',
@@ -1178,7 +1244,7 @@ export function gfx() {
         addCellTowerPts(data);
         break;
 
-      case 'src/assets/data/colloquium_ii_data/FM_contours_NYS_clip_20231101.geojson':
+      case 'src/assets/data/fcc/fm/processed/FM_contours_AOI_polygon_scaled.geojson':
         fmContoursGeojsonData = data;
         addPolygons(data);
         break;
@@ -1200,7 +1266,7 @@ export function gfx() {
 
       case 'src/assets/data/colloquium_ii_data/cellServiceCentroids_2000m_20231210.geojson':
         cellServiceGeojsonData = data;
-        addCellServiceMesh(data);
+        // addCellServiceMesh(data);
         break;
 
       default:
