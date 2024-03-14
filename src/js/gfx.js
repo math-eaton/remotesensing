@@ -17,7 +17,7 @@ export function gfx() {
   let fmMSTLines = new THREE.Group();
   let cellTransmitterPoints = new THREE.Group();
   let cellMSTLines = new THREE.Group();
-  let contourLines = new THREE.Group();
+  let elevContourLines = new THREE.Group();
   let propagationPolygons = new THREE.Group();
   let cellServiceMesh = new THREE.Group();
   let analysisArea = new THREE.Group();
@@ -135,7 +135,7 @@ export function gfx() {
 
     // Set the minimum and maximum polar angles (in radians) to prevent the camera from going over the vertical
     controls.minPolarAngle = 0; // 0 radians (0 degrees) - directly above the target
-    controls.maxPolarAngle = Math.PI / 4 - 0.05; // π/2 radians (90 degrees) - on the horizon
+    controls.maxPolarAngle = Math.PI / 3 - 0.05; // π/n radians (z degrees) - on the horizon
     // Set the maximum distance the camera can dolly out
     controls.maxDistance = 5.5; // max camera zoom
     controls.minDistance = 0.5; // min camera zoom
@@ -451,11 +451,11 @@ export function gfx() {
   }
 
   // Define a variable to store the minimum elevation
-  // This should be determined from the addContourLines function
+  // This should be determined from the addElevContourLines function
   let globalMinElevation = Infinity;
 
-  // Updated addContourLines function to update globalMinElevation
-  function addContourLines(geojson) {
+  // Updated addElevContourLines function to update globalMinElevation
+  function addElevContourLines(geojson) {
     return new Promise((resolve, reject) => {
       if (!geojson || !geojson.features) {
         reject('Invalid GeoJSON data');
@@ -507,7 +507,8 @@ export function gfx() {
               new THREE.Float32BufferAttribute(vertices, 3),
             );
             const line = new THREE.Line(geometry, material);
-            contourLines.add(line);
+            elevContourLines.add(line);
+            elevContourLines.visible = false;
           }
         };
 
@@ -524,10 +525,10 @@ export function gfx() {
       });
 
       try {
-        scene.add(contourLines); // Add the group to the scene
+        scene.add(elevContourLines); // Add the group to the scene
         resolve(); // Resolve the promise when done
       } catch (error) {
-        reject(`Error in addContourLines: ${error.message}`);
+        reject(`Error in addElevContourLines: ${error.message}`);
       }
     });
   }
@@ -710,7 +711,7 @@ export function gfx() {
         scene.add(propagationPolygons);
 
         // Set the initial visibility of the fm propagation curves layer to false
-        propagationPolygons.visible = true;
+        propagationPolygons.visible = false;
 
         resolve(); // Resolve the promise when done
       } catch (error) {
@@ -770,7 +771,7 @@ export function gfx() {
         // console.log(propagationPolygons)
   
         // Set the initial visibility of the fm propagation curves layer to false
-        propagationPolygons.visible = true;
+        propagationPolygons.visible = false;
   
         resolve(); // Resolve the promise when done
       } catch (error) {
@@ -779,6 +780,56 @@ export function gfx() {
     });
   }
   
+  function addPropagation3D(geojson, stride = 1) {
+    return new Promise((resolve, reject) => {
+      try {
+        // Iterate over each feature in the GeoJSON
+        for (let i = 0; i < geojson.features.length; i += stride) {
+          const feature = geojson.features[i];
+          const elevationData = feature.properties.elevation_data;
+          
+          // Ensure there is a matching number of elevation points to coordinate pairs
+          if (!elevationData || elevationData.length !== feature.geometry.coordinates[0].length) {
+            console.error(`Elevation data length does not match coordinates length for feature at index ${i}`);
+            continue; // Skip this feature
+          }
+  
+          // Create a new material for the outline
+          const material = new THREE.LineBasicMaterial({
+            color: colorScheme.polygonColor, // Adjust the color as needed
+            transparent: true,
+            opacity: 0.65, // Adjust opacity as needed
+          });
+  
+          const shapeCoords = feature.geometry.coordinates[0];
+          const vertices = [];
+  
+          // Convert coordinates to 3D vertices, incorporating elevation data
+          shapeCoords.forEach((coord, index) => {
+            const [x, y] = toStatePlane(coord[0], coord[1]);
+            const z = elevationData[index] * zScale; // Use the corresponding elevation data for Z value
+            vertices.push(new THREE.Vector3(x, y, z));
+          });
+  
+          // Create a geometry and add vertices to it
+          const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
+  
+          // Create a line loop with the geometry and material
+          const lineLoop = new THREE.LineLoop(geometry, material);
+          lineLoop.name = `propagation-${feature.properties.key}`; // Use the key as part of the name for uniqueness
+  
+          // Add the line loop to the scene
+          scene.add(lineLoop);
+        }
+  
+        // Resolve the promise when all features have been processed
+        resolve();
+      } catch (error) {
+        reject(`Error in addPropagation3D: ${error.message}`);
+      }
+    });
+  }
+    
 
   function addFMTowerPts(geojson) {
     return new Promise((resolve, reject) => {
@@ -874,7 +925,7 @@ export function gfx() {
 
         // Add the FM points to the scene
         scene.add(fmTransmitterPoints);
-        fmTransmitterPoints.visible = true;
+        fmTransmitterPoints.visible = false;
 
         // Create and add the convex hull to the scene
         if (points.length > 0) {
@@ -951,6 +1002,7 @@ export function gfx() {
 
               // Add the pyramid to the cellTransmitterPoints group
               cellTransmitterPoints.add(pyramid);
+              cellTransmitterPoints.visible = false;
 
               // Check for coincident points and get a z-offset
               const label = `cell`;
@@ -1192,7 +1244,7 @@ export function gfx() {
     const urls = [
       'src/assets/data/colloquium_ii_data/stanford_contours_simplified1000m_20231124.geojson',
       'src/assets/data/colloquium_ii_data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson',
-      'src/assets/data/fcc/fm/processed/FM_contours_AOI_polygon_scaled.geojson',
+      'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_processed.geojson',
       'src/assets/data/colloquium_ii_data/FmTowers_FeaturesToJSON_AOI_20231204.geojson',
       'src/assets/data/colloquium_ii_data/study_area_admin0clip.geojson',
       'src/assets/data/colloquium_ii_data/cellServiceCentroids_2000m_20231210.geojson',
@@ -1236,7 +1288,7 @@ export function gfx() {
     switch (url) {
       case 'src/assets/data/colloquium_ii_data/stanford_contours_simplified1000m_20231124.geojson':
         contourGeojsonData = data;
-        addContourLines(data);
+        addElevContourLines(data);
         break;
 
       case 'src/assets/data/colloquium_ii_data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson':
@@ -1244,10 +1296,15 @@ export function gfx() {
         addCellTowerPts(data);
         break;
 
-      case 'src/assets/data/fcc/fm/processed/FM_contours_AOI_polygon_scaled.geojson':
+      case 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_processed.geojson':
         fmContoursGeojsonData = data;
-        addPolygons(data);
+        addPropagation3D(data);
         break;
+
+      // case 'src/assets/data/fcc/fm/processed/FM_contours_AOI_polygon_scaled.geojson':
+      //   fmContoursGeojsonData = data;
+      //   addPolygons(data);
+      //   break;
 
       case 'src/assets/data/colloquium_ii_data/FmTowers_FeaturesToJSON_AOI_20231204.geojson':
         fmTransmitterGeojsonData = data;

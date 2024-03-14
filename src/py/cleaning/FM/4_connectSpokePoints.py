@@ -75,4 +75,4 @@ output_geojson = generate_output_geojson(polylines)
 # Optionally, save the output GeoJSON to a file
 output_file_path = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_processed.geojson'
 with open(output_file_path, 'w') as f:
-    json.dump(output_geojson, f, indent=2)
+    json.dump(output_geojson, f, indent=4)
