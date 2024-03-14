@@ -437,7 +437,7 @@ p, ul{
   /* margin: 2%; */
 }
 
-#app {
+#gfx {
   position: fixed;
   top: 0;
   left: 0;
@@ -534,8 +534,9 @@ p, ul{
   margin: 0.5em;
 }
 
+
 /* Hide the info-button when the background class is active on the parent */
-#app.background #info-button {
+#gfx.background #info-button {
   visibility: hidden;
   opacity: 0;
   transition:
@@ -544,7 +545,7 @@ p, ul{
 }
 
 /* Show the info-button when the background class is not active */
-#app:not(.background) #info-button {
+#gfx:not(.background) #info-button {
   visibility: visible;
   opacity: 1;
   transition:

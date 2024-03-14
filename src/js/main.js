@@ -22,3 +22,13 @@ window.onload = () => {
 
 // init external js
 gfx();
+
+document.getElementById('fullscreenButton');
+const threeContainer = document.getElementById('gfx');
+
+if (threeContainer) {
+  console.log('idk');
+  threeContainer.classList.remove('background'); // Remove 'background' class from 'app'
+} else {
+  console.log('lol');
+}

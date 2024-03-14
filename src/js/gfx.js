@@ -73,8 +73,8 @@ export function gfx() {
   //   let mouse = new THREE.Vector2();
   //   let polygons = [];
   let isCameraRotating = false; // Flag to track camera rotation
-  const rotationSpeed = 0.001; // Define the speed of rotation
-  let pixelMod = 8; //  default value
+  const rotationSpeed = 0.0005; // Define the speed of rotation
+  let pixelMod = 1; //  default value
 
   // Create a material for the ray line
   const rayMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 }); // Red color for visibility
@@ -124,9 +124,14 @@ export function gfx() {
     controls.enableDamping = true; // an optional setting to give a smoother control feeling
     controls.dampingFactor = 0.05; // amount of damping (drag)
 
+    // camera.up.set(0, 0, 1); 
+    controls.enablePan = true; // Enable panning
+    controls.enableRotate = true; // Disable rotation
+
+
     // Set the minimum and maximum polar angles (in radians) to prevent the camera from going over the vertical
     controls.minPolarAngle = 0; // 0 radians (0 degrees) - directly above the target
-    controls.maxPolarAngle = Math.PI / 2 - 0.05; // π/2 radians (90 degrees) - on the horizon
+    controls.maxPolarAngle = Math.PI / 4 - 0.05; // π/2 radians (90 degrees) - on the horizon
     // Set the maximum distance the camera can dolly out
     controls.maxDistance = 5.5; // max camera zoom
     controls.minDistance = 0.5; // min camera zoom
