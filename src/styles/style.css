@@ -448,6 +448,7 @@ p, ul{
   overflow: hidden;
   cursor: url("/src/cursor/whiteCrosshair.cur"), auto;
   transition: filter 0.25s linear; /* Transition applies to the filter property */
+  image-rendering: pixelated;
   /* z-index: 1; Lower than #intro */
 }
 

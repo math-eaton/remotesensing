@@ -134,7 +134,7 @@ export function gfx() {
     controls.minPolarAngle = 0; // 0 radians (0 degrees) - directly above the target
     controls.maxPolarAngle = Math.PI / 5; // π/n radians (z degrees) - on the horizon
     // Set the maximum distance the camera can dolly out
-    controls.maxDistance = 5.5; // max camera zoom
+    controls.maxDistance = 5; // max camera zoom
     controls.minDistance = 0.5; // min camera zoom
     console.log(controls.angle)
 
@@ -153,7 +153,7 @@ export function gfx() {
     scene.add(directionalLight);
 
     const fogNear = 2; // The starting distance of the fog (where it begins to appear)
-    const fogFar = 8.5; // The ending distance of the fog (where it becomes fully opaque)
+    const fogFar = 9; // The ending distance of the fog (where it becomes fully opaque)
 
     // Adding fog to the scene
     scene.fog = new THREE.Fog(colorScheme.backgroundColor, fogNear, fogFar);
