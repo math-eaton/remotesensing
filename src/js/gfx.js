@@ -184,7 +184,7 @@ export function gfx() {
     renderer.setSize(width, height);
 
     // update this value to alter pixel ratio scaled with the screen
-    pixelationFactor = 0.3;
+    pixelationFactor = 0.5;
 
     // Calculate new dimensions based on the slider value
     var newWidth = Math.max(1, window.innerWidth * pixelationFactor);
@@ -484,31 +484,37 @@ export function gfx() {
         reject('Invalid GeoJSON data');
         return;
       }
-
+  
       // Determine min and max elevation from the geojson
-      const elevations = geojson.features.map((f) => f.properties.contour);
+      const elevations = geojson.features.map(f => f.properties.contour);
       const minElevation = Math.min(...elevations);
-      globalMinElevation = Math.min(globalMinElevation, minElevation);
-      // const totalElevation = elevations.reduce((acc, cur) => acc + cur, 0);
-      meanElevation = calculateMeanContourElevation(geojson);
       const maxElevation = Math.max(...elevations);
-
+      const elevationRange = maxElevation - minElevation; // Calculate the elevation range
+  
       geojson.features.forEach((feature, index) => {
         const contour = feature.properties.contour; // Elevation value
         const coordinates = feature.geometry.coordinates; // Array of [lon, lat] pairs
-
         const color = getColorForElevation(contour, minElevation, maxElevation);
-        let material = new THREE.LineBasicMaterial({ color: color });
 
+        let minOpacity = 0.1;
+        let maxOpacity = 1;
+  
+        // Calculate opacity based on elevation, linearly scaling between 0.25 and 1
+        const opacity = elevationRange > 0 ? minOpacity + maxOpacity * (contour - minElevation) / elevationRange : 1;
+  
+        let material = new THREE.LineDashedMaterial({ 
+          color: color,
+          transparent: true,
+          opacity: opacity,
+          dashSize: .0002,
+          gapSize: .0005,          
+        });
+  
         // Function to process a single line
         const processLine = (lineCoords, contourValue) => {
           let vertices = [];
           lineCoords.forEach((pair) => {
-            if (
-              !Array.isArray(pair) ||
-              pair.length !== 2 ||
-              pair.some((c) => isNaN(c))
-            ) {
+            if (!Array.isArray(pair) || pair.length !== 2 || pair.some(c => isNaN(c))) {
               console.error(`Feature ${index} has invalid coordinates`, pair);
               return;
             }
@@ -518,37 +524,29 @@ export function gfx() {
               const z = contourValue * zScale; // Scale the elevation for visibility
               vertices.push(x, y, z);
             } catch (error) {
-              console.error(
-                `Feature ${index} error in toStatePlane:`,
-                error.message,
-              );
+              console.error(`Feature ${index} error in toStatePlane:`, error.message);
             }
           });
-
+  
           if (vertices.length > 0) {
             const geometry = new THREE.BufferGeometry();
-            geometry.setAttribute(
-              'position',
-              new THREE.Float32BufferAttribute(vertices, 3),
-            );
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
             const line = new THREE.Line(geometry, material);
+            line.computeLineDistances(); 
             elevContourLines.add(line);
-            elevContourLines.visible = false;
           }
         };
-
+  
         // Check geometry type and process accordingly
         if (feature.geometry.type === 'LineString') {
           processLine(coordinates, contour);
         } else if (feature.geometry.type === 'MultiLineString') {
-          coordinates.forEach((lineCoords) => {
-            processLine(lineCoords, contour);
-          });
+          coordinates.forEach(lineCoords => processLine(lineCoords, contour));
         } else {
           console.error(`Unsupported geometry type: ${feature.geometry.type}`);
         }
       });
-
+  
       try {
         scene.add(elevContourLines); // Add the group to the scene
         resolve(); // Resolve the promise when done
@@ -557,7 +555,7 @@ export function gfx() {
       }
     });
   }
-
+  
   function addCellServiceMesh(geojson, stride = 3) {
     return new Promise((resolve, reject) => {
       try {
