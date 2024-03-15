@@ -485,30 +485,54 @@ export function gfx() {
         return;
       }
   
-      // Determine min and max elevation from the geojson
       const elevations = geojson.features.map(f => f.properties.contour);
       const minElevation = Math.min(...elevations);
       const maxElevation = Math.max(...elevations);
-      const elevationRange = maxElevation - minElevation; // Calculate the elevation range
+  
+      // To avoid negative or zero values in logarithm calculation, ensure a positive offset
+      const minElevationPositive = Math.abs(minElevation) + 1;
+      const maxElevationLog = Math.log(maxElevation + minElevationPositive);
+      const minElevationLog = Math.log(minElevationPositive);
   
       geojson.features.forEach((feature, index) => {
-        const contour = feature.properties.contour; // Elevation value
+        const contour = feature.properties.contour;
         const coordinates = feature.geometry.coordinates; // Array of [lon, lat] pairs
         const color = getColorForElevation(contour, minElevation, maxElevation);
+  
+        // Calculate logarithmic opacity scaling
+        let minOpacity = 0.01;
+        let maxOpacity = 0.4;
+        let scaleExponent = 0.1; // Adjust this to control the rate of change
 
-        let minOpacity = 0.1;
-        let maxOpacity = 1;
+        // Normalize contour value between 0 and 1 based on elevation range
+        const normalizedElevation = (contour - minElevation) / (maxElevation - minElevation);
+      
+      
+        const contourPositive = contour + minElevationPositive;
+        const contourLog = Math.log(contourPositive);
+
+        // apply logarithmic scaling
+        // const opacity = minOpacity + (maxOpacity * (contourLog - minElevationLog) / (maxElevationLog - minElevationLog));
+
+        // Apply exponential scaling
+        const opacity = minOpacity + (maxOpacity - minOpacity) * Math.pow(normalizedElevation, scaleExponent);
+
   
-        // Calculate opacity based on elevation, linearly scaling between 0.25 and 1
-        const opacity = elevationRange > 0 ? minOpacity + maxOpacity * (contour - minElevation) / elevationRange : 1;
-  
-        let material = new THREE.LineDashedMaterial({ 
+        let material = new THREE.LineBasicMaterial({
           color: color,
           transparent: true,
+          alphaHash: false,
           opacity: opacity,
-          dashSize: .0002,
-          gapSize: .0005,          
         });
+
+
+        // let material = new THREE.LineDashedMaterial({ 
+        //   color: color,
+        //   transparent: true,
+        //   opacity: opacity,
+        //   dashSize: .5,
+        //   gapSize: .25,
+        // });
   
         // Function to process a single line
         const processLine = (lineCoords, contourValue) => {
@@ -555,7 +579,7 @@ export function gfx() {
       }
     });
   }
-  
+    
   function addCellServiceMesh(geojson, stride = 3) {
     return new Promise((resolve, reject) => {
       try {
