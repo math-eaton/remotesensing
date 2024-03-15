@@ -37,7 +37,7 @@ def is_in_aoi(coords, aoi_boundary):
     return False
 
 # process intput rows with optional downsample factor ie remove every N coordinates from the output
-def process_data(input_filename, output_filename, aoi_geojson, limit=None, downsample_factor=12, downsample_limit=None, proximity_threshold=100):
+def process_data(input_filename, output_filename, aoi_geojson, limit=None, downsample_factor=8, downsample_limit=None, proximity_threshold=0):
     
     # Load AOI boundary from the GeoJSON file
     aoi_boundary_gdf = gpd.read_file(aoi_geojson)
@@ -64,8 +64,10 @@ def process_data(input_filename, output_filename, aoi_geojson, limit=None, downs
             if not transmitter_sites.empty:
                 distances = current_chunk_gdf.geometry.apply(lambda x: transmitter_sites.distance(x).min())
                 filtered_chunk_gdf = current_chunk_gdf.loc[distances > proximity_threshold / 100000]  # Adjust based on the CRS
-                print(f"Number of features removed due to proximity threshold ({proximity_threshold} meters): {len(current_chunk_gdf) - len(filtered_chunk_gdf)}")
-                current_chunk_gdf = filtered_chunk_gdf
+
+                # comment out the following two lines to skip de-duping
+                # print(f"Number of features removed due to proximity threshold ({proximity_threshold} meters): {len(current_chunk_gdf) - len(filtered_chunk_gdf)}")
+                # current_chunk_gdf = filtered_chunk_gdf
             
             transmitter_sites = pd.concat([transmitter_sites, current_chunk_gdf])
 

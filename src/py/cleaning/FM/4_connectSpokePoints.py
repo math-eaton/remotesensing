@@ -65,7 +65,7 @@ def generate_output_geojson(polylines_with_elevation):
     }
 
 # Main processing flow
-file_path = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes.geojson'
+file_path = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubOnly.geojson'
 geojson_data = load_geojson(file_path)
 features = geojson_data['features']
 groups = group_and_sort_features(features)
@@ -73,6 +73,6 @@ polylines = construct_polylines(groups)
 output_geojson = generate_output_geojson(polylines)
 
 # Optionally, save the output GeoJSON to a file
-output_file_path = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_processed.geojson'
+output_file_path = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubOnly_processed.geojson'
 with open(output_file_path, 'w') as f:
     json.dump(output_geojson, f, indent=4)
