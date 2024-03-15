@@ -87,7 +87,7 @@ def generate_spokes_with_sampling(input_geojson, output_geojson, dem_path=None, 
     with open(output_geojson, 'w') as file:
         geojson.dump(output, file, indent=4)
 
-# Example usage with specified input and output GeoJSON paths, and the path to the DEM file
+# init
 input_geojson = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_polygon.geojson'
 output_geojson = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes.geojson'
 generate_spokes_with_sampling(input_geojson, output_geojson, dem_path, sampling_resolution=5)

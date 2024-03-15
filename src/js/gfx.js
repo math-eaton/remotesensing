@@ -132,10 +132,11 @@ export function gfx() {
 
     // Set the minimum and maximum polar angles (in radians) to prevent the camera from going over the vertical
     controls.minPolarAngle = 0; // 0 radians (0 degrees) - directly above the target
-    controls.maxPolarAngle = Math.PI / 4 - 0.05; // π/n radians (z degrees) - on the horizon
+    controls.maxPolarAngle = Math.PI / 5; // π/n radians (z degrees) - on the horizon
     // Set the maximum distance the camera can dolly out
     controls.maxDistance = 5.5; // max camera zoom
     controls.minDistance = 0.5; // min camera zoom
+    console.log(controls.angle)
 
     const audioListener = new THREE.AudioListener();
     camera.add(audioListener);
@@ -151,8 +152,8 @@ export function gfx() {
     directionalLight.position.set(0, 1, 0);
     scene.add(directionalLight);
 
-    const fogNear = 4.5; // The starting distance of the fog (where it begins to appear)
-    const fogFar = 9; // The ending distance of the fog (where it becomes fully opaque)
+    const fogNear = 2; // The starting distance of the fog (where it begins to appear)
+    const fogFar = 8.5; // The ending distance of the fog (where it becomes fully opaque)
 
     // Adding fog to the scene
     scene.fog = new THREE.Fog(colorScheme.backgroundColor, fogNear, fogFar);
@@ -183,7 +184,7 @@ export function gfx() {
     renderer.setSize(width, height);
 
     // update this value to alter pixel ratio scaled with the screen
-    pixelationFactor = 0.4;
+    pixelationFactor = 0.3;
 
     // Calculate new dimensions based on the slider value
     var newWidth = Math.max(1, window.innerWidth * pixelationFactor);
@@ -815,7 +816,7 @@ export function gfx() {
         });
         const maxIndex = Math.max(...indices);
         const maxOpacity = 0.85; 
-        const minOpacity = 0.0; 
+        const minOpacity = 0.05; 
         const opacityRange = maxOpacity - minOpacity;
   
         // Iterate over each feature in the GeoJSON
@@ -854,8 +855,8 @@ export function gfx() {
             alphaHash: true,
             opacity: opacity,
             // color: 0xffffff,
-            dashSize: .00025,
-            gapSize: .005,          
+            dashSize: .0004,
+            gapSize: .0025,          
           });
 
   
