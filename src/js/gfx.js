@@ -814,8 +814,8 @@ export function gfx() {
           return parseInt(keyParts[keyParts.length - 1], 10);
         });
         const maxIndex = Math.max(...indices);
-        const maxOpacity = 0.55; 
-        const minOpacity = 0.005; 
+        const maxOpacity = 0.85; 
+        const minOpacity = 0.0; 
         const opacityRange = maxOpacity - minOpacity;
   
         // Iterate over each feature in the GeoJSON
@@ -839,12 +839,25 @@ export function gfx() {
             opacity = minOpacity + (opacityRange * (maxIndex - featureIndex) / maxIndex);
           }
   
-          // Create a new material for the outline with dynamic opacity
-          const material = new THREE.LineBasicMaterial({
+          // basic line material - aka solid
+          // const material = new THREE.LineBasicMaterial({
+          //   color: colorScheme.polygonColor,
+          //   transparent: true,
+          //   alphaHash: true,
+          //   opacity: opacity,
+          // });
+
+          // dashed lines for fun
+          const material = new THREE.LineDashedMaterial({
             color: colorScheme.polygonColor,
             transparent: true,
+            alphaHash: true,
             opacity: opacity,
+            // color: 0xffffff,
+            dashSize: .00025,
+            gapSize: .005,          
           });
+
   
           const shapeCoords = feature.geometry.coordinates[0];
           const vertices = [];
@@ -862,6 +875,8 @@ export function gfx() {
           // Create a line loop with the geometry and material
           const lineLoop = new THREE.LineLoop(geometry, material);
           lineLoop.name = `propagation-${feature.properties.key}`;
+          lineLoop.computeLineDistances(); 
+
   
           // Add the line loop to the scene
           scene.add(lineLoop);
