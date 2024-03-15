@@ -662,149 +662,221 @@ export function gfx() {
   }
 
   // original radiating triangle fill polys
-  function addFilledPolygons(geojson, stride = 10) {
+  // function addFilledPolygons(geojson, stride = 10) {
+  //   return new Promise((resolve, reject) => {
+  //     try {
+  //       for (let i = 0; i < geojson.features.length; i += stride) {
+  //         const feature = geojson.features[i];
+
+  //         // Create a new material for each polygon
+  //         const material = new THREE.MeshBasicMaterial({
+  //           color: colorScheme.polygonColor,
+  //           transparent: true,
+  //           wireframe: true,
+  //           dithering: true,
+  //           opacity: 0.8, // Start with lower opacity
+  //           side: THREE.FrontSide,
+  //         });
+
+  //         try {
+  //           const shapeCoords = feature.geometry.coordinates[0]; // Assuming no holes in the polygon for simplicity
+  //           const vertices = [];
+  //           let centroid = new THREE.Vector3(0, 0, 0);
+
+  //           // Convert coordinates to vertices and calculate centroid
+  //           shapeCoords.forEach((coord) => {
+  //             const [x, y] = toStatePlane(coord[0], coord[1]);
+  //             const z = meanElevation * zScale; // Set Z to the lowest contour elevation
+  //             vertices.push(new THREE.Vector3(x, y, z));
+  //             centroid.add(new THREE.Vector3(x, y, z));
+  //           });
+
+  //           centroid.divideScalar(shapeCoords.length); // Average to find centroid
+  //           vertices.unshift(centroid); // Add centroid as the first vertex
+
+  //           const shapeGeometry = new THREE.BufferGeometry();
+  //           const positions = [];
+
+  //           // The centroid is the first vertex, and it's connected to every other vertex
+  //           for (let j = 1; j <= shapeCoords.length; j++) {
+  //             // Add centroid
+  //             positions.push(centroid.x, centroid.y, centroid.z);
+
+  //             // Add current vertex
+  //             positions.push(
+  //               vertices[j % shapeCoords.length].x,
+  //               vertices[j % shapeCoords.length].y,
+  //               vertices[j % shapeCoords.length].z,
+  //             );
+
+  //             // Add next vertex
+  //             positions.push(
+  //               vertices[(j + 1) % shapeCoords.length].x,
+  //               vertices[(j + 1) % shapeCoords.length].y,
+  //               vertices[(j + 1) % shapeCoords.length].z,
+  //             );
+  //           }
+
+  //           shapeGeometry.setAttribute(
+  //             'position',
+  //             new THREE.Float32BufferAttribute(positions, 3),
+  //           );
+  //           shapeGeometry.computeVertexNormals();
+
+  //           const mesh = new THREE.Mesh(shapeGeometry, material);
+  //           mesh.name = 'polygon-' + i;
+  //           scene.add(mesh);
+  //           propagationPolygons.add(mesh);
+  //         } catch (error) {
+  //           console.error(`Error processing feature at index ${i}:`, error);
+  //         }
+  //       }
+  //       // Add the propagationPolygons group to the scene
+  //       scene.add(propagationPolygons);
+
+  //       // Set the initial visibility of the fm propagation curves layer to false
+  //       propagationPolygons.visible = false;
+
+  //       resolve(); // Resolve the promise when done
+  //     } catch (error) {
+  //       reject(`Error in addPolygons: ${error.message}`);
+  //     }
+  //   });
+  // }
+
+
+  // function addPolygons(geojson, stride = 5) {
+  //   return new Promise((resolve, reject) => {
+  //     try {
+  //       for (let i = 0; i < geojson.features.length; i += stride) {
+  //         const feature = geojson.features[i];
+  
+  //         // Create a new material for the outline
+  //         const material = new THREE.LineBasicMaterial({
+  //           color: colorScheme.polygonColor, // Adjust the color as needed
+  //           transparent: false,
+  //           opacity: 0.8, // Adjust opacity as needed
+  //         });
+  
+  //         try {
+  //           const shapeCoords = feature.geometry.coordinates[0]; // Assuming no holes in the polygon for simplicity
+  //           // console.log(shapeCoords)
+  //           const vertices = [];
+  
+  //           // Convert coordinates to vertices
+  //           shapeCoords.forEach((coord) => {
+  //             const [x, y] = toStatePlane(coord[0], coord[1]);
+  //             let meanElevation = calculateMeanContourElevation(geojson);
+  //             let z = meanElevation * zScale; // Default Z value if not provided
+  //             console.log(z)
+              
+  //             // If there's a third element (elevation), and it's not null, use it
+  //             if (coord.length > 2 && coord[2] != null) {
+  //                 z = coord[2];
+  //             }
+              
+  //             vertices.push(new THREE.Vector3(x, y, z));
+  //         });
+            
+  //           // Create a geometry and add vertices to it
+  //           const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
+  
+  //           // Create a line loop with the geometry and material
+  //           const lineLoop = new THREE.LineLoop(geometry, material);
+  //           lineLoop.name = 'polygon-' + i;
+  //           scene.add(lineLoop);
+  //           propagationPolygons.add(lineLoop);
+  //         } catch (error) {
+  //           // console.error(`Error processing feature at index ${i}:`, error);
+  //         }
+  //       }
+  //       // Add the propagationPolygons group to the scene
+  //       scene.add(propagationPolygons);
+  //       // console.log(propagationPolygons)
+  
+  //       // Set the initial visibility of the fm propagation curves layer to false
+  //       propagationPolygons.visible = false;
+  
+  //       resolve(); // Resolve the promise when done
+  //     } catch (error) {
+  //       // reject(`Error in addPolygons: ${error.message}`);
+  //     }
+  //   });
+  // }
+  
+  // this version is static rescaling of concentric lines based on input geojson + dynamic transparency based on concentric line
+  function addFMpropagation3D(geojson, stride = 1) {
     return new Promise((resolve, reject) => {
       try {
+        // Extract all indices from the keys to determine the range
+        const indices = geojson.features.map(feature => {
+          const keyParts = feature.properties.key.split('_');
+          return parseInt(keyParts[keyParts.length - 1], 10);
+        });
+        const maxIndex = Math.max(...indices);
+        const maxOpacity = 0.55; 
+        const minOpacity = 0.005; 
+        const opacityRange = maxOpacity - minOpacity;
+  
+        // Iterate over each feature in the GeoJSON
         for (let i = 0; i < geojson.features.length; i += stride) {
           const feature = geojson.features[i];
-
-          // Create a new material for each polygon
-          const material = new THREE.MeshBasicMaterial({
+          const elevationData = feature.properties.elevation_data;
+          
+          // Ensure there is a matching number of elevation points to coordinate pairs
+          if (!elevationData || elevationData.length !== feature.geometry.coordinates[0].length) {
+            console.error(`Elevation data length does not match coordinates length for feature at index ${i}`);
+            continue; // Skip this feature
+          }
+  
+          // Default opacity to the median of the range if all indices are the same (maxIndex is 0)
+          let opacity;
+          if (maxIndex === 0) {
+            opacity = minOpacity + (opacityRange / 2); // Midpoint of opacity range
+          } else {
+            const featureIndex = parseInt(feature.properties.key.split('_')[1], 10);
+            // Scale opacity based on feature index
+            opacity = minOpacity + (opacityRange * (maxIndex - featureIndex) / maxIndex);
+          }
+  
+          // Create a new material for the outline with dynamic opacity
+          const material = new THREE.LineBasicMaterial({
             color: colorScheme.polygonColor,
             transparent: true,
-            wireframe: true,
-            dithering: true,
-            opacity: 0.8, // Start with lower opacity
-            side: THREE.FrontSide,
+            opacity: opacity,
           });
-
-          try {
-            const shapeCoords = feature.geometry.coordinates[0]; // Assuming no holes in the polygon for simplicity
-            const vertices = [];
-            let centroid = new THREE.Vector3(0, 0, 0);
-
-            // Convert coordinates to vertices and calculate centroid
-            shapeCoords.forEach((coord) => {
-              const [x, y] = toStatePlane(coord[0], coord[1]);
-              const z = meanElevation * zScale; // Set Z to the lowest contour elevation
-              vertices.push(new THREE.Vector3(x, y, z));
-              centroid.add(new THREE.Vector3(x, y, z));
-            });
-
-            centroid.divideScalar(shapeCoords.length); // Average to find centroid
-            vertices.unshift(centroid); // Add centroid as the first vertex
-
-            const shapeGeometry = new THREE.BufferGeometry();
-            const positions = [];
-
-            // The centroid is the first vertex, and it's connected to every other vertex
-            for (let j = 1; j <= shapeCoords.length; j++) {
-              // Add centroid
-              positions.push(centroid.x, centroid.y, centroid.z);
-
-              // Add current vertex
-              positions.push(
-                vertices[j % shapeCoords.length].x,
-                vertices[j % shapeCoords.length].y,
-                vertices[j % shapeCoords.length].z,
-              );
-
-              // Add next vertex
-              positions.push(
-                vertices[(j + 1) % shapeCoords.length].x,
-                vertices[(j + 1) % shapeCoords.length].y,
-                vertices[(j + 1) % shapeCoords.length].z,
-              );
-            }
-
-            shapeGeometry.setAttribute(
-              'position',
-              new THREE.Float32BufferAttribute(positions, 3),
-            );
-            shapeGeometry.computeVertexNormals();
-
-            const mesh = new THREE.Mesh(shapeGeometry, material);
-            mesh.name = 'polygon-' + i;
-            scene.add(mesh);
-            propagationPolygons.add(mesh);
-          } catch (error) {
-            console.error(`Error processing feature at index ${i}:`, error);
-          }
+  
+          const shapeCoords = feature.geometry.coordinates[0];
+          const vertices = [];
+  
+          // Convert coordinates to 3D vertices, incorporating elevation data
+          shapeCoords.forEach((coord, index) => {
+            const [x, y] = toStatePlane(coord[0], coord[1]);
+            const z = elevationData[index] * zScale; // Use the corresponding elevation data for Z value
+            vertices.push(new THREE.Vector3(x, y, z));
+          });
+  
+          // Create a geometry and add vertices to it
+          const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
+  
+          // Create a line loop with the geometry and material
+          const lineLoop = new THREE.LineLoop(geometry, material);
+          lineLoop.name = `propagation-${feature.properties.key}`;
+  
+          // Add the line loop to the scene
+          scene.add(lineLoop);
         }
-        // Add the propagationPolygons group to the scene
-        scene.add(propagationPolygons);
-
-        // Set the initial visibility of the fm propagation curves layer to false
-        propagationPolygons.visible = false;
-
-        resolve(); // Resolve the promise when done
+  
+        resolve(); // Resolve the promise when all features have been processed
       } catch (error) {
-        reject(`Error in addPolygons: ${error.message}`);
+        reject(`Error in addFMpropagation3D: ${error.message}`);
       }
     });
   }
+    
 
-
-  function addPolygons(geojson, stride = 5) {
-    return new Promise((resolve, reject) => {
-      try {
-        for (let i = 0; i < geojson.features.length; i += stride) {
-          const feature = geojson.features[i];
-  
-          // Create a new material for the outline
-          const material = new THREE.LineBasicMaterial({
-            color: colorScheme.polygonColor, // Adjust the color as needed
-            transparent: false,
-            opacity: 0.8, // Adjust opacity as needed
-          });
-  
-          try {
-            const shapeCoords = feature.geometry.coordinates[0]; // Assuming no holes in the polygon for simplicity
-            // console.log(shapeCoords)
-            const vertices = [];
-  
-            // Convert coordinates to vertices
-            shapeCoords.forEach((coord) => {
-              const [x, y] = toStatePlane(coord[0], coord[1]);
-              let meanElevation = calculateMeanContourElevation(geojson);
-              let z = meanElevation * zScale; // Default Z value if not provided
-              console.log(z)
-              
-              // If there's a third element (elevation), and it's not null, use it
-              if (coord.length > 2 && coord[2] != null) {
-                  z = coord[2];
-              }
-              
-              vertices.push(new THREE.Vector3(x, y, z));
-          });
-            
-            // Create a geometry and add vertices to it
-            const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
-  
-            // Create a line loop with the geometry and material
-            const lineLoop = new THREE.LineLoop(geometry, material);
-            lineLoop.name = 'polygon-' + i;
-            scene.add(lineLoop);
-            propagationPolygons.add(lineLoop);
-          } catch (error) {
-            // console.error(`Error processing feature at index ${i}:`, error);
-          }
-        }
-        // Add the propagationPolygons group to the scene
-        scene.add(propagationPolygons);
-        // console.log(propagationPolygons)
-  
-        // Set the initial visibility of the fm propagation curves layer to false
-        propagationPolygons.visible = false;
-  
-        resolve(); // Resolve the promise when done
-      } catch (error) {
-        // reject(`Error in addPolygons: ${error.message}`);
-      }
-    });
-  }
-  
-  // function addFMpropagation3D(geojson, stride = 1) {
+  // this version is dynamic rescaling of concentric lines
+  // function addFMpropagation3D(geojson, stride = 1, scaleDecrement = 0.1, numberOfConcentricCopies = 5) {
   //   return new Promise((resolve, reject) => {
   //     try {
   //       // Iterate over each feature in the GeoJSON
@@ -812,15 +884,13 @@ export function gfx() {
   //         const feature = geojson.features[i];
   //         const elevationData = feature.properties.elevation_data;
           
-  //         // Ensure there is a matching number of elevation points to coordinate pairs
   //         if (!elevationData || elevationData.length !== feature.geometry.coordinates[0].length) {
   //           console.error(`Elevation data length does not match coordinates length for feature at index ${i}`);
-  //           continue; // Skip this feature
+  //           continue;
   //         }
   
-  //         // Create a new material for the outline
   //         const material = new THREE.LineBasicMaterial({
-  //           color: colorScheme.polygonColor, // Adjust the color as needed
+  //           color: colorScheme.polygonColor,
   //           transparent: true,
   //           alphaHash: true,
   //           opacity: 0.6,
@@ -828,93 +898,44 @@ export function gfx() {
   
   //         const shapeCoords = feature.geometry.coordinates[0];
   //         const vertices = [];
+  //         let centroid = new THREE.Vector3(0, 0, 0);
   
-  //         // Convert coordinates to 3D vertices, incorporating elevation data
   //         shapeCoords.forEach((coord, index) => {
   //           const [x, y] = toStatePlane(coord[0], coord[1]);
-  //           const z = elevationData[index] * zScale; // Use the corresponding elevation data for Z value
-  //           vertices.push(new THREE.Vector3(x, y, z));
+  //           const z = elevationData[index] * zScale;
+  //           const vertex = new THREE.Vector3(x, y, z);
+  //           vertices.push(vertex);
+  //           centroid.add(vertex);
   //         });
   
-  //         // Create a geometry and add vertices to it
+  //         centroid.divideScalar(shapeCoords.length); // Compute centroid
+  
+  //         // Create original geometry
   //         const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
-  
-  //         // Create a line loop with the geometry and material
   //         const lineLoop = new THREE.LineLoop(geometry, material);
-  //         lineLoop.name = `propagation-${feature.properties.key}`; // Use the key as part of the name for uniqueness
-  
-  //         // Add the line loop to the scene
+  //         lineLoop.name = `propagation-${feature.properties.key}`;
   //         scene.add(lineLoop);
+  
+  //         // Generate concentric copies
+  //         for (let j = 1; j <= numberOfConcentricCopies; j++) {
+  //           const scaledVertices = vertices.map(vertex => {
+  //             const scaledVertex = vertex.clone().sub(centroid).multiplyScalar(1 - j * scaleDecrement).add(centroid);
+  //             return scaledVertex;
+  //           });
+  
+  //           const scaledGeometry = new THREE.BufferGeometry().setFromPoints(scaledVertices);
+  //           const scaledLineLoop = new THREE.LineLoop(scaledGeometry, material);
+  //           scaledLineLoop.name = `propagation-${feature.properties.key}-concentric-${j}`;
+  //           scene.add(scaledLineLoop);
+  //         }
   //       }
   
-  //       // Resolve the promise when all features have been processed
   //       resolve();
   //     } catch (error) {
   //       reject(`Error in addFMpropagation3D: ${error.message}`);
   //     }
   //   });
   // }
-
-  function addFMpropagation3D(geojson, stride = 1, scaleDecrement = 0.1, numberOfConcentricCopies = 5) {
-    return new Promise((resolve, reject) => {
-      try {
-        // Iterate over each feature in the GeoJSON
-        for (let i = 0; i < geojson.features.length; i += stride) {
-          const feature = geojson.features[i];
-          const elevationData = feature.properties.elevation_data;
-          
-          if (!elevationData || elevationData.length !== feature.geometry.coordinates[0].length) {
-            console.error(`Elevation data length does not match coordinates length for feature at index ${i}`);
-            continue;
-          }
-  
-          const material = new THREE.LineBasicMaterial({
-            color: colorScheme.polygonColor,
-            transparent: true,
-            alphaHash: true,
-            opacity: 0.6,
-          });
-  
-          const shapeCoords = feature.geometry.coordinates[0];
-          const vertices = [];
-          let centroid = new THREE.Vector3(0, 0, 0);
-  
-          shapeCoords.forEach((coord, index) => {
-            const [x, y] = toStatePlane(coord[0], coord[1]);
-            const z = elevationData[index] * zScale;
-            const vertex = new THREE.Vector3(x, y, z);
-            vertices.push(vertex);
-            centroid.add(vertex);
-          });
-  
-          centroid.divideScalar(shapeCoords.length); // Compute centroid
-  
-          // Create original geometry
-          const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
-          const lineLoop = new THREE.LineLoop(geometry, material);
-          lineLoop.name = `propagation-${feature.properties.key}`;
-          scene.add(lineLoop);
-  
-          // Generate concentric copies
-          for (let j = 1; j <= numberOfConcentricCopies; j++) {
-            const scaledVertices = vertices.map(vertex => {
-              const scaledVertex = vertex.clone().sub(centroid).multiplyScalar(1 - j * scaleDecrement).add(centroid);
-              return scaledVertex;
-            });
-  
-            const scaledGeometry = new THREE.BufferGeometry().setFromPoints(scaledVertices);
-            const scaledLineLoop = new THREE.LineLoop(scaledGeometry, material);
-            scaledLineLoop.name = `propagation-${feature.properties.key}-concentric-${j}`;
-            scene.add(scaledLineLoop);
-          }
-        }
-  
-        resolve();
-      } catch (error) {
-        reject(`Error in addFMpropagation3D: ${error.message}`);
-      }
-    });
-  }
   
     
 
@@ -1331,7 +1352,7 @@ export function gfx() {
     const urls = [
       'src/assets/data/colloquium_ii_data/stanford_contours_simplified1000m_20231124.geojson',
       'src/assets/data/colloquium_ii_data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson',
-      'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubOnly_processed.geojson',
+      'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_processed.geojson',
       'src/assets/data/colloquium_ii_data/FmTowers_FeaturesToJSON_AOI_20231204.geojson',
       'src/assets/data/colloquium_ii_data/study_area_admin0clip.geojson',
       'src/assets/data/colloquium_ii_data/cellServiceCentroids_2000m_20231210.geojson',
@@ -1384,7 +1405,7 @@ export function gfx() {
         addCellTowerPts(data);
         break;
 
-      case 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubOnly_processed.geojson':
+      case 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_processed.geojson':
         fmContoursGeojsonData = data;
         addFMpropagation3D(data);
         break;

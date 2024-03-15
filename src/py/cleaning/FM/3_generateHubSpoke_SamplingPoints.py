@@ -89,5 +89,5 @@ def generate_spokes_with_sampling(input_geojson, output_geojson, dem_path=None, 
 
 # Example usage with specified input and output GeoJSON paths, and the path to the DEM file
 input_geojson = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_polygon.geojson'
-output_geojson = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubOnly.geojson'
-generate_spokes_with_sampling(input_geojson, output_geojson, dem_path, sampling_resolution=0)
+output_geojson = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes.geojson'
+generate_spokes_with_sampling(input_geojson, output_geojson, dem_path, sampling_resolution=5)
