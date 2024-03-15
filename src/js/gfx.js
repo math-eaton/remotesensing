@@ -72,13 +72,12 @@ export function gfx() {
   // loading screen! //////////////////
 
   // Three.js - Initialize the Scene
-  let scene, camera, renderer, controls;
+  let scene, camera, renderer, controls, pixelationFactor;
   //   let raycaster = new THREE.Raycaster();
   //   let mouse = new THREE.Vector2();
   //   let polygons = [];
   let isCameraRotating = true; // Flag to track camera rotation
-  const rotationSpeed = 0.001; // Define the speed of rotation
-  let pixelationFactor = 1; //  default value
+  const rotationSpeed = 0.00001; // Define the speed of rotation
 
   // Create a material for the ray line
   const rayMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 }); // Red color for visibility
@@ -183,8 +182,8 @@ export function gfx() {
     camera.updateProjectionMatrix();
     renderer.setSize(width, height);
 
-    // pixelationFactor is hardcoded rn for removal (fka sliderValue)
-    pixelationFactor = 0.666;
+    // update this value to alter pixel ratio scaled with the screen
+    pixelationFactor = 0.4;
 
     // Calculate new dimensions based on the slider value
     var newWidth = Math.max(1, window.innerWidth * pixelationFactor);
@@ -449,11 +448,35 @@ export function gfx() {
     return color;
   }
 
+  // calculate elevation properties from contours geojson
+  function calculateMeanContourElevation(geojson) {
+    if (!geojson || !geojson.features || geojson.features.length === 0) {
+      console.error('Invalid or empty GeoJSON data');
+      return 0; // Return a default or error value
+    }
+  
+    // Extract elevation values from the GeoJSON properties
+    const elevations = geojson.features.map(feature => feature.properties.contour);
+  
+    // Calculate the total elevation to find the mean
+    const totalElevation = elevations.reduce((acc, elevation) => acc + elevation, 0);
+    const meanElevation = totalElevation / elevations.length;
+  
+    // Optionally, calculate min and max elevations for additional insights
+    const minElevation = Math.min(...elevations);
+    const maxElevation = Math.max(...elevations);
+  
+    console.log(`Min Elevation: ${minElevation}, Max Elevation: ${maxElevation}, Mean Elevation: ${meanElevation}`);
+  
+    return meanElevation;
+  }
+  
+
   // Define a variable to store the minimum elevation
   // This should be determined from the addElevContourLines function
   let globalMinElevation = Infinity;
+  let meanElevation = Infinity + 1;
 
-  // Updated addElevContourLines function to update globalMinElevation
   function addElevContourLines(geojson) {
     return new Promise((resolve, reject) => {
       if (!geojson || !geojson.features) {
@@ -464,7 +487,9 @@ export function gfx() {
       // Determine min and max elevation from the geojson
       const elevations = geojson.features.map((f) => f.properties.contour);
       const minElevation = Math.min(...elevations);
-      globalMinElevation = Math.min(globalMinElevation, minElevation); // Update the global minimum elevation
+      globalMinElevation = Math.min(globalMinElevation, minElevation);
+      // const totalElevation = elevations.reduce((acc, cur) => acc + cur, 0);
+      meanElevation = calculateMeanContourElevation(geojson);
       const maxElevation = Math.max(...elevations);
 
       geojson.features.forEach((feature, index) => {
@@ -661,7 +686,7 @@ export function gfx() {
             // Convert coordinates to vertices and calculate centroid
             shapeCoords.forEach((coord) => {
               const [x, y] = toStatePlane(coord[0], coord[1]);
-              const z = globalMinElevation * zScale; // Set Z to the lowest contour elevation
+              const z = meanElevation * zScale; // Set Z to the lowest contour elevation
               vertices.push(new THREE.Vector3(x, y, z));
               centroid.add(new THREE.Vector3(x, y, z));
             });
@@ -741,8 +766,8 @@ export function gfx() {
             // Convert coordinates to vertices
             shapeCoords.forEach((coord) => {
               const [x, y] = toStatePlane(coord[0], coord[1]);
-              let globalMinElevation = 500;
-              let z = globalMinElevation * zScale; // Default Z value if not provided
+              let meanElevation = calculateMeanContourElevation(geojson);
+              let z = meanElevation * zScale; // Default Z value if not provided
               console.log(z)
               
               // If there's a third element (elevation), and it's not null, use it
@@ -797,7 +822,8 @@ export function gfx() {
           const material = new THREE.LineBasicMaterial({
             color: colorScheme.polygonColor, // Adjust the color as needed
             transparent: true,
-            opacity: 0.65, // Adjust opacity as needed
+            alphaHash: true,
+            opacity: 0.6,
           });
   
           const shapeCoords = feature.geometry.coordinates[0];
@@ -1287,6 +1313,7 @@ export function gfx() {
     switch (url) {
       case 'src/assets/data/colloquium_ii_data/stanford_contours_simplified1000m_20231124.geojson':
         contourGeojsonData = data;
+        const meanElevation = calculateMeanContourElevation(data);
         addElevContourLines(data);
         break;
 
