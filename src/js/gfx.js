@@ -132,10 +132,10 @@ export function gfx() {
 
     // Set the minimum and maximum polar angles (in radians) to prevent the camera from going over the vertical
     controls.minPolarAngle = 0; // 0 radians (0 degrees) - directly above the target
-    controls.maxPolarAngle = Math.PI / 5; // π/n radians (z degrees) - on the horizon
+    controls.maxPolarAngle = Math.PI / 4; // π/n radians (z degrees) - on the horizon
     // Set the maximum distance the camera can dolly out
-    controls.maxDistance = 5; // max camera zoom
-    controls.minDistance = 0.5; // min camera zoom
+    controls.maxDistance = 2.5; // max camera zoom
+    controls.minDistance = 0.4; // min camera zoom
     console.log(controls.angle)
 
     const audioListener = new THREE.AudioListener();
@@ -265,6 +265,8 @@ export function gfx() {
     // Log camera distance from xyz
     // logCameraDistance();
 
+    updateDashSizeForZoom(); 
+
     adjustMeshVisibilityBasedOnCameraDistance();
     renderer.render(scene, camera);
   }
@@ -333,6 +335,47 @@ export function gfx() {
     }
   }
 
+  // update line feature dashes based on zoom level
+
+  const dashSize = .002;
+  const gapSize = .015;
+
+  const zoomLevels = [
+    { threshold: 0.4, dashSize: dashSize*20000000, gapSize: gapSize }, // Closest zoom
+    { threshold: 0.5, dashSize: dashSize, gapSize: gapSize / 2},
+    { threshold: 1.5, dashSize: dashSize / 5, gapSize: gapSize / 4},
+    // { threshold: 2, dashSize: dashSize, gapSize: gapSize }, // Farthest zoom
+  ];
+  
+    let currentZoomLevelIndex = -1; // Index of the currently applied zoom level
+
+    function updateDashSizeForZoom() {
+      const distanceToTarget = camera.position.distanceTo(controls.target);
+      console.log(distanceToTarget)
+      // Find the closest zoom level without going over
+      let selectedZoomLevel = zoomLevels[0];
+      for (let i = zoomLevels.length - 1; i >= 0; i--) {
+        if (distanceToTarget >= zoomLevels[i].threshold) {
+          selectedZoomLevel = zoomLevels[i];
+          break;
+        }
+      }
+    
+      // Check if we need to update the dash and gap sizes
+      if (currentZoomLevelIndex !== selectedZoomLevel.threshold) {
+        currentZoomLevelIndex = selectedZoomLevel.threshold;
+        // Update all line loops with the new dash and gap sizes
+        lineLoops.forEach((lineLoop) => {
+          if (lineLoop.material instanceof THREE.LineDashedMaterial) {
+            lineLoop.material.dashSize = selectedZoomLevel.dashSize;
+            lineLoop.material.gapSize = selectedZoomLevel.gapSize;
+            lineLoop.material.needsUpdate = true;
+            lineLoop.computeLineDistances();
+          }
+        });
+      }
+    }
+    
   function getBoundingBoxOfGeoJSON(geojson) {
     let minX = Infinity;
     let maxX = -Infinity;
@@ -827,6 +870,9 @@ export function gfx() {
   //   });
   // }
   
+
+  let lineLoops = [];
+
   // this version is static rescaling of concentric lines based on input geojson + dynamic transparency based on concentric line
   function addFMpropagation3D(geojson, stride = 1) {
     return new Promise((resolve, reject) => {
@@ -875,10 +921,11 @@ export function gfx() {
             color: colorScheme.polygonColor,
             transparent: true,
             alphaHash: true,
+            // alphaTest: true,
             opacity: opacity,
             // color: 0xffffff,
-            dashSize: .0004,
-            gapSize: .0025,          
+            dashSize: dashSize,
+            gapSize: gapSize,          
           });
 
   
@@ -898,11 +945,11 @@ export function gfx() {
           // Create a line loop with the geometry and material
           const lineLoop = new THREE.LineLoop(geometry, material);
           lineLoop.name = `propagation-${feature.properties.key}`;
-          lineLoop.computeLineDistances(); 
-
-  
-          // Add the line loop to the scene
+          lineLoop.computeLineDistances();
           scene.add(lineLoop);
+          
+          // Add the line loop to the array for later access
+          lineLoops.push(lineLoop); 
         }
   
         resolve(); // Resolve the promise when all features have been processed
