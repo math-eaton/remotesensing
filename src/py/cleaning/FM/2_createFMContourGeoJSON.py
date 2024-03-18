@@ -5,11 +5,11 @@ import os
 import ast
 
 # Load the data from the JSON file
-input_file = 'src/assets/data/fcc/fm/processed/FM_service_contour_testClean_reduceDupe.json'  
+input_file = 'src/assets/data/fcc/fm/processed/FM_service_contour_testClean_reduceDupe_infoJoin.json'  
 data = pd.read_json(input_file, dtype=str)
 
 # output info
-use_case = "FM_contours_AOI"
+use_case = "FM_contours_AOI_infoJoin"
 output_path = os.path.join("src/assets/data/fcc/fm/processed", use_case)
 extension = ".geojson"
 
@@ -58,8 +58,11 @@ for index, row in data.iterrows():
 
     properties = {
         'transmitter_site': row['transmitter_site'],
-        'lms_application_id': row['lms_application_id']
+        'lms_application_id': row['lms_application_id'],
+        'channel': int(row['Channel'])
     }
+
+
 
     coordinates = [tuple(map(float, v.split(','))) for v in coords_dict.values()]
 
@@ -81,8 +84,8 @@ for gdf in [gdf_points, gdf_lines, gdf_polygons]:
     gdf.set_crs(epsg=4326, inplace=True)
 
 # Save the GeoDataFrames as GeoJSON files
-gdf_points.to_file(f"{output_path}_point{extension}", driver='GeoJSON')
-gdf_lines.to_file(f"{output_path}_line{extension}", driver='GeoJSON')
+# gdf_points.to_file(f"{output_path}_point{extension}", driver='GeoJSON')
+# gdf_lines.to_file(f"{output_path}_line{extension}", driver='GeoJSON')
 gdf_polygons.to_file(f"{output_path}_polygon{extension}", driver='GeoJSON')
 
 print("GeoJSON files have been created.")

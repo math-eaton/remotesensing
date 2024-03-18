@@ -9,6 +9,9 @@ dem_path = 'src/assets/data/usgs/usgs150m_wgs84/usgs150mWGS84.tif'
 geojson.geometry.DEFAULT_PRECISION = 4
 
 def sample_points_on_line(line, num_points):
+
+    print("sampling points ...")
+
     """
     Generate evenly spaced points along a line. Adjusted to include variable sampling resolution,
     including handling zero sampling points where only vertex points are returned.
@@ -19,6 +22,7 @@ def sample_points_on_line(line, num_points):
     return []
 
 def add_elevation(point, raster, band_array):
+
     """
     Get elevation for a point from a preloaded raster band array. This function is unchanged
     from the original script.
@@ -31,6 +35,9 @@ def add_elevation(point, raster, band_array):
         return round(float(elevation), 2)
     
 def generate_spokes_with_sampling(input_geojson, output_geojson, dem_path=None, sampling_resolution=4):
+
+    print("generating ...")
+
     with open(input_geojson, 'r') as file:
         data = geojson.load(file)
     
@@ -42,31 +49,14 @@ def generate_spokes_with_sampling(input_geojson, output_geojson, dem_path=None, 
         "features": []
     }
 
-    transmitter_site_added = False  # Flag to track if the transmitter site has been added
-
     for feature in data['features']:
         transmitter_location = feature['properties']['transmitter_site'].split(', ')
         transmitter_point = Point(float(transmitter_location[0]), float(transmitter_location[1]))
         lms_application_id = feature['properties']['lms_application_id']
 
-        if not transmitter_site_added and sampling_resolution > 0:
-            # Add the transmitter site with the highest possible sampling_level
-            output['features'].append({
-                "type": "Feature",
-                "geometry": mapping(transmitter_point),
-                "properties": {
-                    "elevation": add_elevation(transmitter_point, raster, band_array) if raster else None,
-                    "transmitter_site": feature['properties']['transmitter_site'],
-                    "channel": feature['properties']['channel'],
-                    "lms_application_id": lms_application_id,
-                    "sampling_level": sampling_resolution,  # Use for the transmitter site
-                },
-            })
-            transmitter_site_added = True  # Set the flag as true after adding
-
         for vertex in feature['geometry']['coordinates'][0]:
             vertex_point = Point(vertex[0], vertex[1])
-            line = LineString([vertex_point, transmitter_point])  # Note the order of points
+            line = LineString([vertex_point, transmitter_point])
 
             # Add the outer-edge vertex point with sampling_level 0
             vertex_elevation = add_elevation(vertex_point, raster, band_array) if raster else None
@@ -99,9 +89,11 @@ def generate_spokes_with_sampling(input_geojson, output_geojson, dem_path=None, 
                 })
 
     with open(output_geojson, 'w') as file:
+        print("done.")
         geojson.dump(output, file, indent=4)
+
         
 # init
 input_geojson = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_infoJoin_polygon.geojson'
 output_geojson = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_infoJoin.geojson'
-generate_spokes_with_sampling(input_geojson, output_geojson, dem_path, sampling_resolution=4)
+generate_spokes_with_sampling(input_geojson, output_geojson, dem_path, sampling_resolution=9)
