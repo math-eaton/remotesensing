@@ -139,7 +139,7 @@ export function gfx() {
     // Set the maximum distance the camera can dolly out
     controls.maxDistance = 2.5; // max camera zoom
     controls.minDistance = 0.4; // min camera zoom
-    console.log(controls.angle)
+    // console.log(controls.angle)
 
     const audioListener = new THREE.AudioListener();
     camera.add(audioListener);
@@ -354,7 +354,7 @@ export function gfx() {
 
     function updateDashSizeForZoom() {
       const distanceToTarget = camera.position.distanceTo(controls.target);
-      console.log(distanceToTarget)
+      // console.log(distanceToTarget)
       // Find the closest zoom level without going over
       let selectedZoomLevel = zoomLevels[0];
       for (let i = zoomLevels.length - 1; i >= 0; i--) {
@@ -883,16 +883,23 @@ export function gfx() {
         // Extract all indices from the keys to determine the range
         const indices = geojson.features.map(feature => {
           const keyParts = feature.properties.key.split('_');
-          return parseInt(keyParts[keyParts.length - 1], 10);
+          console.log(keyParts)
+          return parseInt(keyParts[keyParts.length - 1], 5);
         });
         const maxIndex = Math.max(...indices);
-        const maxOpacity = 0.85; 
-        const minOpacity = 0.05; 
+        const maxOpacity = 1.00; 
+        const minOpacity = 0.25; 
         const opacityRange = maxOpacity - minOpacity;
   
         // Iterate over each feature in the GeoJSON
         for (let i = 0; i < geojson.features.length; i += stride) {
           const feature = geojson.features[i];
+          
+          // Filter by channel property (only process features with channel = 201) ... currently assuming channel is a string
+          if (feature.properties.channel !== "201") {
+            continue; // Skip this feature if its channel is not 201
+          }
+  
           const elevationData = feature.properties.elevation_data;
           
           // Ensure there is a matching number of elevation points to coordinate pairs
@@ -908,29 +915,19 @@ export function gfx() {
           } else {
             const featureIndex = parseInt(feature.properties.key.split('_')[1], 10);
             // Scale opacity based on feature index
-            opacity = minOpacity + (opacityRange * (maxIndex - featureIndex) / maxIndex);
+            // opacity = minOpacity + (opacityRange * (maxIndex - featureIndex) / maxIndex);
+            opacity = maxOpacity - (opacityRange * featureIndex / maxIndex);
           }
   
-          // basic line material - aka solid
-          // const material = new THREE.LineBasicMaterial({
-          //   color: colorScheme.polygonColor,
-          //   transparent: true,
-          //   alphaHash: true,
-          //   opacity: opacity,
-          // });
-
           // dashed lines for fun
           const material = new THREE.LineDashedMaterial({
             color: colorScheme.polygonColor,
             transparent: true,
             alphaHash: true,
-            // alphaTest: true,
             opacity: opacity,
-            // color: 0xffffff,
             dashSize: dashSize * .8,
             gapSize: gapSize * .4,          
           });
-
   
           const shapeCoords = feature.geometry.coordinates[0];
           const vertices = [];
@@ -961,7 +958,7 @@ export function gfx() {
       }
     });
   }
-    
+      
 
   // this version is dynamic rescaling of concentric lines
   // function addFMpropagation3D(geojson, stride = 1, scaleDecrement = 0.1, numberOfConcentricCopies = 5) {
@@ -1440,7 +1437,7 @@ export function gfx() {
     const urls = [
       'src/assets/data/colloquium_ii_data/stanford_contours_simplified1000m_20231124.geojson',
       'src/assets/data/colloquium_ii_data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson',
-      'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_processed.geojson',
+      'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_infoJoin_processed.geojson',
       'src/assets/data/colloquium_ii_data/FmTowers_FeaturesToJSON_AOI_20231204.geojson',
       'src/assets/data/colloquium_ii_data/study_area_admin0clip.geojson',
       'src/assets/data/colloquium_ii_data/cellServiceCentroids_2000m_20231210.geojson',
@@ -1493,7 +1490,7 @@ export function gfx() {
         addCellTowerPts(data);
         break;
 
-      case 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_processed.geojson':
+      case 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_infoJoin_processed.geojson':
         fmContoursGeojsonData = data;
         addFMpropagation3D(data);
         break;

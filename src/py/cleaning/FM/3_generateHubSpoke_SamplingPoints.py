@@ -5,6 +5,9 @@ import rasterio
 # Path to the Digital Elevation Model (DEM) file
 dem_path = 'src/assets/data/usgs/usgs150m_wgs84/usgs150mWGS84.tif' 
 
+
+geojson.geometry.DEFAULT_PRECISION = 4
+
 def sample_points_on_line(line, num_points):
     """
     Generate evenly spaced points along a line. Adjusted to include variable sampling resolution,
@@ -27,7 +30,7 @@ def add_elevation(point, raster, band_array):
     else:
         return round(float(elevation), 2)
     
-def generate_spokes_with_sampling(input_geojson, output_geojson, dem_path=None, sampling_resolution=9):
+def generate_spokes_with_sampling(input_geojson, output_geojson, dem_path=None, sampling_resolution=4):
     """
     Generate spokes with variable sampling points. This function now includes a 'sampling_resolution'
     parameter to control the number of sampling points created along each spoke.
@@ -62,6 +65,7 @@ def generate_spokes_with_sampling(input_geojson, output_geojson, dem_path=None, 
                 "geometry": mapping(vertex_point),
                 "properties": {
                     "transmitter_site": feature['properties']['transmitter_site'],
+                    "channel": feature['properties']['channel'],
                     "lms_application_id": lms_application_id,
                     "sampling_level": 0,
                     "elevation": vertex_elevation
@@ -79,6 +83,7 @@ def generate_spokes_with_sampling(input_geojson, output_geojson, dem_path=None, 
                     "properties": {
                         "elevation": elevation,
                         "transmitter_site": feature['properties']['transmitter_site'],
+                        "channel": feature['properties']['channel'],
                         "lms_application_id": lms_application_id,
                         "sampling_level": i  # Reflects the position along the spoke
                     },
@@ -88,6 +93,6 @@ def generate_spokes_with_sampling(input_geojson, output_geojson, dem_path=None, 
         geojson.dump(output, file, indent=4)
 
 # init
-input_geojson = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_polygon.geojson'
-output_geojson = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes.geojson'
-generate_spokes_with_sampling(input_geojson, output_geojson, dem_path, sampling_resolution=5)
+input_geojson = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_infoJoin_polygon.geojson'
+output_geojson = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_infoJoin.geojson'
+generate_spokes_with_sampling(input_geojson, output_geojson, dem_path, sampling_resolution=4)
