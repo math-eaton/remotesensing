@@ -11,6 +11,13 @@
     <div id="gfx" class="background crosshair">
       <div id="three-container" class="pixelated"></div> 
     </div>
+
+    <div id="fm-channel-controls">
+      <label for="resolution-slider">scale resolution:</label>
+      <input type="range" id="fm-channel-slider" min="2" max="10" step="1" value="2">
+      <p id="fm-channel-display">channel: </p>
+    </div>
+
     <script type="module" src="/src/js/gfx.js" defer></script>
     <script type="module" src="/src/js/main.js" defer></script>
   </body>

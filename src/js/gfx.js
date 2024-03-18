@@ -26,6 +26,10 @@ export function gfx() {
   let analysisArea = new THREE.Group();
   cellServiceMesh.visible = false; // Set the mesh to be invisible initially
 
+  let sliderValue = 8;  //  default value
+  const sliderLength = 10;  // Assuming 10 is the maximum value of the slider
+
+
   // Define color scheme variables
   const colorScheme = {
     graticuleColor: '#2f2f2f0b', // Bright green
@@ -98,10 +102,7 @@ export function gfx() {
     );
     camera.up.set(0, 0, 1); // Set Z as up-direction
 
-    // Create the renderer first
     renderer = new THREE.WebGLRenderer({ antialias: false });
-
-    // var lowResScale = .01; // Adjust this for more or less resolution (lower value = lower resolution)
 
     renderer.setSize(window.innerWidth, window.innerHeight, false);
     renderer.setPixelRatio(1);
@@ -129,8 +130,6 @@ export function gfx() {
     controls.enableRotate = true; // tilt up down
     controls.enableDamping = true; // an optional setting to give a smoother control feeling
     controls.dampingFactor = 0.05; // amount of damping (drag)
-
-    // camera.up.set(0, 0, 1); 
 
 
     // Set the minimum and maximum polar angles (in radians) to prevent the camera from going over the vertical
@@ -165,6 +164,9 @@ export function gfx() {
     camera.far = fogFar;
     camera.updateProjectionMatrix();
 
+    const resolutionSlider = document.getElementById('fm-channel-slider');
+    updateSliderDisplay(sliderValue, resolutionSlider);
+
     renderer.setClearColor(colorScheme.backgroundColor);
     window.addEventListener('resize', onWindowResize, false);
     adjustCameraZoom();
@@ -172,7 +174,46 @@ export function gfx() {
 
   ////////////////////
   /////////// DOM stuff event listener resolution display stuff bye bye
-  ////////////////
+
+
+  function updateChannelDisplay() {
+    var newWidth = Math.round(window.innerWidth * (sliderValue / sliderLength));
+    var newHeight = Math.round(window.innerHeight * (sliderValue / sliderLength));
+    document.getElementById('fm-channel-display').textContent = `fm channel: `;
+  }
+  
+  // Set up the slider event listener
+  document.getElementById('fm-channel-slider').addEventListener('input', function(event) {
+    // Read the new value from the slider and convert it
+    sliderValue = 0.2 + (parseFloat(event.target.value) / sliderLength) * 0.8;
+  
+    // Update the resolution and the display
+    onWindowResize(); // Update the resolution
+    updateChannelDisplay(); // Update the display
+  });
+  
+  
+  document.addEventListener('updateChannelSlider', function(event) {
+    const newSliderValue = event.detail.sliderValue;
+    // Convert the slider value to the scale needed for your Three.js visualization
+    sliderValue = 0.2 + (parseFloat(newSliderValue) / sliderLength) * 0.8;
+  
+    // Then update your Three.js visualization accordingly
+    onWindowResize(); // Call the function that updates the resolution
+    updateChannelDisplay(); // Update the resolution display
+  });
+
+  // Function to update slider display
+function updateSliderDisplay(value, resolutionSlider) {
+  let sliderDisplay = '[';
+  for (let i = 0; i < sliderLength; i++) {
+      sliderDisplay += i < value ? '#' : '-';
+  }
+  sliderDisplay += ']';
+  resolutionSlider.textContent = sliderDisplay;
+  }
+  
+
   //////////////////////////////////////
   // Resize function
   function onWindowResize() {
@@ -282,6 +323,9 @@ export function gfx() {
     pixelationFactor = 1;
 
     onWindowResize(); // Update the resolution
+
+      // Ensure the sliderValue is up-to-date
+    sliderValue = 0.2 + (parseFloat(document.getElementById('fm-channel-slider').value) / sliderLength) * 0.8;
 
     // Load GeoJSON data and then enable interaction
     loadGeoJSONData(() => {
@@ -877,14 +921,19 @@ export function gfx() {
   let lineLoops = [];
 
   // this version is static rescaling of concentric lines based on input geojson + dynamic transparency based on concentric line
-  function addFMpropagation3D(geojson, stride = 1) {
+  function addFMpropagation3D(geojson, channelFilter, stride = 1) {
     return new Promise((resolve, reject) => {
       try {
+        // Clear previously displayed features
+        while(lineLoops.length > 0) {
+          const loop = lineLoops.pop();
+          scene.remove(loop);
+        }
+  
         // Extract all indices from the keys to determine the range
         const indices = geojson.features.map(feature => {
           const keyParts = feature.properties.key.split('_');
-          console.log(keyParts)
-          return parseInt(keyParts[keyParts.length - 1], 5);
+          return parseInt(keyParts[keyParts.length - 1], 10); 
         });
         const maxIndex = Math.max(...indices);
         const maxOpacity = 1.00; 
@@ -895,11 +944,12 @@ export function gfx() {
         for (let i = 0; i < geojson.features.length; i += stride) {
           const feature = geojson.features[i];
           
-          // Filter by channel property (only process features with channel = "201")
-          if (feature.properties.channel !== "201") {
-            continue; // Skip this feature if its channel is not "201"
+          // Use the channelFilter to process only matching features
+          if (parseInt(feature.properties.channel, 10) !== channelFilter) {
+            continue; // Skip this feature if its channel does not match the filter
           }
-        
+          
+          
           const elevationData = feature.properties.elevation_data;
           
           // Ensure there is a matching number of elevation points to coordinate pairs

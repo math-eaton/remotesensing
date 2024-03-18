@@ -454,12 +454,13 @@ p, ul{
 }
 
 /* Slider container */
-#resolution-controls {
+#fm-channel-controls {
   width: 200px; /* Adjust as necessary */
+  margin-left: 1vw;
 }
 
 /* The slider itself */
-#resolution-slider {
+#fm-channel-slider {
   -webkit-appearance: none; /* Override default CSS styles */
   appearance: none;
   width: 100%;
@@ -472,7 +473,7 @@ p, ul{
 }
 
 /* Slider thumb */
-#resolution-slider::-webkit-slider-thumb {
+#fm-channel-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 20px; /* Thumb width */
@@ -481,7 +482,7 @@ p, ul{
   cursor: url("/src/cursor/point.cur"), auto;
 }
 
-#resolution-slider::-moz-range-thumb {
+#fm-channel-slider::-moz-range-thumb {
   width: 20px;
   height: 20px;
   background: #444;
