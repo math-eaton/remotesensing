@@ -457,8 +457,8 @@ p, ul{
 #fm-channel-controls {
   position: relative; /* Add this if not already set */
   width: 30vw;
-  margin-left: 3vw;
-  margin-top: 1vh;
+  margin: 3vw;
+  padding-right: 5vw;
   z-index: 10000000000000;
 }
 
@@ -473,6 +473,14 @@ p, ul{
   opacity: 0.7;
   -webkit-transition: 0.2s;
   transition: opacity 0.2s;
+}
+
+#fm-channel-display{
+  display: none;
+}
+
+#fm-frequency-display{
+  align-items: center;
 }
 
 /* Slider thumb */

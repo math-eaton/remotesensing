@@ -187,24 +187,24 @@ function updateSliderDisplay(value, resolutionSlider) {
   }
   
 function updateLabelPosition() {
-    const slider = document.getElementById('fm-channel-slider');
-    const label = document.getElementById('fm-frequency-display');
-    console.log(label)
-    const sliderValue = parseInt(slider.value, 10);
-    const min = parseInt(slider.min, 10);
-    const max = parseInt(slider.max, 10);
+  const slider = document.getElementById('fm-channel-slider');
+  const label = document.getElementById('fm-frequency-display');
+  const sliderValue = parseInt(slider.value, 10);
+  const min = parseInt(slider.min, 10);
+  const max = parseInt(slider.max, 10);
 
-    // Calculate thumb position percentage
-    const percent = ((sliderValue - min) / (max - min)) * 100;
+  // Calculate thumb position percentage
+  const percent = ((sliderValue - min) / (max - min)) * 100;
 
-    // Adjust label position based on thumb position
-    // This calculation depends on the slider's width and the label's width to center it
-    const sliderWidth = slider.offsetWidth;
-    const labelWidth = label.offsetWidth;
-    const leftPosition = (percent / 100) * sliderWidth - (labelWidth / 2) + (slider.getBoundingClientRect().left - label.offsetParent.getBoundingClientRect().left);
+  // Adjust label position based on thumb position
+  const sliderWidth = slider.offsetWidth;
+  const labelWidth = label.offsetWidth;
+  // Dynamically adjust label's max-width
+  label.style.maxWidth = `${sliderWidth / 4}px`;
+  const leftPosition = (percent / 100) * sliderWidth - (labelWidth / 2) + (slider.getBoundingClientRect().left - label.offsetParent.getBoundingClientRect().left);
 
-    // Update the label's position
-    label.style.left = `${leftPosition}px`;
+  // Update the label's position
+  label.style.left = `${leftPosition}px`;
 }
 
 // Initial position update
