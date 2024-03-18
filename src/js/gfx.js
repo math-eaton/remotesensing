@@ -895,11 +895,11 @@ export function gfx() {
         for (let i = 0; i < geojson.features.length; i += stride) {
           const feature = geojson.features[i];
           
-          // Filter by channel property (only process features with channel = 201) ... currently assuming channel is a string
+          // Filter by channel property (only process features with channel = "201")
           if (feature.properties.channel !== "201") {
-            continue; // Skip this feature if its channel is not 201
+            continue; // Skip this feature if its channel is not "201"
           }
-  
+        
           const elevationData = feature.properties.elevation_data;
           
           // Ensure there is a matching number of elevation points to coordinate pairs
@@ -907,19 +907,18 @@ export function gfx() {
             console.error(`Elevation data length does not match coordinates length for feature at index ${i}`);
             continue; // Skip this feature
           }
-  
-          // Default opacity to the median of the range if all indices are the same (maxIndex is 0)
+        
+          const featureIndex = parseInt(feature.properties.key.split('_')[feature.properties.key.split('_').length - 1], 10);
+          
           let opacity;
           if (maxIndex === 0) {
-            opacity = minOpacity + (opacityRange / 2); // Midpoint of opacity range
+            // If there's only one index, set it to max opacity (since it's both the minimum and maximum)
+            opacity = maxOpacity;
           } else {
-            const featureIndex = parseInt(feature.properties.key.split('_')[1], 10);
-            // Scale opacity based on feature index
-            // opacity = minOpacity + (opacityRange * (maxIndex - featureIndex) / maxIndex);
-            opacity = maxOpacity - (opacityRange * featureIndex / maxIndex);
+            // Directly scale the opacity: Higher indices get higher opacity
+            opacity = minOpacity + (opacityRange * featureIndex / maxIndex);
           }
-  
-          // dashed lines for fun
+        
           const material = new THREE.LineDashedMaterial({
             color: colorScheme.polygonColor,
             transparent: true,
@@ -928,7 +927,7 @@ export function gfx() {
             dashSize: dashSize * .8,
             gapSize: gapSize * .4,          
           });
-  
+          
           const shapeCoords = feature.geometry.coordinates[0];
           const vertices = [];
   
