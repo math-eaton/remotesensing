@@ -31,35 +31,45 @@ def add_elevation(point, raster, band_array):
         return round(float(elevation), 2)
     
 def generate_spokes_with_sampling(input_geojson, output_geojson, dem_path=None, sampling_resolution=4):
-    """
-    Generate spokes with variable sampling points. This function now includes a 'sampling_resolution'
-    parameter to control the number of sampling points created along each spoke.
-    """
     with open(input_geojson, 'r') as file:
         data = geojson.load(file)
     
     raster = rasterio.open(dem_path) if dem_path else None
-    band_array = raster.read(1) if dem_path else None  # Read the first band into memory, if DEM path is provided
+    band_array = raster.read(1) if dem_path else None
 
     output = {
         "type": "FeatureCollection",
         "features": []
     }
 
+    transmitter_site_added = False  # Flag to track if the transmitter site has been added
+
     for feature in data['features']:
-        # Extract transmitter location and ID from properties
         transmitter_location = feature['properties']['transmitter_site'].split(', ')
         transmitter_point = Point(float(transmitter_location[0]), float(transmitter_location[1]))
         lms_application_id = feature['properties']['lms_application_id']
 
-        for vertex in feature['geometry']['coordinates'][0]:  # Loop over vertices assuming one polygon per feature
+        if not transmitter_site_added and sampling_resolution > 0:
+            # Add the transmitter site with the highest possible sampling_level
+            output['features'].append({
+                "type": "Feature",
+                "geometry": mapping(transmitter_point),
+                "properties": {
+                    "elevation": add_elevation(transmitter_point, raster, band_array) if raster else None,
+                    "transmitter_site": feature['properties']['transmitter_site'],
+                    "channel": feature['properties']['channel'],
+                    "lms_application_id": lms_application_id,
+                    "sampling_level": sampling_resolution,  # Use for the transmitter site
+                },
+            })
+            transmitter_site_added = True  # Set the flag as true after adding
+
+        for vertex in feature['geometry']['coordinates'][0]:
             vertex_point = Point(vertex[0], vertex[1])
-            line = LineString([transmitter_point, vertex_point])
+            line = LineString([vertex_point, transmitter_point])  # Note the order of points
 
-            # Optional: Add elevation data to vertex point, if DEM is provided
+            # Add the outer-edge vertex point with sampling_level 0
             vertex_elevation = add_elevation(vertex_point, raster, band_array) if raster else None
-
-            # Always add the vertex point with sampling level 0 and elevation
             output['features'].append({
                 "type": "Feature",
                 "geometry": mapping(vertex_point),
@@ -72,9 +82,8 @@ def generate_spokes_with_sampling(input_geojson, output_geojson, dem_path=None, 
                 },
             })
 
-            # Generate sampled points along the line based on the specified sampling resolution
+            # Generate and add sampled points
             sampled_points = sample_points_on_line(line, sampling_resolution)
-
             for i, point in enumerate(sampled_points, start=1):
                 elevation = add_elevation(point, raster, band_array) if raster else None
                 output['features'].append({
@@ -85,13 +94,13 @@ def generate_spokes_with_sampling(input_geojson, output_geojson, dem_path=None, 
                         "transmitter_site": feature['properties']['transmitter_site'],
                         "channel": feature['properties']['channel'],
                         "lms_application_id": lms_application_id,
-                        "sampling_level": i  # Reflects the position along the spoke
+                        "sampling_level": i
                     },
                 })
 
     with open(output_geojson, 'w') as file:
         geojson.dump(output, file, indent=4)
-
+        
 # init
 input_geojson = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_infoJoin_polygon.geojson'
 output_geojson = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_infoJoin.geojson'
