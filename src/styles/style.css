@@ -455,8 +455,11 @@ p, ul{
 
 /* Slider container */
 #fm-channel-controls {
-  width: 200px; /* Adjust as necessary */
-  margin-left: 1vw;
+  position: relative; /* Add this if not already set */
+  width: 30vw;
+  margin-left: 3vw;
+  margin-top: 1vh;
+  z-index: 10000000000000;
 }
 
 /* The slider itself */

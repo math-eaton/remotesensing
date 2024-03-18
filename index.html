@@ -13,9 +13,10 @@
     </div>
 
     <div id="fm-channel-controls">
-      <label for="resolution-slider">scale resolution:</label>
-      <input type="range" id="fm-channel-slider" min="2" max="10" step="1" value="2">
-      <p id="fm-channel-display">channel: </p>
+      <div id="fm-channel-display">FM channel: 201</div>
+      <input type="range" id="fm-channel-slider" min="201" max="300" step="1" value="201">
+      <div id="fm-frequency-display" style="position: absolute; bottom: -5vh;">88.1 MHz</div>
+      <!-- <p id="fm-channel-display">88.1 MHz</p> -->
     </div>
 
     <script type="module" src="/src/js/gfx.js" defer></script>

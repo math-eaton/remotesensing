@@ -26,8 +26,8 @@ export function gfx() {
   let analysisArea = new THREE.Group();
   cellServiceMesh.visible = false; // Set the mesh to be invisible initially
 
-  let sliderValue = 8;  //  default value
-  const sliderLength = 10;  // Assuming 10 is the maximum value of the slider
+  let sliderValue = 1;  //  default value
+  const sliderLength = 100;  // Assuming 10 is the maximum value of the slider
 
 
   // Define color scheme variables
@@ -176,33 +176,6 @@ export function gfx() {
   /////////// DOM stuff event listener resolution display stuff bye bye
 
 
-  function updateChannelDisplay() {
-    var newWidth = Math.round(window.innerWidth * (sliderValue / sliderLength));
-    var newHeight = Math.round(window.innerHeight * (sliderValue / sliderLength));
-    document.getElementById('fm-channel-display').textContent = `fm channel: `;
-  }
-  
-  // Set up the slider event listener
-  document.getElementById('fm-channel-slider').addEventListener('input', function(event) {
-    // Read the new value from the slider and convert it
-    sliderValue = 0.2 + (parseFloat(event.target.value) / sliderLength) * 0.8;
-  
-    // Update the resolution and the display
-    onWindowResize(); // Update the resolution
-    updateChannelDisplay(); // Update the display
-  });
-  
-  
-  document.addEventListener('updateChannelSlider', function(event) {
-    const newSliderValue = event.detail.sliderValue;
-    // Convert the slider value to the scale needed for your Three.js visualization
-    sliderValue = 0.2 + (parseFloat(newSliderValue) / sliderLength) * 0.8;
-  
-    // Then update your Three.js visualization accordingly
-    onWindowResize(); // Call the function that updates the resolution
-    updateChannelDisplay(); // Update the resolution display
-  });
-
   // Function to update slider display
 function updateSliderDisplay(value, resolutionSlider) {
   let sliderDisplay = '[';
@@ -213,6 +186,34 @@ function updateSliderDisplay(value, resolutionSlider) {
   resolutionSlider.textContent = sliderDisplay;
   }
   
+function updateLabelPosition() {
+    const slider = document.getElementById('fm-channel-slider');
+    const label = document.getElementById('fm-frequency-display');
+    console.log(label)
+    const sliderValue = parseInt(slider.value, 10);
+    const min = parseInt(slider.min, 10);
+    const max = parseInt(slider.max, 10);
+
+    // Calculate thumb position percentage
+    const percent = ((sliderValue - min) / (max - min)) * 100;
+
+    // Adjust label position based on thumb position
+    // This calculation depends on the slider's width and the label's width to center it
+    const sliderWidth = slider.offsetWidth;
+    const labelWidth = label.offsetWidth;
+    const leftPosition = (percent / 100) * sliderWidth - (labelWidth / 2) + (slider.getBoundingClientRect().left - label.offsetParent.getBoundingClientRect().left);
+
+    // Update the label's position
+    label.style.left = `${leftPosition}px`;
+}
+
+// Initial position update
+updateLabelPosition();
+
+// Update label position on slider input
+document.getElementById('fm-channel-slider').addEventListener('input', updateLabelPosition);
+
+
 
   //////////////////////////////////////
   // Resize function
@@ -244,6 +245,8 @@ function updateSliderDisplay(value, resolutionSlider) {
       camera.updateProjectionMatrix();
     }
 
+    updateLabelPosition();
+    
     // Continue with your existing resize adjustments
     adjustCameraZoom();
   }
@@ -324,12 +327,16 @@ function updateSliderDisplay(value, resolutionSlider) {
 
     onWindowResize(); // Update the resolution
 
-      // Ensure the sliderValue is up-to-date
-    sliderValue = 0.2 + (parseFloat(document.getElementById('fm-channel-slider').value) / sliderLength) * 0.8;
 
     // Load GeoJSON data and then enable interaction
     loadGeoJSONData(() => {
       postLoadOperations(); // Setup the scene after critical datasets are loaded
+
+      initFMsliderAndContours(fmFreqDictionaryJson); // Setup slider and initial visualization
+
+      // Ensure the sliderValue is up-to-date
+      sliderValue = (parseFloat(document.getElementById('fm-channel-slider').value) / sliderLength);
+
       enableInteraction(); // Directly enable interaction without waiting for a button click
       // document.getElementById('progress-bar').style.display = 'none'; // Hide the progress bar
     });
@@ -347,6 +354,7 @@ function updateSliderDisplay(value, resolutionSlider) {
       threeContainer.style.visibility = 'visible';
       threeContainer.style.opacity = '1';
       threeContainer.style.pointerEvents = 'auto';
+
 
       // Start the animation loop
       animate();
@@ -557,7 +565,7 @@ function updateSliderDisplay(value, resolutionSlider) {
     const minElevation = Math.min(...elevations);
     const maxElevation = Math.max(...elevations);
   
-    console.log(`Min Elevation: ${minElevation}, Max Elevation: ${maxElevation}, Mean Elevation: ${meanElevation}`);
+    // console.log(`Min Elevation: ${minElevation}, Max Elevation: ${maxElevation}, Mean Elevation: ${meanElevation}`);
   
     return meanElevation;
   }
@@ -1007,7 +1015,51 @@ function updateSliderDisplay(value, resolutionSlider) {
       }
     });
   }
+
+  let channelFrequencies = {};
       
+  function initFMsliderAndContours(frequencyData) {
+    channelFrequencies = frequencyData;
+
+    const slider = document.getElementById('fm-channel-slider');
+    const display = document.getElementById('fm-channel-display');
+    const frequencyLabel = document.getElementById('fm-frequency-display'); 
+
+    // Update both channel display and frequency label
+    const updateDisplays = (channelValue) => {
+        const frequencyText = channelFrequencies[channelValue.toString()] || "Frequency not found";
+        display.textContent = `FM channel: ${channelValue}`;
+        frequencyLabel.textContent = frequencyText; // Use frequencyLabel for the frequency text
+
+        // Update the visualization based on the new channel value
+        updateFMcontourFilter(fmContoursGeojsonData, channelValue);
+    };
+
+    // Listener for slider input
+    slider.addEventListener('input', function(event) {
+        const channelValue = parseInt(event.target.value, 10); // Parse the value once and use it
+        updateDisplays(channelValue);
+    });
+
+    // Initial update based on the slider's default value
+    const initialChannelValue = parseInt(slider.value, 10);
+    updateDisplays(initialChannelValue);
+}
+  
+  function updateFMcontourFilter(geojsonData, channelFilter) {
+    if (!geojsonData) {
+      console.warn("GeoJSON data not available.");
+      return;
+    }
+  
+    // Clear existing visualization here if necessary
+    
+    // Assuming `addFMpropagation3D` is your function to draw/update the visualization
+    addFMpropagation3D(geojsonData, channelFilter)
+      .then(() => console.log("Visualization updated."))
+      .catch(error => console.error("Failed to update visualization:", error));
+  }
+  
 
   // this version is dynamic rescaling of concentric lines
   // function addFMpropagation3D(geojson, stride = 1, scaleDecrement = 0.1, numberOfConcentricCopies = 5) {
@@ -1490,6 +1542,7 @@ function updateSliderDisplay(value, resolutionSlider) {
       'src/assets/data/colloquium_ii_data/FmTowers_FeaturesToJSON_AOI_20231204.geojson',
       'src/assets/data/colloquium_ii_data/study_area_admin0clip.geojson',
       'src/assets/data/colloquium_ii_data/cellServiceCentroids_2000m_20231210.geojson',
+      'src/assets/data/fcc/fm/processed/fm_freq_dict.json'
     ];
 
     let criticalDatasetsLoaded = 0;
@@ -1518,13 +1571,15 @@ function updateSliderDisplay(value, resolutionSlider) {
     // todo: this breaks if the contours aren't required up front but they take longest to load
     return url.includes('stanford_contours') || url.includes('study');
   }
+  
 
   let contourGeojsonData,
     cellTowerGeojsonData,
     fmContoursGeojsonData,
     fmTransmitterGeojsonData,
     boundingBoxGeojsonData,
-    cellServiceGeojsonData;
+    cellServiceGeojsonData,
+    fmFreqDictionaryJson;
 
   function handleGeoJSONData(url, data) {
     switch (url) {
@@ -1569,6 +1624,10 @@ function updateSliderDisplay(value, resolutionSlider) {
         // addCellServiceMesh(data);
         break;
 
+      case 'src/assets/data/fcc/fm/processed/fm_freq_dict.json':
+        fmFreqDictionaryJson = data;
+        break;
+  
       default:
         console.warn('Unrecognized URL:', url);
         break;
