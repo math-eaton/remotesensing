@@ -5,11 +5,14 @@ import { MapControls } from 'three/examples/jsm/controls/MapControls.js';
 import proj4 from 'proj4';
 import hull from 'convex-hull';
 import Delaunator from 'delaunator';
+import { GeoJSON } from 'geojson';
+// import { GeoJSON } from 'geojson';
 // import Graph from 'graphology';
 // import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
 // import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js';
 
 let visualizationReady = false;
+
 
 export function gfx() {
   // Define global geographic layer groups
@@ -132,7 +135,7 @@ export function gfx() {
 
     // Set the minimum and maximum polar angles (in radians) to prevent the camera from going over the vertical
     controls.minPolarAngle = 0; // 0 radians (0 degrees) - directly above the target
-    controls.maxPolarAngle = Math.PI / 4; // π/n radians (z degrees) - on the horizon
+    controls.maxPolarAngle = Math.PI / 6; // π/n radians (z degrees) - on the horizon
     // Set the maximum distance the camera can dolly out
     controls.maxDistance = 2.5; // max camera zoom
     controls.minDistance = 0.4; // min camera zoom
@@ -341,8 +344,8 @@ export function gfx() {
   const gapSize = .015;
 
   const zoomLevels = [
-    { threshold: 0.4, dashSize: dashSize*20000000, gapSize: gapSize }, // Closest zoom
-    { threshold: 0.5, dashSize: dashSize, gapSize: gapSize / 2},
+    { threshold: 0.4, dashSize: dashSize / 2, gapSize: gapSize / 8 }, // Closest zoom
+    { threshold: 0.5, dashSize: dashSize * .8, gapSize: gapSize * .4},
     { threshold: 1.5, dashSize: dashSize / 5, gapSize: gapSize / 4},
     // { threshold: 2, dashSize: dashSize, gapSize: gapSize }, // Farthest zoom
   ];
@@ -924,8 +927,8 @@ export function gfx() {
             // alphaTest: true,
             opacity: opacity,
             // color: 0xffffff,
-            dashSize: dashSize,
-            gapSize: gapSize,          
+            dashSize: dashSize * .8,
+            gapSize: gapSize * .4,          
           });
 
   
