@@ -455,22 +455,27 @@ p, ul{
 
 /* Slider container */
 #fm-channel-controls {
-  position: relative; /* Add this if not already set */
+  position: relative; 
   width: 30vw;
-  padding-bottom: 1vh;
+  max-height: 10vh;
+  padding-bottom: 5vh;
   margin: 5vh;
   padding-right: 5vw;
+  padding-left: 2.5vw;
   z-index: 10000000000000;
+
 }
 
-/* The slider itself */
+/* slider itself */
 #fm-channel-slider {
   -webkit-appearance: none; /* Override default CSS styles */
   appearance: none;
   width: 100%;
-  height: 8px; /* Slider height */
-  background: #ddd; /* Slider background */
-  outline: none;
+  height: auto;
+  background:none; /* Slider background */
+  outline:#ececec;
+  outline-style:auto;
+  outline-width: 0.1em;
   opacity: 0.7;
   -webkit-transition: 0.2s;
   transition: opacity 0.2s;
@@ -481,16 +486,20 @@ p, ul{
 }
 
 #fm-frequency-display{
-  /* align-items: center; */
+  font-family: monospace;
+  user-select: none;
 }
 
 /* Slider thumb */
 #fm-channel-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 20px; /* Thumb width */
-  height: 20px; /* Thumb height */
-  background: #444; /* Thumb color */
+  width: 0.75vw; /* Thumb width */
+  height: 2vh; /* Thumb height */
+  background: none; /* Thumb color */
+  outline-width: 0.1em;
+  outline:#ececec;
+  outline-style:auto;
   cursor: url("/src/cursor/point.cur"), auto;
 }
 
@@ -677,9 +686,9 @@ button:focus-visible {
   .container {
     flex-direction: column; /* Stack columns vertically on small screens */
   }
-  #info-container {
-    font-size: 12px; /* Smaller font size for mobile */
-  }
+  #fm-frequency-display{
+    /* font-size: 8px; */
+  }  
 }
 
 @keyframes spin {
