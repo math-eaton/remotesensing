@@ -4,6 +4,15 @@ from shapely.geometry import Point
 from tqdm import tqdm
 import json
 import warnings
+from datetime import datetime
+
+
+downsample_factor=8
+
+# Function to format the current date in YYYYMMDD format
+def get_current_date_format():
+    return datetime.now().strftime('%Y%m%d')
+
 
 def clean_text(input_text):
     """
@@ -37,7 +46,7 @@ def is_in_aoi(coords, aoi_boundary):
     return False
 
 # process intput rows with optional downsample factor ie remove every N coordinates from the output
-def process_data(input_filename, output_filename, aoi_geojson, limit=None, downsample_factor=4, downsample_limit=None, proximity_threshold=0):
+def process_data(input_filename, output_filename, aoi_geojson, limit=None, downsample_factor=downsample_factor, downsample_limit=None, proximity_threshold=0):
     
     # Load AOI boundary from the GeoJSON file
     aoi_boundary_gdf = gpd.read_file(aoi_geojson)
@@ -118,7 +127,7 @@ def process_data(input_filename, output_filename, aoi_geojson, limit=None, downs
 
 
 input_filename = '/Users/matthewheaton/Documents/GitHub/remotesensing/src/assets/data/fcc/fm/raw/FM_service_contour_current.txt'
-output_filename = '/Users/matthewheaton/Documents/GitHub/remotesensing/src/assets/data/fcc/fm/processed/FM_service_contour_testClean_reduceDupe.json'
+output_filename = f'/Users/matthewheaton/Documents/GitHub/remotesensing/src/assets/data/fcc/fm/processed/FM_service_contour_downsample{downsample_factor}_{get_current_date_format()}.json'
 aoi_geojson = '/Users/matthewheaton/Documents/GitHub/remotesensing/src/assets/data/fcc/fm/aoi_northeast_geojson_20240310.geojson'
 
 

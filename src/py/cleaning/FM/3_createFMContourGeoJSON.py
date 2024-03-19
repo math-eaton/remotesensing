@@ -3,14 +3,20 @@ import geopandas as gpd
 from shapely.geometry import Point, LineString, Polygon
 import os
 import ast
+from datetime import datetime
+
 
 # Load the data from the JSON file
-input_file = 'src/assets/data/fcc/fm/processed/FM_service_contour_testClean_reduceDupe_infoJoin.json'  
+input_file = 'src/assets/data/fcc/fm/processed/FM_service_contour_downsample8_FMinfoJoin_20240319.json'  
 data = pd.read_json(input_file, dtype=str)
 
+# Function to format the current date in YYYYMMDD format
+def get_current_date_format():
+    return datetime.now().strftime('%Y%m%d')
+
 # output info
-use_case = "FM_contours_AOI_infoJoin"
-output_path = os.path.join("src/assets/data/fcc/fm/processed", use_case)
+output_name = f"FM_service_contour_downsample8_FMinfoJoin"
+output_path = os.path.join("src/assets/data/fcc/fm/processed", output_name)
 extension = ".geojson"
 
 # Adjusted Functions to create geometries
@@ -86,6 +92,6 @@ for gdf in [gdf_points, gdf_lines, gdf_polygons]:
 # Save the GeoDataFrames as GeoJSON files
 # gdf_points.to_file(f"{output_path}_point{extension}", driver='GeoJSON')
 # gdf_lines.to_file(f"{output_path}_line{extension}", driver='GeoJSON')
-gdf_polygons.to_file(f"{output_path}_polygon{extension}", driver='GeoJSON')
+gdf_polygons.to_file(f"{output_path}_polygon_{get_current_date_format()}{extension}", driver='GeoJSON')
 
 print("GeoJSON files have been created.")

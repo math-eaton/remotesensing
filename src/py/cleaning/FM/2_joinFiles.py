@@ -77,10 +77,10 @@ def join_datasets(file_path_1, file_path_2, join_field, output_path, output_form
     else:
         raise ValueError(f'Unsupported output format: {output_format}')
     
-file_path_1 = 'src/assets/data/fcc/fm/processed/FM_service_contour_testClean_reduceDupe.json'  # Change to your file path
+file_path_1 = 'src/assets/data/fcc/fm/processed/FM_service_contour_downsample8_20240319.json'  # Change to your file path
 file_path_2 = 'src/assets/data/fcc/fm/processed/fm_info_cleaned.csv'  # Change to your file path
 join_field = 'lms_application_id'  # The field name to join on
-output_path = 'src/assets/data/fcc/fm/processed/FM_service_contour_testClean_reduceDupe_infoJoin.json'  # The output file path
+output_path = 'src/assets/data/fcc/fm/processed/FM_service_contour_downsample8_FMinfoJoin_20240319.json'  # The output file path
 output_format = 'json'  # Change to 'json' if you want JSON output
 
 

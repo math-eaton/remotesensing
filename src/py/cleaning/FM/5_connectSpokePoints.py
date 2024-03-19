@@ -1,12 +1,16 @@
 import json
-from shapely.geometry import Point, Polygon, mapping
+from shapely.geometry import Point, Polygon, MultiPoint, mapping
 from math import atan2, pi
 from shapely.ops import unary_union
 import numpy as np
 import cProfile
 
 def main():
+
+    coordPrecision = 4
+
     def load_geojson(file_path):
+        print("loading input ...")
         with open(file_path, 'r') as file:
             return json.load(file)
 
@@ -20,14 +24,18 @@ def main():
                 groups[key] = []
             groups[key].append(feature)
         
-        # Sort each group based on the angle relative to the transmitter site
         for key, group in groups.items():
-            transmitter_coords = group[0]['properties']['transmitter_site'].split(", ")
-            transmitter_point = Point(float(transmitter_coords[0]), float(transmitter_coords[1]))
+            # Calculate the simplified centroid for the group
+            x_coords = [feature['geometry']['coordinates'][0] for feature in group]
+            y_coords = [feature['geometry']['coordinates'][1] for feature in group]
+            centroid_x = sum(x_coords) / len(x_coords)
+            centroid_y = sum(y_coords) / len(y_coords)
+            centroid_point = Point(centroid_x, centroid_y)
             
+            # Sort each group based on the angle relative to the centroid
             def sort_key(feature):
                 point = Point(feature['geometry']['coordinates'])
-                angle = atan2(point.y - transmitter_point.y, point.x - transmitter_point.x)
+                angle = atan2(point.y - centroid_point.y, point.x - centroid_point.x)
                 return angle
             
             groups[key] = sorted(group, key=sort_key)
@@ -38,8 +46,8 @@ def main():
         print("constructing polylines ...")
         polylines_with_elevation = []
         for key, features in groups.items():
-            # coords rounded to 5 decimals here
-            points_with_elevation = [(round(feature['geometry']['coordinates'][0], 5), round(feature['geometry']['coordinates'][1], 5), feature['properties']['elevation']) for feature in features]
+            # coords rounded to defined decimals
+            points_with_elevation = [(round(feature['geometry']['coordinates'][0], coordPrecision), round(feature['geometry']['coordinates'][1], coordPrecision), feature['properties']['elevation']) for feature in features]
             # Ensure the loop is closed by adding the first point at the end, including elevation
             if points_with_elevation[0][:2] != points_with_elevation[-1][:2]:
                 points_with_elevation.append(points_with_elevation[0])
@@ -58,8 +66,8 @@ def main():
         print("outputting to geojson ...")
         features = []
         for polyline in polylines_with_elevation:
-            # Apply rounding here to ensure precision
-            rounded_coordinates = [(round(x, 5), round(y, 5)) for x, y, _ in polyline["coordinates"]]
+            # round precision again
+            rounded_coordinates = [(round(x, coordPrecision), round(y, coordPrecision)) for x, y, _ in polyline["coordinates"]]
             # Ensure the loop is closed by re-adding the first point at the end
             if rounded_coordinates[0] != rounded_coordinates[-1]:
                 rounded_coordinates.append(rounded_coordinates[0])
@@ -99,9 +107,18 @@ def main():
             "features": unique_features
         }
 
+    def validate_geojson(geojson_object):
+        print("validating output ...")
+        try:
+            # Serialize and deserialize to check for well-formed JSON
+            json_string = json.dumps(geojson_object)
+            json.loads(json_string)
+            print("geojson output is normal and valid uwu")
+        except json.JSONDecodeError as e:
+            print(f"Invalid GeoJSON: {e}")
 
     # Load the input GeoJSON file
-    file_path = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_infoJoin.geojson'
+    file_path = 'src/assets/data/fcc/fm/processed/FM_service_contour_downsample8_15step_20240319.geojson'
     geojson_data = load_geojson(file_path)
 
     # Process the GeoJSON data
@@ -113,8 +130,11 @@ def main():
     output_geojson_preprocessed = generate_output_geojson(polylines)
     output_geojson = remove_duplicate_features(output_geojson_preprocessed)
 
+    # Validate the output GeoJSON for good JSON syntax
+    validate_geojson(output_geojson)
+
     # Save the deduplicated output GeoJSON to a file
-    output_file_path = 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_infoJoin_processed.geojson'
+    output_file_path = 'src/assets/data/fcc/fm/processed/FM_service_contour_downsample8_15step_processed_20240319.geojson'
     with open(output_file_path, 'w') as f:
         json.dump(output_geojson, f, indent=4)
 
