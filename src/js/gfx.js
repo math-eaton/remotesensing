@@ -47,6 +47,8 @@ export function gfx() {
     boundingBoxColor: '#303030',
     contoursLabelColor: '#00ff00',
     cellColor: '#FFFF00', // magenta
+    matchingPyramidColor: '#FFFF00',
+    nonMatchingPyramidColor: '#FF1493',
   };
 
   // Define the custom projection with its PROJ string
@@ -1118,12 +1120,15 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
   }
 
   function addFMTowerPts(geojson, channelFilter) {
-
     return new Promise((resolve, reject) => {
       try {
-        // Define the base size and height for the pyramids
-        const baseSize = 0.005; // Size of one side of the pyramid's base
-        const pyramidHeight = 0.02; // Height of the pyramid from the base to the tip
+        // Define the base size and height for the pyramids for matching features
+        const baseSizeMatching = 0.004; // Size of one side of the pyramid's base for matching features
+        const pyramidHeightMatching = 0.015; // Height of the pyramid from the base to the tip for matching features
+  
+        // Define smaller size and height for non-matching features
+        const baseSizeNonMatching = baseSizeMatching * 0.5; // Smaller base size for non-matching features
+        const pyramidHeightNonMatching = pyramidHeightMatching * 0.5; // Shorter pyramid for non-matching features
   
         // Clear previously displayed FM towers
         while (fmTransmitterPoints.children.length > 0) {
@@ -1131,58 +1136,57 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
           fmTransmitterPoints.remove(child);
         }
   
+        // Define characteristics for matching and non-matching features
+        const matchingColor = colorScheme.matchingPyramidColor; // Color for features that match the channel filter
+        const nonMatchingColor = colorScheme.nonMatchingPyramidColor; // Color for features that do not match
+        const matchingOpacity = 0.8; // Higher opacity for matching features
+        const nonMatchingOpacity = 0.1; // Lower opacity for non-matching features
+  
         // Iterate over each feature in the GeoJSON
         geojson.features.forEach((feature) => {
-          // Use the channelFilter to process only matching features
-          if (parseInt(feature.properties.channel, 10) !== channelFilter) {
-            return; // Skip this feature if its channel does not match the filter
-          }
+          const [lon, lat] = feature.geometry.coordinates;
+          const elevation = feature.properties.elevation;
   
-          if (feature.geometry.type === 'Point') {
-            const [lon, lat] = feature.geometry.coordinates;
-            const elevation = feature.properties.elevation;
-
+          try {
+            const [x, y] = toStatePlane(lon, lat);
+            const z = elevation * zScale; // Apply the scaling factor to the elevation
   
-            try {
-              const [x, y] = toStatePlane(lon, lat);
-              const z = elevation * zScale; // Apply the scaling factor to the elevation
-  
-  
-              // Check for valid coordinates before proceeding
-              if (x === null || y === null || isNaN(z)) {
-                console.error('Invalid point coordinates:', x, y, z);
-                return; // Skip this iteration
-              }
-  
-              console.log(`"scaled elevation ${z}"`)
-
-              // Create a pyramid geometry
-              const pyramidGeometry = new THREE.ConeGeometry(baseSize, pyramidHeight, 4);
-              pyramidGeometry.rotateX(Math.PI / 2); // Rotate the pyramid to point up along the Z-axis
-  
-              // Material for the pyramids
-              let pyramidMaterialFM = new THREE.MeshBasicMaterial({
-                color: colorScheme.pyramidColorFM,
-                wireframe: true,
-                transparent: true,
-                opacity: 0.5, // Fixed opacity for all points
-              });
-  
-              const pyramid = new THREE.Mesh(pyramidGeometry, pyramidMaterialFM);
-              pyramid.position.set(x, y, z);
-              fmTransmitterPoints.add(pyramid);
-            } catch (error) {
-              console.error(`Error projecting point: ${error.message}`);
+            // Check for valid coordinates before proceeding
+            if (x === null || y === null || isNaN(z)) {
+              console.error('Invalid point coordinates:', x, y, z);
+              return; // Skip this iteration
             }
-          } else {
-            console.error(`Unsupported geometry type for points: ${feature.geometry.type}`);
+  
+            // Determine characteristics based on channel filter match
+            const isMatching = parseInt(feature.properties.channel, 10) === channelFilter;
+            const featureColor = isMatching ? matchingColor : nonMatchingColor;
+            const featureOpacity = isMatching ? matchingOpacity : nonMatchingOpacity;
+            const baseSize = isMatching ? baseSizeMatching : baseSizeNonMatching;
+            const pyramidHeight = isMatching ? pyramidHeightMatching : pyramidHeightNonMatching;
+  
+            // Create a pyramid geometry with determined size
+            const pyramidGeometry = new THREE.ConeGeometry(baseSize, pyramidHeight, 4);
+            pyramidGeometry.rotateX(Math.PI / 2); // Rotate the pyramid to point up along the Z-axis
+  
+            // Material for the pyramids, using the determined characteristics
+            let pyramidMaterialFM = new THREE.MeshBasicMaterial({
+              color: featureColor,
+              wireframe: true,
+              transparent: true,
+              opacity: featureOpacity,
+            });
+  
+            const pyramid = new THREE.Mesh(pyramidGeometry, pyramidMaterialFM);
+            pyramid.position.set(x, y, z);
+            fmTransmitterPoints.add(pyramid);
+          } catch (error) {
+            console.error(`Error projecting point: ${error.message}`);
           }
         });
   
         // Add the FM transmitter points to the scene
         scene.add(fmTransmitterPoints);
         fmTransmitterPoints.visible = true;
-
   
         resolve(); // Resolve the promise when done
       } catch (error) {
@@ -1191,7 +1195,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
       }
     });
   }
-  
+      
   let channelFrequencies = {};
       
   function initFMsliderAndContours(frequencyData) {
