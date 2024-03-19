@@ -133,15 +133,15 @@ export function gfx() {
 
 
     // Set the minimum and maximum polar angles (in radians) to prevent the camera from going over the vertical
-    controls.minPolarAngle = 0; // 0 radians (0 degrees) - directly above the target
-    controls.maxPolarAngle = Math.PI / 6; // π/n radians (z degrees) - on the horizon
+    // controls.minPolarAngle = 0; // 0 radians (0 degrees) - directly above the target
+    // controls.maxPolarAngle = Math.PI / 6; // π/n radians (z degrees) - on the horizon
     // Set the maximum distance the camera can dolly out
-    controls.maxDistance = 2.5; // max camera zoom
-    controls.minDistance = 0.5; // min camera zoom
+    controls.maxDistance = 2.5; // max camera zoom out
+    controls.minDistance = 0.5; // min camera zoom in
     // console.log(controls.angle)
 
-    const audioListener = new THREE.AudioListener();
-    camera.add(audioListener);
+    // const audioListener = new THREE.AudioListener();
+    // camera.add(audioListener);
 
     // const distanceToTarget = camera.position.distanceTo(controls.target);
 
@@ -162,13 +162,43 @@ export function gfx() {
 
     // Adjust the camera's far plane
     camera.far = fogFar;
+            
     camera.updateProjectionMatrix();
+
 
 
     renderer.setClearColor(colorScheme.backgroundColor);
     window.addEventListener('resize', onWindowResize, false);
     adjustCameraZoom();
   }
+
+  // rotation logic //////////////////////
+  function flipCamera() {
+    // Calculate the distance to the target
+    const distanceToTarget = camera.position.distanceTo(controls.target);
+    const angle = - Math.PI / 5; // Define the angle for rotation
+
+    // Calculate the new position
+    const relativePosition = new THREE.Vector3().subVectors(
+      camera.position,
+      controls.target,
+    );
+    const axis = new THREE.Vector3(0, 0, 1); 
+    const quaternion = new THREE.Quaternion().setFromAxisAngle(axis, angle);
+    relativePosition.applyQuaternion(quaternion);
+
+    // Apply the new position while maintaining the distance
+    camera.position
+      .copy(controls.target)
+      .add(relativePosition.setLength(distanceToTarget));
+
+    // Ensure the camera keeps looking at the target
+    camera.lookAt(controls.target);
+    camera.updateProjectionMatrix()
+    console.log(camera.rotation.z)
+    }
+            
+  
 
   ////////////////////
   /////////// DOM stuff event listener resolution display stuff bye bye
@@ -362,13 +392,10 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
 
     updateDashSizeForZoom(); 
 
-
     adjustMeshVisibilityBasedOnCameraDistance();
 
 
-    console.log(`Camera X: ${camera.position.x}, Camera Y: ${camera.position.y}, Camera Z: ${camera.position.z}`);
-
-
+    // console.log(`Camera X: ${camera.position.x}, Camera Y: ${camera.position.y}, Camera Z: ${camera.position.z}`);
 
     renderer.render(scene, camera);
   }
@@ -382,11 +409,9 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
 
     onWindowResize(); // Update the resolution
 
-
     // Load GeoJSON data and then enable interaction
     loadGeoJSONData(() => {
       postLoadOperations(); // Setup the scene after critical datasets are loaded
-
 
 
       // // Ensure the sliderValue is up-to-date
@@ -396,9 +421,10 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
   
 
       initFMsliderAndContours(fmFreqDictionaryJson); // Setup slider and initial visualization
-
+    
 
       enableInteraction(); // Directly enable interaction without waiting for a button click
+      flipCamera();
       // document.getElementById('progress-bar').style.display = 'none'; // Hide the progress bar
     });
 
@@ -406,12 +432,16 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
 
   }
 
+
   function enableInteraction() {
     const threeContainer = document.getElementById('gfx');
+
 
     // Render the scene once before making it visible
     renderer.render(scene, camera);
 
+
+    camera.updateProjectionMatrix();
 
     // Use requestAnimationFrame to ensure the rendering is done
     requestAnimationFrame(() => {
@@ -1244,27 +1274,27 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
               // Ensure Callsign or another property is correctly referenced
               // const label = feature.properties.Callsign || `Tower ${index}`;
 
-              const textSprite = makeTextSprite(` ${label} `, {
-                fontsize: 24,
-                strokeColor: 'rgba(255, 255, 255, 0.9)',
-                strokeWidth: 1,
+              // const textSprite = makeTextSprite(` ${label} `, {
+              //   fontsize: 24,
+              //   strokeColor: 'rgba(255, 255, 255, 0.9)',
+              //   strokeWidth: 1,
 
-                // borderColor: { r: 255, g: 0, b: 0, a: 1.0 },
-                // backgroundColor: { r: 255, g: 100, b: 100, a: 0.8 }
-              });
+              //   // borderColor: { r: 255, g: 0, b: 0, a: 1.0 },
+              //   // backgroundColor: { r: 255, g: 100, b: 100, a: 0.8 }
+              // });
 
               // Position the sprite above the pyramid
               const pyramidHeightScaled = pyramidHeight * zScale;
 
               // Position the sprite above the pyramid, applying the offset for coincident points
-              textSprite.position.set(
-                x,
-                y,
-                z + pyramidHeightScaled + zOffset + 0.009,
-              );
-              textSprite.scale.set(0.05, 0.025, 1.0);
+              // textSprite.position.set(
+              //   x,
+              //   y,
+              //   z + pyramidHeightScaled + zOffset + 0.009,
+              // );
+              // textSprite.scale.set(0.05, 0.025, 1.0);
 
-              fmTransmitterPoints.add(textSprite);
+              // fmTransmitterPoints.add(textSprite);
               // console.log(`creating label for ${label}`);
 
               // Add the position to the points array for convex hull calculation
@@ -1368,27 +1398,27 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
               // Ensure Callsign or another property is correctly referenced
               // const label = feature.properties.Callsign || `Tower ${index}`;
 
-              const textSprite = makeTextSprite(` ${label} `, {
-                fontsize: 24,
-                strokeColor: 'rgba(255, 255, 255, 0.9)',
-                strokeWidth: 1,
+              // const textSprite = makeTextSprite(` ${label} `, {
+              //   fontsize: 24,
+              //   strokeColor: 'rgba(255, 255, 255, 0.9)',
+              //   strokeWidth: 1,
 
                 // borderColor: { r: 255, g: 0, b: 0, a: 1.0 },
                 // backgroundColor: { r: 255, g: 100, b: 100, a: 0.8 }
-              });
+              // });
 
               // Position the sprite above the pyramid
               const pyramidHeightScaled = pyramidHeight * zScale;
 
               // Position the sprite above the pyramid, applying the offset for coincident points
-              textSprite.position.set(
-                x,
-                y,
-                z + pyramidHeightScaled + zOffset + 0.009,
-              );
-              textSprite.scale.set(0.05, 0.025, 1.0);
+              // textSprite.position.set(
+              //   x,
+              //   y,
+              //   z + pyramidHeightScaled + zOffset + 0.009,
+              // );
+              // textSprite.scale.set(0.05, 0.025, 1.0);
 
-              cellTransmitterPoints.add(textSprite); // Add the label to the cellTransmitterPoints group
+              // cellTransmitterPoints.add(textSprite); // Add the label to the cellTransmitterPoints group
               // console.log(`creating label for ${label}`);
 
               // Add the position to the points array for convex hull calculation
@@ -1713,40 +1743,27 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
     // Adjust camera Z to be closer
     const fov = camera.fov * (Math.PI / 90);
     let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-    cameraZ *= 0.5; // Adjust to move the camera closer
+    cameraZ *= 0.4; // reduce coefficient to move the camera closer
 
     camera.position.set(
       cameraPositionStatePlane[0], // x position
-      cameraPositionStatePlane[1], // z position (height, since Z is up)
-      cameraZ // y position, assuming Z-up configuration
+      cameraPositionStatePlane[1], // y position
+      cameraZ
     );
 
     // Set controls target to the center of bounding box
     controls.target.set(camera.position.x, camera.position.y, 0);
 
+    // Ensure the camera keeps looking straight down at the target after rotation
+    camera.lookAt(controls.target);
+
     // Apply constraints to camera and update controls
     constrainCamera(controls, boundingBox);
 
-    // Calculate the distance to the target
-    const distanceToTarget = camera.position.distanceTo(controls.target);
 
-    // Convert angle for rotation to radians
-    const angleRadians = Math.PI; // 180 degrees in radians
+    // console.log(`State Plane X: ${cameraPositionStatePlane[0]}, State Plane Y: ${cameraPositionStatePlane[1]}`);
+    // console.log(`Camera X: ${camera.position.x}, Camera Y: ${camera.position.y}, Camera Z: ${camera.position.z}`);
 
-    // Calculate the new position using quaternion for rotation
-    const relativePosition = new THREE.Vector3().subVectors(camera.position, controls.target);
-    const axis = new THREE.Vector3(0, 0, 1); // Rotate around Z-axis
-    const quaternion = new THREE.Quaternion().setFromAxisAngle(axis, angleRadians);
-    relativePosition.applyQuaternion(quaternion);
-
-    // Apply the new position while maintaining the distance
-    camera.position.copy(controls.target).add(relativePosition.setLength(distanceToTarget));
-
-    // Ensure the camera keeps looking at the target
-    camera.lookAt(controls.target);
-
-    console.log(`State Plane X: ${cameraPositionStatePlane[0]}, State Plane Y: ${cameraPositionStatePlane[1]}`);
-    console.log(`Camera X: ${camera.position.x}, Camera Y: ${camera.position.y}, Camera Z: ${camera.position.z}`);
 
     controls.update();
 }
