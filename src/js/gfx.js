@@ -37,7 +37,7 @@ export function gfx() {
     directionalLightColor: '#ffffff', // White
     backgroundColor: '#000000', // Black
     polygonColor: '#FF1493', // magenta
-    pyramidColorFM: '#FF1493', // magenta
+    pyramidColorFM: '#FFFF00', // magenta
     pyramidColorCellular: '#FFFF00', // neon orange
     // lowestElevationColor: "#0000ff", // Blue
     // middleElevationColor: "#00ff00", // Green
@@ -46,7 +46,7 @@ export function gfx() {
     mstCellColor: '#FFFF00', // neon orange
     boundingBoxColor: '#303030',
     contoursLabelColor: '#00ff00',
-    cellColor: '#FF1493', // magenta
+    cellColor: '#FFFF00', // magenta
   };
 
   // Define the custom projection with its PROJ string
@@ -133,10 +133,10 @@ export function gfx() {
 
 
     // Set the minimum and maximum polar angles (in radians) to prevent the camera from going over the vertical
-    // controls.minPolarAngle = 0; // 0 radians (0 degrees) - directly above the target
-    // controls.maxPolarAngle = Math.PI / 6; // π/n radians (z degrees) - on the horizon
+    controls.minPolarAngle = 0; // 0 radians (0 degrees) - directly above the target
+    controls.maxPolarAngle = Math.PI / 6; // π/n radians (z degrees) - on the horizon
     // Set the maximum distance the camera can dolly out
-    controls.maxDistance = 2.5; // max camera zoom out
+    controls.maxDistance = 2; // max camera zoom out
     controls.minDistance = 0.5; // min camera zoom in
     // console.log(controls.angle)
 
@@ -176,7 +176,14 @@ export function gfx() {
   function flipCamera() {
     // Calculate the distance to the target
     const distanceToTarget = camera.position.distanceTo(controls.target);
-    const angle = - Math.PI / 5; // Define the angle for rotation
+
+    function getRandom(min, max) {
+      let randomMin = 0.5
+      let randomMax = 1.5  
+      return Math.random() * (randomMax - randomMin) + randomMin;
+     }
+
+    const angle =  (- Math.PI / 5) * getRandom(); // Define the angle for rotation
 
     // Calculate the new position
     const relativePosition = new THREE.Vector3().subVectors(
@@ -195,7 +202,6 @@ export function gfx() {
     // Ensure the camera keeps looking at the target
     camera.lookAt(controls.target);
     camera.updateProjectionMatrix()
-    console.log(camera.rotation.z)
     }
             
   
@@ -307,7 +313,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
     renderer.setSize(width, height);
 
     // update this value to alter pixel ratio scaled with the screen
-    pixelationFactor = 0.45;
+    pixelationFactor = 0.5;
 
     // Calculate new dimensions based on the slider value
     var newWidth = Math.max(1, window.innerWidth * pixelationFactor);
@@ -1061,7 +1067,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
             continue; // Skip this feature
           }
         
-          const featureIndex = parseInt(feature.properties.key.split('_')[feature.properties.key.split('_').length - 1], 10);
+          const featureIndex = parseInt(feature.properties.key.split('_')[feature.properties.key.split('_').length - 1], 20);
           
           let opacity;
           if (maxIndex === 0) {
@@ -1111,6 +1117,81 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
     });
   }
 
+  function addFMTowerPts(geojson, channelFilter) {
+
+    return new Promise((resolve, reject) => {
+      try {
+        // Define the base size and height for the pyramids
+        const baseSize = 0.005; // Size of one side of the pyramid's base
+        const pyramidHeight = 0.02; // Height of the pyramid from the base to the tip
+  
+        // Clear previously displayed FM towers
+        while (fmTransmitterPoints.children.length > 0) {
+          const child = fmTransmitterPoints.children.pop();
+          fmTransmitterPoints.remove(child);
+        }
+  
+        // Iterate over each feature in the GeoJSON
+        geojson.features.forEach((feature) => {
+          // Use the channelFilter to process only matching features
+          if (parseInt(feature.properties.channel, 10) !== channelFilter) {
+            return; // Skip this feature if its channel does not match the filter
+          }
+  
+          if (feature.geometry.type === 'Point') {
+            const [lon, lat] = feature.geometry.coordinates;
+            const elevation = feature.properties.elevation;
+
+  
+            try {
+              const [x, y] = toStatePlane(lon, lat);
+              const z = elevation * zScale; // Apply the scaling factor to the elevation
+  
+  
+              // Check for valid coordinates before proceeding
+              if (x === null || y === null || isNaN(z)) {
+                console.error('Invalid point coordinates:', x, y, z);
+                return; // Skip this iteration
+              }
+  
+              console.log(`"scaled elevation ${z}"`)
+
+              // Create a pyramid geometry
+              const pyramidGeometry = new THREE.ConeGeometry(baseSize, pyramidHeight, 4);
+              pyramidGeometry.rotateX(Math.PI / 2); // Rotate the pyramid to point up along the Z-axis
+  
+              // Material for the pyramids
+              let pyramidMaterialFM = new THREE.MeshBasicMaterial({
+                color: colorScheme.pyramidColorFM,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.5, // Fixed opacity for all points
+              });
+  
+              const pyramid = new THREE.Mesh(pyramidGeometry, pyramidMaterialFM);
+              pyramid.position.set(x, y, z);
+              fmTransmitterPoints.add(pyramid);
+            } catch (error) {
+              console.error(`Error projecting point: ${error.message}`);
+            }
+          } else {
+            console.error(`Unsupported geometry type for points: ${feature.geometry.type}`);
+          }
+        });
+  
+        // Add the FM transmitter points to the scene
+        scene.add(fmTransmitterPoints);
+        fmTransmitterPoints.visible = true;
+
+  
+        resolve(); // Resolve the promise when done
+      } catch (error) {
+        console.error('Error in addFMTowerPts:', error);
+        reject(`Error in addFMTowerPts: ${error.message}`);
+      }
+    });
+  }
+  
   let channelFrequencies = {};
       
   function initFMsliderAndContours(frequencyData) {
@@ -1127,8 +1208,8 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
         frequencyLabel.textContent = frequencyText; // Use frequencyLabel for the frequency text
 
         // Update the visualization based on the new channel value
-        updateFMcontourFilter(fmContoursGeojsonData, channelValue);
-    };
+        updateVisualizationWithChannelFilter(fmContoursGeojsonData, fmTransmitterGeojsonData, channelValue);
+      };
 
     // Listener for slider input
     slider.addEventListener('input', function(event) {
@@ -1141,206 +1222,149 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
     updateDisplays(initialChannelValue);
 }
   
-  function updateFMcontourFilter(geojsonData, channelFilter) {
-    if (!geojsonData) {
-      console.warn("GeoJSON data not available.");
-      return;
-    }
-      
-    addFMpropagation3D(geojsonData, channelFilter)
-      .then(() => console.log("Visualization updated."))
-      .catch(error => console.error("Failed to update visualization:", error));
+function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonData, channelFilter) {
+  if (!contourGeojsonData || !towerGeojsonData) {
+    console.warn("GeoJSON data not available.");
+    return;
   }
   
+  addFMpropagation3D(contourGeojsonData, channelFilter)
+    .then(() => console.log("FM contour channel updated"))
+    .catch(error => console.error("Failed to update contour channel:", error));
 
-  // this version is dynamic rescaling of concentric lines
-  // function addFMpropagation3D(geojson, stride = 1, scaleDecrement = 0.1, numberOfConcentricCopies = 5) {
+  addFMTowerPts(towerGeojsonData, channelFilter)
+    .then(() => console.log(towerGeojsonData))
+    .catch(error => console.error("Failed to update tower channel:", error));
+}
+  
+  
+
+  
+
+  // function addFMTowerPts(geojson) {
   //   return new Promise((resolve, reject) => {
   //     try {
-  //       // Iterate over each feature in the GeoJSON
-  //       for (let i = 0; i < geojson.features.length; i += stride) {
-  //         const feature = geojson.features[i];
-  //         const elevationData = feature.properties.elevation_data;
-          
-  //         if (!elevationData || elevationData.length !== feature.geometry.coordinates[0].length) {
-  //           console.error(`Elevation data length does not match coordinates length for feature at index ${i}`);
-  //           continue;
+  //       // Define the base size and height for the pyramids
+  //       const baseSize = 0.003; // Size of one side of the pyramid's base
+  //       const pyramidHeight = 0.015; // Height of the pyramid from the base to the tip
+
+  //       // Material for the wireframe pyramids
+  //       let pyramidMaterialFM = new THREE.MeshBasicMaterial({
+  //         color: colorScheme.pyramidColorFM,
+  //         wireframe: true,
+  //         transparent: true,
+  //         opacity: 0.5,
+  //       });
+
+  //       const points = []; // Array to store points for the convex hull
+
+  //       // Parse the POINT data from the GeoJSON
+  //       geojson.features.forEach((feature) => {
+  //         if (feature.geometry.type === 'Point') {
+  //           const [lon, lat] = feature.geometry.coordinates;
+  //           const elevation = feature.properties.Z;
+
+  //           try {
+  //             // Convert the lon/lat to State Plane coordinates
+  //             const [x, y] = toStatePlane(lon, lat);
+  //             const z = elevation * zScale; // Apply the scaling factor to the elevation
+
+  //             // Check for valid coordinates before proceeding
+  //             if (x === null || y === null || isNaN(z)) {
+  //               console.error('Invalid point coordinates:', x, y, z);
+  //               return; // Skip this iteration
+  //             }
+
+  //             // Create a cone geometry for the pyramid
+  //             const pyramidGeometry = new THREE.ConeGeometry(
+  //               baseSize,
+  //               pyramidHeight,
+  //               5,
+  //             );
+  //             pyramidGeometry.rotateX(Math.PI / 2); // Rotate the pyramid to point up along the Z-axis
+
+  //             const pyramid = new THREE.Mesh(
+  //               pyramidGeometry,
+  //               pyramidMaterialFM,
+  //             );
+  //             pyramid.position.set(x, y, z);
+  //             fmTransmitterPoints.add(pyramid);
+
+  //             // Check for coincident points and get a z-offset
+  //             const label = `fm`;
+  //             const zOffset = 8;
+  //             //   const zOffset = getCoincidentPointOffset(lon, lat, 8, 0.00001);
+  //             // const zOffset = getCoincidentPointOffset(lon, lat, label, 4, 0.0001)
+  //             // Ensure Callsign or another property is correctly referenced
+  //             // const label = feature.properties.Callsign || `Tower ${index}`;
+
+  //             // const textSprite = makeTextSprite(` ${label} `, {
+  //             //   fontsize: 24,
+  //             //   strokeColor: 'rgba(255, 255, 255, 0.9)',
+  //             //   strokeWidth: 1,
+
+  //             //   // borderColor: { r: 255, g: 0, b: 0, a: 1.0 },
+  //             //   // backgroundColor: { r: 255, g: 100, b: 100, a: 0.8 }
+  //             // });
+
+  //             // Position the sprite above the pyramid
+  //             const pyramidHeightScaled = pyramidHeight * zScale;
+
+  //             // Position the sprite above the pyramid, applying the offset for coincident points
+  //             // textSprite.position.set(
+  //             //   x,
+  //             //   y,
+  //             //   z + pyramidHeightScaled + zOffset + 0.009,
+  //             // );
+  //             // textSprite.scale.set(0.05, 0.025, 1.0);
+
+  //             // fmTransmitterPoints.add(textSprite);
+  //             // console.log(`creating label for ${label}`);
+
+  //             // Add the position to the points array for convex hull calculation
+  //             points.push(new THREE.Vector3(x, y, z));
+  //           } catch (error) {
+  //             console.error(`Error projecting point: ${error.message}`);
+  //           }
+  //         } else {
+  //           console.error(
+  //             `Unsupported geometry type for points: ${feature.geometry.type}`,
+  //           );
   //         }
-  
-  //         const material = new THREE.LineBasicMaterial({
-  //           color: colorScheme.polygonColor,
-  //           transparent: true,
-  //           alphaHash: true,
-  //           opacity: 0.6,
-  //         });
-  
-  //         const shapeCoords = feature.geometry.coordinates[0];
-  //         const vertices = [];
-  //         let centroid = new THREE.Vector3(0, 0, 0);
-  
-  //         shapeCoords.forEach((coord, index) => {
-  //           const [x, y] = toStatePlane(coord[0], coord[1]);
-  //           const z = elevationData[index] * zScale;
-  //           const vertex = new THREE.Vector3(x, y, z);
-  //           vertices.push(vertex);
-  //           centroid.add(vertex);
-  //         });
-  
-  //         centroid.divideScalar(shapeCoords.length); // Compute centroid
-  
-  //         // Create original geometry
-  //         const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
-  //         const lineLoop = new THREE.LineLoop(geometry, material);
-  //         lineLoop.name = `propagation-${feature.properties.key}`;
-  //         scene.add(lineLoop);
-  
-  //         // Generate concentric copies
-  //         for (let j = 1; j <= numberOfConcentricCopies; j++) {
-  //           const scaledVertices = vertices.map(vertex => {
-  //             const scaledVertex = vertex.clone().sub(centroid).multiplyScalar(1 - j * scaleDecrement).add(centroid);
-  //             return scaledVertex;
-  //           });
-  
-  //           const scaledGeometry = new THREE.BufferGeometry().setFromPoints(scaledVertices);
-  //           const scaledLineLoop = new THREE.LineLoop(scaledGeometry, material);
-  //           scaledLineLoop.name = `propagation-${feature.properties.key}-concentric-${j}`;
-  //           scene.add(scaledLineLoop);
-  //         }
+  //       });
+
+  //       // Add the FM points to the scene
+  //       scene.add(fmTransmitterPoints);
+  //       fmTransmitterPoints.visible = true;
+
+  //       // Create and add the convex hull to the scene
+  //       if (points.length > 0) {
+  //         // Additional checks and functionality as needed...
+
+  //         // Construct the MST
+  //         const fmMstEdges = primsAlgorithm(points);
+
+  //         // Draw the MST
+  //         drawMSTEdges(
+  //           fmMstEdges,
+  //           '#FFFFFF',
+  //           colorScheme.mstFmColor,
+  //           0.00025,
+  //           0.00075,
+  //           fmMSTLines,
+  //         );
   //       }
-  
-  //       resolve();
+
+  //       // Add the MST lines to the scene
+  //       scene.add(fmMSTLines);
+  //       fmMSTLines.visible = false;
+  //       resolve(); // Resolve the promise when done
   //     } catch (error) {
-  //       reject(`Error in addFMpropagation3D: ${error.message}`);
+  //       console.error('Error in addFMTowerPts:', error);
+  //       reject(`Error in addFMTowerPts: ${error.message}`);
   //     }
   //   });
   // }
-  
-    
-
-  function addFMTowerPts(geojson) {
-    return new Promise((resolve, reject) => {
-      try {
-        // Define the base size and height for the pyramids
-        const baseSize = 0.003; // Size of one side of the pyramid's base
-        const pyramidHeight = 0.015; // Height of the pyramid from the base to the tip
-
-        // Material for the wireframe pyramids
-        let pyramidMaterialFM = new THREE.MeshBasicMaterial({
-          color: colorScheme.pyramidColorFM,
-          wireframe: true,
-          transparent: true,
-          opacity: 0.5,
-        });
-
-        const points = []; // Array to store points for the convex hull
-
-        // Parse the POINT data from the GeoJSON
-        geojson.features.forEach((feature) => {
-          if (feature.geometry.type === 'Point') {
-            const [lon, lat] = feature.geometry.coordinates;
-            const elevation = feature.properties.Z;
-
-            try {
-              // Convert the lon/lat to State Plane coordinates
-              const [x, y] = toStatePlane(lon, lat);
-              const z = elevation * zScale; // Apply the scaling factor to the elevation
-
-              // Check for valid coordinates before proceeding
-              if (x === null || y === null || isNaN(z)) {
-                console.error('Invalid point coordinates:', x, y, z);
-                return; // Skip this iteration
-              }
-
-              // Create a cone geometry for the pyramid
-              const pyramidGeometry = new THREE.ConeGeometry(
-                baseSize,
-                pyramidHeight,
-                5,
-              );
-              pyramidGeometry.rotateX(Math.PI / 2); // Rotate the pyramid to point up along the Z-axis
-
-              const pyramid = new THREE.Mesh(
-                pyramidGeometry,
-                pyramidMaterialFM,
-              );
-              pyramid.position.set(x, y, z);
-              fmTransmitterPoints.add(pyramid);
-
-              // Check for coincident points and get a z-offset
-              const label = `fm`;
-              const zOffset = 8;
-              //   const zOffset = getCoincidentPointOffset(lon, lat, 8, 0.00001);
-              // const zOffset = getCoincidentPointOffset(lon, lat, label, 4, 0.0001)
-              // Ensure Callsign or another property is correctly referenced
-              // const label = feature.properties.Callsign || `Tower ${index}`;
-
-              // const textSprite = makeTextSprite(` ${label} `, {
-              //   fontsize: 24,
-              //   strokeColor: 'rgba(255, 255, 255, 0.9)',
-              //   strokeWidth: 1,
-
-              //   // borderColor: { r: 255, g: 0, b: 0, a: 1.0 },
-              //   // backgroundColor: { r: 255, g: 100, b: 100, a: 0.8 }
-              // });
-
-              // Position the sprite above the pyramid
-              const pyramidHeightScaled = pyramidHeight * zScale;
-
-              // Position the sprite above the pyramid, applying the offset for coincident points
-              // textSprite.position.set(
-              //   x,
-              //   y,
-              //   z + pyramidHeightScaled + zOffset + 0.009,
-              // );
-              // textSprite.scale.set(0.05, 0.025, 1.0);
-
-              // fmTransmitterPoints.add(textSprite);
-              // console.log(`creating label for ${label}`);
-
-              // Add the position to the points array for convex hull calculation
-              points.push(new THREE.Vector3(x, y, z));
-            } catch (error) {
-              console.error(`Error projecting point: ${error.message}`);
-            }
-          } else {
-            console.error(
-              `Unsupported geometry type for points: ${feature.geometry.type}`,
-            );
-          }
-        });
-
-        // Add the FM points to the scene
-        scene.add(fmTransmitterPoints);
-        fmTransmitterPoints.visible = true;
-
-        // Create and add the convex hull to the scene
-        if (points.length > 0) {
-          // Additional checks and functionality as needed...
-
-          // Construct the MST
-          const fmMstEdges = primsAlgorithm(points);
-
-          // Draw the MST
-          drawMSTEdges(
-            fmMstEdges,
-            '#FFFFFF',
-            colorScheme.mstFmColor,
-            0.00025,
-            0.00075,
-            fmMSTLines,
-          );
-        }
-
-        // Add the MST lines to the scene
-        scene.add(fmMSTLines);
-        fmMSTLines.visible = false;
-        resolve(); // Resolve the promise when done
-      } catch (error) {
-        console.error('Error in addFMTowerPts:', error);
-        reject(`Error in addFMTowerPts: ${error.message}`);
-      }
-    });
-  }
 
   // Function to add wireframe pyramids and text labels for POINT data from GeoJSON
   function addCellTowerPts(geojson) {
@@ -1451,7 +1475,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
         // add groups to scene
         scene.add(cellTransmitterPoints);
         scene.add(cellMSTLines);
-        cellMSTLines.visible = true;
+        cellMSTLines.visible = false;
 
         resolve(); // Resolve the promise when done
       } catch (error) {
@@ -1633,11 +1657,12 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
     const urls = [
       'src/assets/data/colloquium_ii_data/stanford_contours_simplified1000m_20231124.geojson',
       'src/assets/data/colloquium_ii_data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson',
-      'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_infoJoin_processed.geojson',
-      'src/assets/data/colloquium_ii_data/FmTowers_FeaturesToJSON_AOI_20231204.geojson',
+      // 'src/assets/data/colloquium_ii_data/FmTowers_FeaturesToJSON_AOI_20231204.geojson',
       'src/assets/data/colloquium_ii_data/study_area_admin0clip.geojson',
       'src/assets/data/colloquium_ii_data/cellServiceCentroids_2000m_20231210.geojson',
-      'src/assets/data/fcc/fm/processed/fm_freq_dict.json'
+      'src/assets/data/fcc/fm/processed/fm_freq_dict.json',
+      'src/assets/data/fcc/fm/processed/FM_transmitter_sites.geojson',
+      'src/assets/data/fcc/fm/processed/FM_service_contour_downsample8_15step_processed_20240319.geojson'
     ];
 
     let criticalDatasetsLoaded = 0;
@@ -1664,7 +1689,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
   function isCriticalDataset(url) {
     // Define logic to determine if a dataset is critical for initial rendering
     // todo: this breaks if the contours aren't required up front but they take longest to load
-    return url.includes('stanford_contours') || url.includes('hubSpokes');
+    return url.includes('stanford_contours') || url.includes('service');
   }
   
 
@@ -1689,17 +1714,19 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
         addCellTowerPts(data);
         break;
 
-      case 'src/assets/data/fcc/fm/processed/FM_contours_AOI_hubSpokes_infoJoin_processed.geojson':
+      case 'src/assets/data/fcc/fm/processed/FM_service_contour_downsample8_15step_processed_20240319.geojson':
         fmContoursGeojsonData = data;
         addFMpropagation3D(data);
         break;
 
-      // case 'src/assets/data/fcc/fm/processed/FM_contours_AOI_polygon_scaled.geojson':
-      //   fmContoursGeojsonData = data;
-      //   addPolygons(data);
+
+      // case 'src/assets/data/colloquium_ii_data/FmTowers_FeaturesToJSON_AOI_20231204.geojson':
+      //   fmTransmitterGeojsonData = data;
+      //   addFMTowerPts(data);
       //   break;
 
-      case 'src/assets/data/colloquium_ii_data/FmTowers_FeaturesToJSON_AOI_20231204.geojson':
+      // updated points using fm contour origins
+      case 'src/assets/data/fcc/fm/processed/FM_transmitter_sites.geojson':
         fmTransmitterGeojsonData = data;
         addFMTowerPts(data);
         break;
@@ -1737,7 +1764,10 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
     const size = getSizeOfBoundingBox(boundingBox);
     const maxDim = Math.max(size.x, size.y);
 
-    const geoCameraPositionLonLat = [-73.97058811775618, 42.79146513478376];
+    const geoCameraPositionLonLat = [-74.68057752571633, 42.79146513478376];
+
+
+    
     const cameraPositionStatePlane = toStatePlane(...geoCameraPositionLonLat);
 
     // Adjust camera Z to be closer
