@@ -399,6 +399,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
     // logCameraDistance();
 
     updateDashSizeForZoom(); 
+    updatefmContourGroups();
 
     adjustMeshVisibilityBasedOnCameraDistance();
 
@@ -509,31 +510,34 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
 
     function updateDashSizeForZoom() {
       const distanceToTarget = camera.position.distanceTo(controls.target);
-      // console.log(distanceToTarget)
       // Find the closest zoom level without going over
       let selectedZoomLevel = zoomLevels[0];
       for (let i = zoomLevels.length - 1; i >= 0; i--) {
-        if (distanceToTarget >= zoomLevels[i].threshold) {
-          selectedZoomLevel = zoomLevels[i];
-          break;
-        }
+          if (distanceToTarget >= zoomLevels[i].threshold) {
+              selectedZoomLevel = zoomLevels[i];
+              break;
+          }
       }
-    
+  
       // Check if we need to update the dash and gap sizes
       if (currentZoomLevelIndex !== selectedZoomLevel.threshold) {
-        currentZoomLevelIndex = selectedZoomLevel.threshold;
-        // Update all line loops with the new dash and gap sizes
-        lineLoops.forEach((lineLoop) => {
-          if (lineLoop.material instanceof THREE.LineDashedMaterial) {
-            lineLoop.material.dashSize = selectedZoomLevel.dashSize;
-            lineLoop.material.gapSize = selectedZoomLevel.gapSize;
-            lineLoop.material.needsUpdate = true;
-            lineLoop.computeLineDistances();
-          }
-        });
+          currentZoomLevelIndex = selectedZoomLevel.threshold;
+          
+          // Iterate over each group in fmContourGroups
+          Object.values(fmContourGroups).forEach(group => {
+              // Update all line loops within the group
+              group.meshes.forEach(mesh => {
+                  if (mesh.material instanceof THREE.LineDashedMaterial) {
+                      mesh.material.dashSize = selectedZoomLevel.dashSize;
+                      mesh.material.gapSize = selectedZoomLevel.gapSize;
+                      mesh.material.needsUpdate = true;
+                      mesh.computeLineDistances();
+                  }
+              });
+          });
       }
-    }
-    
+  }
+      
   function getBoundingBoxOfGeoJSON(geojson) {
     let minX = Infinity;
     let maxX = -Infinity;
@@ -1029,95 +1033,98 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
   // }
   
 
-  let lineLoops = [];
+// Define an array to track all line loops and their decay status
+let fmContourGroups = {}; // Object to store line loop groups
+let lineLoops = {};
 
-  // this version is static rescaling of concentric lines based on input geojson + dynamic transparency based on concentric line
-  function addFMpropagation3D(geojson, channelFilter, stride = 1) {
-    return new Promise((resolve, reject) => {
-      try {
-        // Clear previously displayed features
-        while(lineLoops.length > 0) {
-          const loop = lineLoops.pop();
-          scene.remove(loop);
+function updatefmContourGroups() {
+    Object.keys(fmContourGroups).forEach(groupId => {
+        const group = fmContourGroups[groupId];
+        if (group.isDecaying) {
+            group.opacity -= group.decayRate;
+            group.opacity = Math.max(group.opacity, 0); // Ensure opacity doesn't drop below 0
+            group.meshes.forEach(mesh => {
+                mesh.material.opacity = group.opacity;
+            });
+
+            if (group.opacity <= 0) {
+                group.meshes.forEach(mesh => scene.remove(mesh));
+                delete fmContourGroups[groupId]; // Fully remove the group once it's invisible
+            }
         }
-  
-        // Extract all indices from the keys to determine the range
+    });
+}
+
+// Function to add FM propagation 3D line loops
+function addFMpropagation3D(geojson, channelFilter, stride = 1) {
+    return new Promise((resolve, reject) => {
+        // Existing groups not matching the current channelFilter are marked for decay
+        Object.keys(fmContourGroups).forEach(groupId => {
+            if (groupId !== channelFilter.toString()) {
+                fmContourGroups[groupId].isDecaying = true;
+                fmContourGroups[groupId].decayRate = 0.15; // Adjust decay rate as needed
+            }
+        });
+
+        // Extract indices to calculate opacity
         const indices = geojson.features.map(feature => {
-          const keyParts = feature.properties.key.split('_');
-          return parseInt(keyParts[keyParts.length - 1], 10); 
+            const keyParts = feature.properties.key.split('_');
+            return parseInt(keyParts[keyParts.length - 1], 10); 
         });
         const maxIndex = Math.max(...indices);
-        const maxOpacity = 1.00; 
-        const minOpacity = 0.25; 
+        const maxOpacity = 1.00;
+        const minOpacity = 0.25;
         const opacityRange = maxOpacity - minOpacity;
-  
-        // Iterate over each feature in the GeoJSON
-        for (let i = 0; i < geojson.features.length; i += stride) {
-          const feature = geojson.features[i];
-          
-          // Use the channelFilter to process only matching features
-          if (parseInt(feature.properties.channel, 10) !== channelFilter) {
-            continue; // Skip this feature if its channel does not match the filter
-          }
-          
-          
-          const elevationData = feature.properties.elevation_data;
-          
-          // Ensure there is a matching number of elevation points to coordinate pairs
-          if (!elevationData || elevationData.length !== feature.geometry.coordinates[0].length) {
-            console.error(`Elevation data length does not match coordinates length for feature at index ${i}`);
-            continue; // Skip this feature
-          }
-        
-          const featureIndex = parseInt(feature.properties.key.split('_')[feature.properties.key.split('_').length - 1], 20);
-          
-          let opacity;
-          if (maxIndex === 0) {
-            // If there's only one index, set it to max opacity (since it's both the minimum and maximum)
-            opacity = maxOpacity;
-          } else {
-            // Directly scale the opacity: Higher indices get higher opacity
-            opacity = minOpacity + (opacityRange * featureIndex / maxIndex);
-          }
-        
-          const material = new THREE.LineDashedMaterial({
-            color: colorScheme.polygonColor,
-            transparent: true,
-            alphaHash: true,
-            opacity: opacity,
-            dashSize: zoomLevels[1].dashSize,
-            gapSize: zoomLevels[1].gapSize,          
-          });
-          
-          const shapeCoords = feature.geometry.coordinates[0];
-          const vertices = [];
-  
-          // Convert coordinates to 3D vertices, incorporating elevation data
-          shapeCoords.forEach((coord, index) => {
-            const [x, y] = toStatePlane(coord[0], coord[1]);
-            const z = elevationData[index] * zScale; // Use the corresponding elevation data for Z value
-            vertices.push(new THREE.Vector3(x, y, z));
-          });
-  
-          // Create a geometry and add vertices to it
-          const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
-  
-          // Create a line loop with the geometry and material
-          const lineLoop = new THREE.LineLoop(geometry, material);
-          lineLoop.name = `propagation-${feature.properties.key}`;
-          lineLoop.computeLineDistances();
-          scene.add(lineLoop);
-          
-          // Add the line loop to the array for later access
-          lineLoops.push(lineLoop); 
-        }
-  
-        resolve(); // Resolve the promise when all features have been processed
-      } catch (error) {
-        reject(`Error in addFMpropagation3D: ${error.message}`);
-      }
+
+        geojson.features.forEach((feature, idx) => {
+            if (idx % stride !== 0) return;
+            const channel = parseInt(feature.properties.channel, 10);
+            if (channel !== channelFilter) return; // Only proceed if the channel matches
+
+            const elevationData = feature.properties.elevation_data;
+            if (!elevationData || elevationData.length !== feature.geometry.coordinates[0].length) {
+                console.error(`Elevation data length does not match coordinates length for feature at index ${idx}`);
+                return; // Skip this feature
+            }
+
+            // Calculate feature opacity based on its index
+            let featureIndex = parseInt(feature.properties.key.split('_').pop(), 10);
+            let opacity = minOpacity + (opacityRange * (featureIndex / maxIndex));
+
+            const material = new THREE.LineDashedMaterial({
+                color: colorScheme.polygonColor,
+                transparent: true,
+                opacity: opacity,
+                dashSize: zoomLevels[1].dashSize,
+                gapSize: zoomLevels[1].gapSize,          
+            });
+
+            const vertices = feature.geometry.coordinates[0].map(coord => {
+                const [x, y] = toStatePlane(coord[0], coord[1]);
+                return new THREE.Vector3(x, y, elevationData[coord] * zScale);
+            });
+
+            const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
+            const lineLoop = new THREE.LineLoop(geometry, material);
+            lineLoop.computeLineDistances();
+
+            // Determine the group ID from the key
+            const groupId = feature.properties.key.split('_')[0];
+            if (!fmContourGroups[groupId]) {
+                fmContourGroups[groupId] = {
+                    meshes: [],
+                    opacity: 1.0, // Initial opacity
+                    isDecaying: false, // No decay initially
+                    decayRate: 0.02 // Decay rate when applicable
+                };
+            }
+            fmContourGroups[groupId].meshes.push(lineLoop);
+            scene.add(lineLoop);
+        });
+
+        resolve();
     });
-  }
+}
 
   function addFMTowerPts(geojson, channelFilter) {
     return new Promise((resolve, reject) => {
