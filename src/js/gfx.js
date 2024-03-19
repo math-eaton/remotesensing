@@ -26,9 +26,12 @@ export function gfx() {
   let analysisArea = new THREE.Group();
   cellServiceMesh.visible = false; // Set the mesh to be invisible initially
 
+  // other global vars
+
   let sliderValue = 1;  //  default value
   const sliderLength = 100;  // Assuming 10 is the maximum value of the slider
 
+  let globalDecayRate = 0.02; 
 
   // Define color scheme variables
   const colorScheme = {
@@ -537,6 +540,12 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
           });
       }
   }
+
+  // todo: can dynamically tweak this parameter for effect
+  function updateGlobalDecayRate(newRate) {
+    globalDecayRate = newRate;
+}
+  
       
   function getBoundingBoxOfGeoJSON(geojson) {
     let minX = Infinity;
@@ -1062,7 +1071,7 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
         Object.keys(fmContourGroups).forEach(groupId => {
             if (groupId !== channelFilter.toString()) {
                 fmContourGroups[groupId].isDecaying = true;
-                fmContourGroups[groupId].decayRate = 0.15; // Adjust decay rate as needed
+                fmContourGroups[groupId].decayRate = globalDecayRate;
             }
         });
 
@@ -1115,7 +1124,7 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
                     meshes: [],
                     opacity: 1.0, // Initial opacity
                     isDecaying: false, // No decay initially
-                    decayRate: 0.02 // Decay rate when applicable
+                    decayRate: globalDecayRate
                 };
             }
             fmContourGroups[groupId].meshes.push(lineLoop);
