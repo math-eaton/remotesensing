@@ -137,7 +137,7 @@ export function gfx() {
     controls.maxPolarAngle = Math.PI / 6; // π/n radians (z degrees) - on the horizon
     // Set the maximum distance the camera can dolly out
     controls.maxDistance = 2.5; // max camera zoom
-    controls.minDistance = 0.4; // min camera zoom
+    controls.minDistance = 0.5; // min camera zoom
     // console.log(controls.angle)
 
     const audioListener = new THREE.AudioListener();
@@ -364,6 +364,12 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
 
 
     adjustMeshVisibilityBasedOnCameraDistance();
+
+
+    console.log(`Camera X: ${camera.position.x}, Camera Y: ${camera.position.y}, Camera Z: ${camera.position.z}`);
+
+
+
     renderer.render(scene, camera);
   }
 
@@ -455,8 +461,8 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
   const gapSize = .015;
 
   const zoomLevels = [
-    { threshold: 0.4, dashSize: dashSize / 2, gapSize: gapSize / 8 }, // Closest zoom
-    { threshold: 0.5, dashSize: dashSize, gapSize: gapSize / 6},
+    { threshold: 0.666, dashSize: dashSize / 2, gapSize: gapSize / 8 }, // Closest zoom
+    { threshold: 0.75, dashSize: dashSize, gapSize: gapSize / 6},
     { threshold: 1.5, dashSize: dashSize * 4, gapSize: gapSize / 3},
     // { threshold: 2, dashSize: dashSize, gapSize: gapSize }, // Farthest zoom
   ];
@@ -1701,27 +1707,49 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
     const size = getSizeOfBoundingBox(boundingBox);
     const maxDim = Math.max(size.x, size.y);
 
-    // Adjust camera Z to be closer
-    const fov = camera.fov * (Math.PI / 100);
-    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-    cameraZ *= 0.5; // Decrease this factor to move the camera closer
+    const geoCameraPositionLonLat = [-73.97058811775618, 42.79146513478376];
+    const cameraPositionStatePlane = toStatePlane(...geoCameraPositionLonLat);
 
-    // Adjust tilt angle
-    const tiltAngle = 0;
-    const distance = cameraZ; // Use the calculated camera distance
+    // Adjust camera Z to be closer
+    const fov = camera.fov * (Math.PI / 90);
+    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+    cameraZ *= 0.5; // Adjust to move the camera closer
+
     camera.position.set(
-      center.x + distance * Math.sin(tiltAngle), // x position
-      center.y, // y position
-      center.z + distance * Math.cos(tiltAngle), // z position (height)
+      cameraPositionStatePlane[0], // x position
+      cameraPositionStatePlane[1], // z position (height, since Z is up)
+      cameraZ // y position, assuming Z-up configuration
     );
 
     // Set controls target to the center of bounding box
-    controls.target.set(center.x - 0.05, center.y - 0.02, 0);
+    controls.target.set(camera.position.x, camera.position.y, 0);
 
     // Apply constraints to camera and update controls
     constrainCamera(controls, boundingBox);
+
+    // Calculate the distance to the target
+    const distanceToTarget = camera.position.distanceTo(controls.target);
+
+    // Convert angle for rotation to radians
+    const angleRadians = Math.PI; // 180 degrees in radians
+
+    // Calculate the new position using quaternion for rotation
+    const relativePosition = new THREE.Vector3().subVectors(camera.position, controls.target);
+    const axis = new THREE.Vector3(0, 0, 1); // Rotate around Z-axis
+    const quaternion = new THREE.Quaternion().setFromAxisAngle(axis, angleRadians);
+    relativePosition.applyQuaternion(quaternion);
+
+    // Apply the new position while maintaining the distance
+    camera.position.copy(controls.target).add(relativePosition.setLength(distanceToTarget));
+
+    // Ensure the camera keeps looking at the target
+    camera.lookAt(controls.target);
+
+    console.log(`State Plane X: ${cameraPositionStatePlane[0]}, State Plane Y: ${cameraPositionStatePlane[1]}`);
+    console.log(`Camera X: ${camera.position.x}, Camera Y: ${camera.position.y}, Camera Z: ${camera.position.z}`);
+
     controls.update();
-  }
+}
 }
 
 // Export visualizationReady for access from main.js
