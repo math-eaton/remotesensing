@@ -28,6 +28,7 @@
   text-overflow: ellipsis;
   display: inline-block;
   min-width: 100vw;
+  overflow: hidden;
   /* mix-blend-mode: screen; */
 }
 
@@ -456,12 +457,7 @@ p, ul{
 /* Slider container */
 #fm-channel-controls {
   position: relative; 
-  width: 30vw;
-  max-height: 10vh;
-  padding-bottom: 5vh;
-  margin: 5vh;
-  padding-right: 5vw;
-  padding-left: 2.5vw;
+  margin: 1vh 2vw 0 2vw;
   z-index: 10000000000000;
 
 }
@@ -487,7 +483,9 @@ p, ul{
 
 #fm-frequency-display{
   font-family: monospace;
+  background: transparent;
   user-select: none;
+  /* cursor: pointer; */
 }
 
 /* Slider thumb */
@@ -496,25 +494,26 @@ p, ul{
   appearance: none;
   width: 0.75vw; /* Thumb width */
   height: 2vh; /* Thumb height */
-  background: none; /* Thumb color */
-  outline-width: 0.1em;
-  outline:#ececec;
-  outline-style:auto;
-  cursor: url("/src/cursor/point.cur"), auto;
+  background: #ececec; /* Keep the thumb's visual background */
+  border: 10px solid rgba(0, 0, 0, 0); /* Transparent border */
+  box-sizing: border-box; /* Ensures the border is included in width/height calculations */
+  cursor: pointer;
 }
 
 #fm-channel-slider::-moz-range-thumb {
   width: 20px;
   height: 20px;
   background: #444;
-  cursor: url("/src/cursor/point.cur"), auto;
+  border: 10px solid rgba(0, 0, 0, 0); /* Transparent border for Firefox */
+  box-sizing: border-box; /* Ensures the border is included in width/height calculations */
+  cursor: pointer;
 }
 
 #three-container {
   width: 100%; /* Full width of its parent container */
   height: 100%;
   position: absolute;
-  overflow: hidden; /* Add this to prevent any overflow */
+  overflow: hidden;
 }
 
 #three-container canvas {

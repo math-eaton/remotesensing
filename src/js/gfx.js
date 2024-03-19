@@ -31,7 +31,7 @@ export function gfx() {
   let sliderValue = 1;  //  default value
   const sliderLength = 100;  // Assuming 10 is the maximum value of the slider
 
-  let globalDecayRate = 0.02; 
+  let globalDecayRate = 0.1; 
 
   // Define color scheme variables
   const colorScheme = {
@@ -505,7 +505,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
   const zoomLevels = [
     { threshold: 0.666, dashSize: dashSize / 2, gapSize: gapSize / 8 }, // Closest zoom
     { threshold: 0.75, dashSize: dashSize, gapSize: gapSize / 6},
-    { threshold: 1.5, dashSize: dashSize * 4, gapSize: gapSize / 3},
+    { threshold: 1.5, dashSize: dashSize * 2, gapSize: gapSize / 3},
     // { threshold: 2, dashSize: dashSize, gapSize: gapSize }, // Farthest zoom
   ];
   
@@ -1091,6 +1091,7 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
             if (channel !== channelFilter) return; // Only proceed if the channel matches
 
             const elevationData = feature.properties.elevation_data;
+            console.log(elevationData)
             if (!elevationData || elevationData.length !== feature.geometry.coordinates[0].length) {
                 console.error(`Elevation data length does not match coordinates length for feature at index ${idx}`);
                 return; // Skip this feature
@@ -1110,7 +1111,8 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
 
             const vertices = feature.geometry.coordinates[0].map(coord => {
                 const [x, y] = toStatePlane(coord[0], coord[1]);
-                return new THREE.Vector3(x, y, elevationData[coord] * zScale);
+                const z = elevationData[featureIndex] * zScale
+                return new THREE.Vector3(x, y, z);
             });
 
             const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
@@ -1140,11 +1142,11 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
       try {
         // Define the base size and height for the pyramids for matching features
         const baseSizeMatching = 0.004; // Size of one side of the pyramid's base for matching features
-        const pyramidHeightMatching = 0.015; // Height of the pyramid from the base to the tip for matching features
+        const pyramidHeightMatching = 0.025; // Height of the pyramid from the base to the tip for matching features
   
         // Define smaller size and height for non-matching features
         const baseSizeNonMatching = baseSizeMatching * 0.5; // Smaller base size for non-matching features
-        const pyramidHeightNonMatching = pyramidHeightMatching * 0.5; // Shorter pyramid for non-matching features
+        const pyramidHeightNonMatching = pyramidHeightMatching * 0.25; // Shorter pyramid for non-matching features
   
         // Clear previously displayed FM towers
         while (fmTransmitterPoints.children.length > 0) {
