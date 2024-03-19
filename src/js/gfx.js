@@ -37,7 +37,7 @@ export function gfx() {
     directionalLightColor: '#ffffff', // White
     backgroundColor: '#000000', // Black
     polygonColor: '#FF1493', // magenta
-    pyramidColorFM: '#FF5F1F', // Yellow
+    pyramidColorFM: '#FF1493', // magenta
     pyramidColorCellular: '#FFFF00', // neon orange
     // lowestElevationColor: "#0000ff", // Blue
     // middleElevationColor: "#00ff00", // Green
@@ -164,8 +164,6 @@ export function gfx() {
     camera.far = fogFar;
     camera.updateProjectionMatrix();
 
-    const resolutionSlider = document.getElementById('fm-channel-slider');
-    updateSliderDisplay(sliderValue, resolutionSlider);
 
     renderer.setClearColor(colorScheme.backgroundColor);
     window.addEventListener('resize', onWindowResize, false);
@@ -174,6 +172,56 @@ export function gfx() {
 
   ////////////////////
   /////////// DOM stuff event listener resolution display stuff bye bye
+
+  // const layerObjects = {
+  //   'fm transmitter points': fmTransmitterPoints,
+  //   'fm minimum spanning tree lines': fmMSTLines,
+  //   'cell transmitter points': cellTransmitterPoints,
+  //   'cell MST lines': cellMSTLines,
+  //   'contour lines': contourLines,
+  //   // 'fm propagation curves': propagationPolygons,
+  //   'cell dead zones': cellServiceMesh,
+  //   'analysis area': analysisArea
+  
+  // };
+  
+  // function toggleCellServiceMeshVisibility(isVisible) {
+  //   cellServiceMesh.visible = isVisible;
+  //   cellServiceMesh.children.forEach(group => {
+  //       group.children.forEach(mesh => {
+  //           mesh.visible = isVisible;
+  //       });
+  //   });
+  // }
+  
+  // // Function to toggle layer visibility
+  // function toggleLayerVisibility(layerName, isVisible) {
+  //   if (layerObjects[layerName]) {
+  //     layerObjects[layerName].visible = isVisible;
+  
+  //     // Special handling for cellServiceMesh
+  //     if (layerName === 'cell dead zones') {
+  //       cellServiceMesh.children.forEach(group => {
+  //         group.visible = isVisible; // Set visibility for each group
+  //         group.children.forEach(mesh => {
+  //           mesh.visible = isVisible; // Set visibility for each mesh within the group
+  //         });
+  //       });
+  //     }
+  
+  //     // Update the checkbox state
+  //     const checkbox = document.getElementById(layerName);
+  //     if (checkbox) {
+  //       checkbox.checked = isVisible;
+  //     }
+  //   } else {
+  //     console.warn(`Layer "${layerName}" not found in the scene.`);
+  //   }
+  
+  //   renderer.render(scene, camera);
+  // }
+  
+  
 
 
   // Function to update slider display
@@ -229,7 +277,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
     renderer.setSize(width, height);
 
     // update this value to alter pixel ratio scaled with the screen
-    pixelationFactor = 0.5;
+    pixelationFactor = 0.45;
 
     // Calculate new dimensions based on the slider value
     var newWidth = Math.max(1, window.innerWidth * pixelationFactor);
@@ -314,6 +362,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
 
     updateDashSizeForZoom(); 
 
+
     adjustMeshVisibilityBasedOnCameraDistance();
     renderer.render(scene, camera);
   }
@@ -332,14 +381,23 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
     loadGeoJSONData(() => {
       postLoadOperations(); // Setup the scene after critical datasets are loaded
 
+
+
+      // // Ensure the sliderValue is up-to-date
+      // sliderValue = (parseFloat(document.getElementById('fm-channel-slider').value) / sliderLength);
+      const resolutionSlider = document.getElementById('fm-channel-slider');
+      updateSliderDisplay(sliderValue, resolutionSlider);
+  
+
       initFMsliderAndContours(fmFreqDictionaryJson); // Setup slider and initial visualization
 
-      // Ensure the sliderValue is up-to-date
-      sliderValue = (parseFloat(document.getElementById('fm-channel-slider').value) / sliderLength);
 
       enableInteraction(); // Directly enable interaction without waiting for a button click
       // document.getElementById('progress-bar').style.display = 'none'; // Hide the progress bar
     });
+
+
+
   }
 
   function enableInteraction() {
@@ -347,6 +405,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
 
     // Render the scene once before making it visible
     renderer.render(scene, camera);
+
 
     // Use requestAnimationFrame to ensure the rendering is done
     requestAnimationFrame(() => {
@@ -397,8 +456,8 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
 
   const zoomLevels = [
     { threshold: 0.4, dashSize: dashSize / 2, gapSize: gapSize / 8 }, // Closest zoom
-    { threshold: 0.5, dashSize: dashSize * .8, gapSize: gapSize * .4},
-    { threshold: 1.5, dashSize: dashSize / 5, gapSize: gapSize / 4},
+    { threshold: 0.5, dashSize: dashSize, gapSize: gapSize / 6},
+    { threshold: 1.5, dashSize: dashSize * 4, gapSize: gapSize / 3},
     // { threshold: 2, dashSize: dashSize, gapSize: gapSize }, // Farthest zoom
   ];
   
@@ -600,7 +659,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
         // Calculate logarithmic opacity scaling
         let minOpacity = 0.01;
         let maxOpacity = 0.4;
-        let scaleExponent = 0.1; // Adjust this to control the rate of change
+        let scaleExponent = 0.5; // Adjust this to control the rate of change
 
         // Normalize contour value between 0 and 1 based on elevation range
         const normalizedElevation = (contour - minElevation) / (maxElevation - minElevation);
@@ -1051,10 +1110,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
       console.warn("GeoJSON data not available.");
       return;
     }
-  
-    // Clear existing visualization here if necessary
-    
-    // Assuming `addFMpropagation3D` is your function to draw/update the visualization
+      
     addFMpropagation3D(geojsonData, channelFilter)
       .then(() => console.log("Visualization updated."))
       .catch(error => console.error("Failed to update visualization:", error));
@@ -1219,7 +1275,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
 
         // Add the FM points to the scene
         scene.add(fmTransmitterPoints);
-        fmTransmitterPoints.visible = false;
+        fmTransmitterPoints.visible = true;
 
         // Create and add the convex hull to the scene
         if (points.length > 0) {
@@ -1241,7 +1297,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
 
         // Add the MST lines to the scene
         scene.add(fmMSTLines);
-        fmMSTLines.visible = true;
+        fmMSTLines.visible = false;
         resolve(); // Resolve the promise when done
       } catch (error) {
         console.error('Error in addFMTowerPts:', error);
@@ -1263,7 +1319,8 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
           color: colorScheme.pyramidColorCellular,
           wireframe: true,
           transparent: true,
-          opacity: 0.4,
+          alphaHash: true,
+          opacity: 0.25,
         });
 
         const points = []; // Array to store points for the convex hull
@@ -1358,6 +1415,8 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
         // add groups to scene
         scene.add(cellTransmitterPoints);
         scene.add(cellMSTLines);
+        cellMSTLines.visible = true;
+
         resolve(); // Resolve the promise when done
       } catch (error) {
         reject(`Error in addCellTowerPts: ${error.message}`);
@@ -1569,7 +1628,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
   function isCriticalDataset(url) {
     // Define logic to determine if a dataset is critical for initial rendering
     // todo: this breaks if the contours aren't required up front but they take longest to load
-    return url.includes('stanford_contours') || url.includes('study');
+    return url.includes('stanford_contours') || url.includes('hubSpokes');
   }
   
 
@@ -1645,10 +1704,10 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
     // Adjust camera Z to be closer
     const fov = camera.fov * (Math.PI / 100);
     let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-    cameraZ *= 0.15; // Decrease this factor to move the camera closer
+    cameraZ *= 0.5; // Decrease this factor to move the camera closer
 
     // Adjust tilt angle
-    const tiltAngle = THREE.MathUtils.degToRad(40); // Example: 30 degree tilt
+    const tiltAngle = 0;
     const distance = cameraZ; // Use the calculated camera distance
     camera.position.set(
       center.x + distance * Math.sin(tiltAngle), // x position

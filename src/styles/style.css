@@ -5,7 +5,7 @@
   font-weight: 400;
   background: linear-gradient(
     to bottom,
-    rgba(60, 60, 60, 0.95) 50%,
+    rgba(60, 60, 60, 0.95) 0%,
     rgba(45, 45, 45, 0.95) 100%
   );
   color-scheme: light dark;
@@ -457,7 +457,8 @@ p, ul{
 #fm-channel-controls {
   position: relative; /* Add this if not already set */
   width: 30vw;
-  margin: 3vw;
+  padding-bottom: 1vh;
+  margin: 5vh;
   padding-right: 5vw;
   z-index: 10000000000000;
 }
@@ -480,7 +481,7 @@ p, ul{
 }
 
 #fm-frequency-display{
-  align-items: center;
+  /* align-items: center; */
 }
 
 /* Slider thumb */
