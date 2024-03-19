@@ -1077,8 +1077,8 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
             transparent: true,
             alphaHash: true,
             opacity: opacity,
-            dashSize: dashSize * .8,
-            gapSize: gapSize * .4,          
+            dashSize: zoomLevels[1].dashSize,
+            gapSize: zoomLevels[1].gapSize,          
           });
           
           const shapeCoords = feature.geometry.coordinates[0];
