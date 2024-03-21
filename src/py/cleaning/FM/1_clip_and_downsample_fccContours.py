@@ -7,7 +7,7 @@ import warnings
 from datetime import datetime
 
 
-downsample_factor=8
+downsample_factor=15
 
 # Function to format the current date in YYYYMMDD format
 def get_current_date_format():
@@ -15,6 +15,9 @@ def get_current_date_format():
 
 
 def clean_text(input_text):
+
+    print("cleaning text input ...")
+
     """
     Removes extra whitespace from the input text, except for the delimiter in coordinate pairs.
     
@@ -31,6 +34,9 @@ def clean_text(input_text):
         return input_text.strip()
 
 def reverse_coordinates(coordinate_string):
+
+    print("processing coordinate strings ...")
+
     try:
         lat, lon = coordinate_string.split(',')
         return f"{lon.strip()}, {lat.strip()}"
@@ -39,6 +45,9 @@ def reverse_coordinates(coordinate_string):
         return None  # or some default value, or even raise a more informative error
 
 def is_in_aoi(coords, aoi_boundary):
+
+    print("filtering area of interest ...")
+
     if isinstance(coords, str):
         lat, lon = map(float, coords.split(','))
         point = Point(lat, lon)
