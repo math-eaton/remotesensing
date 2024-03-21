@@ -31,7 +31,7 @@ export function gfx() {
   let sliderValue = 1;  //  default value
   const sliderLength = 100;  // Assuming 10 is the maximum value of the slider
 
-  let globalDecayRate = 0.1; 
+  let globalDecayRate = 100; 
 
   // Define color scheme variables
   const colorScheme = {
@@ -544,6 +544,11 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
   // todo: can dynamically tweak this parameter for effect
   function updateGlobalDecayRate(newRate) {
     globalDecayRate = newRate;
+    Object.values(fmContourGroups).forEach(group => {
+      if (group.isDecaying) {
+          group.decayRate = newRate;
+      }
+  });
 }
   
       
@@ -1047,21 +1052,30 @@ let fmContourGroups = {}; // Object to store line loop groups
 let lineLoops = {};
 
 function updatefmContourGroups() {
-    Object.keys(fmContourGroups).forEach(groupId => {
-        const group = fmContourGroups[groupId];
-        if (group.isDecaying) {
-            group.opacity -= group.decayRate;
-            group.opacity = Math.max(group.opacity, 0); // Ensure opacity doesn't drop below 0
-            group.meshes.forEach(mesh => {
-                mesh.material.opacity = group.opacity;
-            });
+  Object.keys(fmContourGroups).forEach(groupId => {
+      const group = fmContourGroups[groupId];
+      if (group.isDecaying) {
+          group.opacity -= group.decayRate;
+          group.opacity = Math.max(group.opacity, 0); // Ensure opacity doesn't drop below 0
+          group.meshes.forEach(mesh => {
+              mesh.material.opacity = group.opacity;
+          });
 
-            if (group.opacity <= 0) {
-                group.meshes.forEach(mesh => scene.remove(mesh));
-                delete fmContourGroups[groupId]; // Fully remove the group once it's invisible
-            }
-        }
-    });
+          // Update opacity for each mesh in the group
+          group.meshes.forEach(mesh => {
+              if (mesh.material) {
+                  mesh.material.opacity = group.opacity;
+                  mesh.material.needsUpdate = true; // Ensure the opacity change takes effect
+              }
+          });
+
+          // If fully transparent, remove the group
+          if (group.opacity <= 0) {
+              group.meshes.forEach(mesh => scene.remove(mesh));
+              delete fmContourGroups[groupId];
+          }
+      }
+  });
 }
 
 // Function to add FM propagation 3D line loops
@@ -1072,8 +1086,13 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
             if (groupId !== channelFilter.toString()) {
                 fmContourGroups[groupId].isDecaying = true;
                 fmContourGroups[groupId].decayRate = globalDecayRate;
+
             }
+
+
         });
+
+
 
         // Extract indices to calculate opacity
         const indices = geojson.features.map(feature => {
@@ -1121,6 +1140,7 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
 
             // Determine the group ID from the key
             const groupId = feature.properties.key.split('_')[0];
+            console.log(`"global decay: ${globalDecayRate}"`)
             if (!fmContourGroups[groupId]) {
                 fmContourGroups[groupId] = {
                     meshes: [],
@@ -1684,7 +1704,7 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
       'src/assets/data/colloquium_ii_data/cellServiceCentroids_2000m_20231210.geojson',
       'src/assets/data/fcc/fm/processed/fm_freq_dict.json',
       'src/assets/data/fcc/fm/processed/FM_transmitter_sites.geojson',
-      'src/assets/data/fcc/fm/processed/FM_service_contour_downsample8_15step_processed_20240319.geojson'
+      'src/assets/data/fcc/fm/processed/FM_service_contour_downsample15_15step_processed_20240320.geojson'
     ];
 
     let criticalDatasetsLoaded = 0;
@@ -1736,7 +1756,7 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
         addCellTowerPts(data);
         break;
 
-      case 'src/assets/data/fcc/fm/processed/FM_service_contour_downsample8_15step_processed_20240319.geojson':
+      case 'src/assets/data/fcc/fm/processed/FM_service_contour_downsample15_15step_processed_20240320.geojson':
         fmContoursGeojsonData = data;
         addFMpropagation3D(data);
         break;
