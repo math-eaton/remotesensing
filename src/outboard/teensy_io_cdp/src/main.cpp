@@ -9,13 +9,22 @@ const int pin2 = 1;
 Encoder knobLeft(14, 15); 
 Encoder knobRight(2, 3);
 
-// encoder push-button pins
+// Encoder push-button pins
 const int buttonPinLeft = 11; 
 const int buttonPinRight = 12;
 
 // Encoder positions
 long positionLeft  = -999;
 long positionRight = -999;
+
+// Debounce variables for buttons
+unsigned long lastDebounceTimeLeft = 0;
+unsigned long lastDebounceTimeRight = 0;
+const unsigned long debounceDelay = 50; // 50 ms debounce time
+bool lastButtonStateLeft = HIGH;
+bool lastButtonStateRight = HIGH;
+bool buttonPressedLeft = false;
+bool buttonPressedRight = false;
 
 void setup() {
   Serial.begin(9600);
@@ -27,9 +36,7 @@ void setup() {
 
   pinMode(buttonPinLeft, INPUT_PULLUP);
   pinMode(buttonPinRight, INPUT_PULLUP);
-
   
-  // Encoder test message (optional)
   Serial.println("TwoKnobs Encoder Test:");
 }
 
@@ -70,17 +77,35 @@ void loop() {
     knobRight.write(0);
   }
 
-    bool buttonStateLeft = !digitalRead(buttonPinLeft); // Inverted because of pull-up
-  bool buttonStateRight = !digitalRead(buttonPinRight); // Inverted because of pull-up
+  // Button debounce logic
+  bool readingLeft = !digitalRead(buttonPinLeft);
+  bool readingRight = !digitalRead(buttonPinRight);
 
-  // Print a message when a button is pressed
-  if (buttonStateLeft) {
-    Serial.println("Left button pressed!");
+  if (readingLeft != lastButtonStateLeft) {
+    lastDebounceTimeLeft = millis();
   }
-  if (buttonStateRight) {
-    Serial.println("Right button pressed!");
+  if (readingRight != lastButtonStateRight) {
+    lastDebounceTimeRight = millis();
   }
 
-  // Small delay to avoid spamming
-  delay(250);
+  if ((millis() - lastDebounceTimeLeft) > debounceDelay) {
+    if (readingLeft != buttonPressedLeft) {
+      buttonPressedLeft = readingLeft;
+      if (buttonPressedLeft) {
+        Serial.println("Left button pressed!");
+      }
+    }
+  }
+
+  if ((millis() - lastDebounceTimeRight) > debounceDelay) {
+    if (readingRight != buttonPressedRight) {
+      buttonPressedRight = readingRight;
+      if (buttonPressedRight) {
+        Serial.println("Right button pressed!");
+      }
+    }
+  }
+
+  lastButtonStateLeft = readingLeft;
+  lastButtonStateRight = readingRight;
 }
