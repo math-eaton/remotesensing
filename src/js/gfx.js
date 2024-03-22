@@ -1101,7 +1101,8 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
 
             const vertices = feature.geometry.coordinates[0].map(coord => {
                 const [x, y] = toStatePlane(coord[0], coord[1]);
-                return new THREE.Vector3(x, y, elevationData[coord] * zScale);
+                const z = elevationData[featureIndex] * zScale
+                return new THREE.Vector3(x, y, z);
             });
 
             const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
