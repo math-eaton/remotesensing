@@ -26,12 +26,9 @@ export function gfx() {
   let analysisArea = new THREE.Group();
   cellServiceMesh.visible = false; // Set the mesh to be invisible initially
 
-  // other global vars
-
   let sliderValue = 1;  //  default value
   const sliderLength = 100;  // Assuming 10 is the maximum value of the slider
 
-  let globalDecayRate = 100; 
 
   // Define color scheme variables
   const colorScheme = {
@@ -505,7 +502,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
   const zoomLevels = [
     { threshold: 0.666, dashSize: dashSize / 2, gapSize: gapSize / 8 }, // Closest zoom
     { threshold: 0.75, dashSize: dashSize, gapSize: gapSize / 6},
-    { threshold: 1.5, dashSize: dashSize * 2, gapSize: gapSize / 3},
+    { threshold: 1.5, dashSize: dashSize * 4, gapSize: gapSize / 3},
     // { threshold: 2, dashSize: dashSize, gapSize: gapSize }, // Farthest zoom
   ];
   
@@ -540,17 +537,6 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
           });
       }
   }
-
-  // todo: can dynamically tweak this parameter for effect
-  function updateGlobalDecayRate(newRate) {
-    globalDecayRate = newRate;
-    Object.values(fmContourGroups).forEach(group => {
-      if (group.isDecaying) {
-          group.decayRate = newRate;
-      }
-  });
-}
-  
       
   function getBoundingBoxOfGeoJSON(geojson) {
     let minX = Infinity;
@@ -1052,30 +1038,21 @@ let fmContourGroups = {}; // Object to store line loop groups
 let lineLoops = {};
 
 function updatefmContourGroups() {
-  Object.keys(fmContourGroups).forEach(groupId => {
-      const group = fmContourGroups[groupId];
-      if (group.isDecaying) {
-          group.opacity -= group.decayRate;
-          group.opacity = Math.max(group.opacity, 0); // Ensure opacity doesn't drop below 0
-          group.meshes.forEach(mesh => {
-              mesh.material.opacity = group.opacity;
-          });
+    Object.keys(fmContourGroups).forEach(groupId => {
+        const group = fmContourGroups[groupId];
+        if (group.isDecaying) {
+            group.opacity -= group.decayRate;
+            group.opacity = Math.max(group.opacity, 0); // Ensure opacity doesn't drop below 0
+            group.meshes.forEach(mesh => {
+                mesh.material.opacity = group.opacity;
+            });
 
-          // Update opacity for each mesh in the group
-          group.meshes.forEach(mesh => {
-              if (mesh.material) {
-                  mesh.material.opacity = group.opacity;
-                  mesh.material.needsUpdate = true; // Ensure the opacity change takes effect
-              }
-          });
-
-          // If fully transparent, remove the group
-          if (group.opacity <= 0) {
-              group.meshes.forEach(mesh => scene.remove(mesh));
-              delete fmContourGroups[groupId];
-          }
-      }
-  });
+            if (group.opacity <= 0) {
+                group.meshes.forEach(mesh => scene.remove(mesh));
+                delete fmContourGroups[groupId]; // Fully remove the group once it's invisible
+            }
+        }
+    });
 }
 
 // Function to add FM propagation 3D line loops
@@ -1085,14 +1062,9 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
         Object.keys(fmContourGroups).forEach(groupId => {
             if (groupId !== channelFilter.toString()) {
                 fmContourGroups[groupId].isDecaying = true;
-                fmContourGroups[groupId].decayRate = globalDecayRate;
-
+                fmContourGroups[groupId].decayRate = 0.15; // Adjust decay rate as needed
             }
-
-
         });
-
-
 
         // Extract indices to calculate opacity
         const indices = geojson.features.map(feature => {
@@ -1110,7 +1082,6 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
             if (channel !== channelFilter) return; // Only proceed if the channel matches
 
             const elevationData = feature.properties.elevation_data;
-            console.log(elevationData)
             if (!elevationData || elevationData.length !== feature.geometry.coordinates[0].length) {
                 console.error(`Elevation data length does not match coordinates length for feature at index ${idx}`);
                 return; // Skip this feature
@@ -1130,8 +1101,7 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
 
             const vertices = feature.geometry.coordinates[0].map(coord => {
                 const [x, y] = toStatePlane(coord[0], coord[1]);
-                const z = elevationData[featureIndex] * zScale
-                return new THREE.Vector3(x, y, z);
+                return new THREE.Vector3(x, y, elevationData[coord] * zScale);
             });
 
             const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
@@ -1140,13 +1110,12 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
 
             // Determine the group ID from the key
             const groupId = feature.properties.key.split('_')[0];
-            console.log(`"global decay: ${globalDecayRate}"`)
             if (!fmContourGroups[groupId]) {
                 fmContourGroups[groupId] = {
                     meshes: [],
                     opacity: 1.0, // Initial opacity
                     isDecaying: false, // No decay initially
-                    decayRate: globalDecayRate
+                    decayRate: 0.02 // Decay rate when applicable
                 };
             }
             fmContourGroups[groupId].meshes.push(lineLoop);
@@ -1162,11 +1131,11 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
       try {
         // Define the base size and height for the pyramids for matching features
         const baseSizeMatching = 0.004; // Size of one side of the pyramid's base for matching features
-        const pyramidHeightMatching = 0.025; // Height of the pyramid from the base to the tip for matching features
+        const pyramidHeightMatching = 0.015; // Height of the pyramid from the base to the tip for matching features
   
         // Define smaller size and height for non-matching features
         const baseSizeNonMatching = baseSizeMatching * 0.5; // Smaller base size for non-matching features
-        const pyramidHeightNonMatching = pyramidHeightMatching * 0.25; // Shorter pyramid for non-matching features
+        const pyramidHeightNonMatching = pyramidHeightMatching * 0.5; // Shorter pyramid for non-matching features
   
         // Clear previously displayed FM towers
         while (fmTransmitterPoints.children.length > 0) {
@@ -1704,7 +1673,7 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
       'src/assets/data/colloquium_ii_data/cellServiceCentroids_2000m_20231210.geojson',
       'src/assets/data/fcc/fm/processed/fm_freq_dict.json',
       'src/assets/data/fcc/fm/processed/FM_transmitter_sites.geojson',
-      'src/assets/data/fcc/fm/processed/FM_service_contour_downsample15_15step_processed_20240320.geojson'
+      'src/assets/data/fcc/fm/processed/FM_service_contour_downsample8_15step_processed_20240319.geojson'
     ];
 
     let criticalDatasetsLoaded = 0;
@@ -1756,7 +1725,7 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
         addCellTowerPts(data);
         break;
 
-      case 'src/assets/data/fcc/fm/processed/FM_service_contour_downsample15_15step_processed_20240320.geojson':
+      case 'src/assets/data/fcc/fm/processed/FM_service_contour_downsample8_15step_processed_20240319.geojson':
         fmContoursGeojsonData = data;
         addFMpropagation3D(data);
         break;
