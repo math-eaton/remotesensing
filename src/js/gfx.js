@@ -619,8 +619,8 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
   // GEOGRAPHIC DATA VIS /////////////////////////////
 
   // Define a scaling factor for the Z values (elevation)
-  // const zScale = 0.00025; // Change this value to scale the elevation up or down
-  const zScale = 0.0005; // Change this value to scale the elevation up or down
+  const zScale = 0.00025; // Change this value to scale the elevation up or down
+  // const zScale = 0.0005; // Change this value to scale the elevation up or down
 
   // Function to get color based on elevation
   function getColorForElevation(elevation, minElevation, maxElevation) {
@@ -706,9 +706,9 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
         const color = getColorForElevation(contour, minElevation, maxElevation);
   
         // Calculate logarithmic opacity scaling
-        let minOpacity = 0.15;
-        let maxOpacity = 0.55;
-        let scaleExponent = 0.5; // Adjust this to control the rate of change
+        let minOpacity = 0.2;
+        let maxOpacity = 0.8;
+        let scaleExponent = 0.75; // Adjust this to control the rate of change
 
         // Normalize contour value between 0 and 1 based on elevation range
         const normalizedElevation = (contour - minElevation) / (maxElevation - minElevation);
@@ -1074,7 +1074,7 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
       });
 
       // Determine the new range for dynamic opacity
-      const opacityReductionThreshold = 5; // Start reducing opacity from this index
+      const opacityReductionThreshold = 1; // Start reducing opacity from this index
       const minIndexForOpacity = Math.min(...indices);
       const maxOpacity = 1.00;
       const minOpacity = 0.05;
