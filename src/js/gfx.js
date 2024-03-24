@@ -705,8 +705,8 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
         const color = getColorForElevation(contour, minElevation, maxElevation);
   
         // Calculate logarithmic opacity scaling
-        let minOpacity = 0.01;
-        let maxOpacity = 0.4;
+        let minOpacity = 0.15;
+        let maxOpacity = 0.6;
         let scaleExponent = 0.5; // Adjust this to control the rate of change
 
         // Normalize contour value between 0 and 1 based on elevation range
@@ -1073,7 +1073,7 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
         });
         const maxIndex = Math.max(...indices);
         const maxOpacity = 1.00;
-        const minOpacity = 0.25;
+        const minOpacity = 0.1;
         const opacityRange = maxOpacity - minOpacity;
 
         geojson.features.forEach((feature, idx) => {
@@ -1745,7 +1745,7 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
 
       case 'src/assets/data/colloquium_ii_data/study_area_admin0clip.geojson':
         boundingBoxGeojsonData = data;
-        visualizeBoundingBoxGeoJSON(data);
+        // visualizeBoundingBoxGeoJSON(data);
         break;
 
       case 'src/assets/data/colloquium_ii_data/NYS_cellTower_viewshed_20231130.jpg':
