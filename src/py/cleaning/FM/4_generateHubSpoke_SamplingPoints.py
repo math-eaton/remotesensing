@@ -99,9 +99,9 @@ def generate_spokes_with_sampling(input_geojson, output_geojson, transmitter_out
             # print(f"processing vertex {i}...")
 
             # Outward sampling modification: Calculate additional buffers based on the vertex to transmitter distance
-            outward_distance = vertex_point.distance(transmitter_point) * 0.1
+            # outward_distance = vertex_point.distance(transmitter_point) * 0.1
             # print(outward_distance)
-            num_outward_samples = int(outward_distance // (line.length / sampling_resolution))
+            # num_outward_samples = int(outward_distance // (line.length / sampling_resolution))
             
             vertex_elevation = add_elevation(vertex_point, raster, band_array) if raster else None
             output['features'].append({
@@ -161,6 +161,6 @@ def generate_spokes_with_sampling(input_geojson, output_geojson, transmitter_out
 input_geojson = 'src/assets/data/fcc/fm/processed/FM_service_contour_downsample08_FMinfoJoin_polygon_20240324.geojson'
 output_geojson = 'src/assets/data/fcc/fm/processed/FM_service_contour_downsample08_15step_20240324.geojson'
 transmitter_output_geojson = 'src/assets/data/fcc/fm/processed/FM_transmitter_sites.geojson'
-generate_spokes_with_sampling(input_geojson, output_geojson, transmitter_output_geojson, dem_path, sampling_resolution=3)
+generate_spokes_with_sampling(input_geojson, output_geojson, transmitter_output_geojson, dem_path, sampling_resolution=7)
 
 print("done.")

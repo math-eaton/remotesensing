@@ -619,7 +619,8 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
   // GEOGRAPHIC DATA VIS /////////////////////////////
 
   // Define a scaling factor for the Z values (elevation)
-  const zScale = 0.00025; // Change this value to scale the elevation up or down
+  // const zScale = 0.00025; // Change this value to scale the elevation up or down
+  const zScale = 0.0005; // Change this value to scale the elevation up or down
 
   // Function to get color based on elevation
   function getColorForElevation(elevation, minElevation, maxElevation) {
@@ -706,7 +707,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
   
         // Calculate logarithmic opacity scaling
         let minOpacity = 0.15;
-        let maxOpacity = 0.6;
+        let maxOpacity = 0.55;
         let scaleExponent = 0.5; // Adjust this to control the rate of change
 
         // Normalize contour value between 0 and 1 based on elevation range
@@ -1066,20 +1067,33 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
             }
         });
 
-        // Extract indices to calculate opacity
+        // Extract all indices
         const indices = geojson.features.map(feature => {
-            const keyParts = feature.properties.key.split('_');
-            return parseInt(keyParts[keyParts.length - 1], 10); 
-        });
-        const maxIndex = Math.max(...indices);
-        const maxOpacity = 1.00;
-        const minOpacity = 0.1;
-        const opacityRange = maxOpacity - minOpacity;
+          const keyParts = feature.properties.key.split('_');
+          return parseInt(keyParts[keyParts.length - 1], 10); 
+      });
+
+      // Determine the new range for dynamic opacity
+      const opacityReductionThreshold = 5; // Start reducing opacity from this index
+      const minIndexForOpacity = Math.min(...indices);
+      const maxOpacity = 1.00;
+      const minOpacity = 0.05;
+
+      // Separate indices into negative and non-negative
+        const negativeIndices = geojson.features.map(feature => {
+        const keyParts = feature.properties.key.split('_');
+        const index = parseInt(keyParts[keyParts.length - 1], 10); 
+        return index < 0 ? index : null; // Only consider negative indices
+        }).filter(index => index !== null);
+
+        const maxNegativeIndex = Math.max(...negativeIndices); // Closer to 0
+        const minNegativeIndex = Math.min(...negativeIndices); // Further from 0
+        const opacityRange = maxOpacity - minOpacity; // Defined range for negatives
 
         geojson.features.forEach((feature, idx) => {
             if (idx % stride !== 0) return;
             const channel = parseInt(feature.properties.channel, 10);
-            if (channel !== channelFilter) return; // Only proceed if the channel matches
+            if (channel !== channelFilter) return;
 
             const elevationData = feature.properties.elevation_data;
             if (!elevationData || elevationData.length !== feature.geometry.coordinates[0].length) {
@@ -1089,7 +1103,13 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
 
             // Calculate feature opacity based on its index
             let featureIndex = parseInt(feature.properties.key.split('_').pop(), 10);
-            let opacity = minOpacity + (opacityRange * (featureIndex / maxIndex));
+            let opacity = maxOpacity;
+
+            // Apply dynamic opacity for indices < N through the minimum negative index
+            if (featureIndex < opacityReductionThreshold) {
+              opacity = minOpacity + (opacityRange * (featureIndex - minIndexForOpacity) / (opacityReductionThreshold - 1 - minIndexForOpacity));
+              console.log(featureIndex)
+            }
 
             const material = new THREE.LineDashedMaterial({
                 color: colorScheme.polygonColor,
@@ -1101,7 +1121,8 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
 
             const vertices = feature.geometry.coordinates[0].map(coord => {
                 const [x, y] = toStatePlane(coord[0], coord[1]);
-                const z = elevationData[featureIndex] * zScale
+                // const z = elevationData[featureIndex] * zScale
+                const z = elevationData[Math.abs(featureIndex)] * zScale;
                 return new THREE.Vector3(x, y, z);
             });
 
@@ -1674,7 +1695,7 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
       'src/assets/data/colloquium_ii_data/cellServiceCentroids_2000m_20231210.geojson',
       'src/assets/data/fcc/fm/processed/fm_freq_dict.json',
       'src/assets/data/fcc/fm/processed/FM_transmitter_sites.geojson',
-      'src/assets/data/fcc/fm/processed/FM_service_contour_downsample8_15step_processed_20240319.geojson'
+      'src/assets/data/fcc/fm/processed/FM_service_contour_downsample08_10step_processed_20240324.geojson'
     ];
 
     let criticalDatasetsLoaded = 0;
@@ -1726,7 +1747,7 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
         addCellTowerPts(data);
         break;
 
-      case 'src/assets/data/fcc/fm/processed/FM_service_contour_downsample8_15step_processed_20240319.geojson':
+      case 'src/assets/data/fcc/fm/processed/FM_service_contour_downsample08_10step_processed_20240324.geojson':
         fmContoursGeojsonData = data;
         addFMpropagation3D(data);
         break;
