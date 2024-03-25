@@ -26,6 +26,13 @@ export function gfx() {
   let analysisArea = new THREE.Group();
   cellServiceMesh.visible = false; // Set the mesh to be invisible initially
 
+  // downsample framerate for performance
+  let clock = new THREE.Clock();
+  let delta = 0;
+  // N fps
+  let interval = 1 / 24;
+
+
   let sliderValue = 1;  //  default value
   const sliderLength = 100;  // Assuming 10 is the maximum value of the slider
 
@@ -110,7 +117,7 @@ export function gfx() {
       precision: "lowp",
       powerPreference: "high-performance"
    });
-   
+
     renderer.setSize(window.innerWidth, window.innerHeight, false);
     renderer.setPixelRatio(1);
 
@@ -374,6 +381,8 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
     requestAnimationFrame(animate);
     // checkIntersection(); // Check for mouse-polygon intersection
     controls.update();
+
+
     // Rotate the camera if isCameraRotating is true
     // Check if camera and controls are initialized
     if (camera && controls) {
@@ -411,7 +420,14 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
 
     // console.log(`Camera X: ${camera.position.x}, Camera Y: ${camera.position.y}, Camera Z: ${camera.position.z}`);
 
-    renderer.render(scene, camera);
+    delta += clock.getDelta();
+
+    if (delta  > interval) {
+      // The draw or time dependent code are here
+      renderer.render(scene, camera);
+
+      delta = delta % interval;
+    }
   }
 
   // Function to initialize the scene and other components
@@ -532,7 +548,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
           Object.values(fmContourGroups).forEach(group => {
               // Update all line loops within the group
               group.meshes.forEach(mesh => {
-                  if (mesh.material instanceof THREE.LineDashedMaterial) {
+                  if (mesh.material instanceof THREE.LineBasicMaterial) {
                       mesh.material.dashSize = selectedZoomLevel.dashSize;
                       mesh.material.gapSize = selectedZoomLevel.gapSize;
                       mesh.material.needsUpdate = true;
@@ -689,7 +705,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
   let globalMinElevation = Infinity;
   let meanElevation = Infinity + 1;
 
-  function addElevContourLines(geojson) {
+  function addElevContourLines(geojson, contourInterval = 50) { // Only process contours at specified intervals
     return new Promise((resolve, reject) => {
       if (!geojson || !geojson.features) {
         reject('Invalid GeoJSON data');
@@ -707,12 +723,18 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
   
       geojson.features.forEach((feature, index) => {
         const contour = feature.properties.contour;
-        const coordinates = feature.geometry.coordinates; // Array of [lon, lat] pairs
+  
+        // Skip contours not at the specified interval
+        if (contour % contourInterval !== 0) {
+          return;
+        }
+  
+          const coordinates = feature.geometry.coordinates; // Array of [lon, lat] pairs
         const color = getColorForElevation(contour, minElevation, maxElevation);
   
         // Calculate logarithmic opacity scaling
-        let minOpacity = 0.4;
-        let maxOpacity = .95;
+        let minOpacity = 0.333;
+        let maxOpacity = .666;
         let scaleExponent = 0.75; // Adjust this to control the rate of change
 
         // Normalize contour value between 0 and 1 based on elevation range
@@ -737,7 +759,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
         });
 
 
-        // let material = new THREE.LineDashedMaterial({ 
+        // let material = new THREE.LineBasicMaterial({ 
         //   color: color,
         //   transparent: true,
         //   opacity: opacity,
@@ -860,7 +882,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
           const wireframeMaterial = new THREE.MeshBasicMaterial({
             color: colorScheme.cellColor, // Use your existing color scheme
             transparent: true,
-            alphaTest: true,
+            alphaHash: true,
             opacity: 0.6,
             wireframe: true,
             side: THREE.FrontSide,
@@ -1080,10 +1102,10 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
       });
 
       // Determine the new range for dynamic opacity
-      const opacityReductionThreshold = 1; // Start reducing opacity from this index
+      const opacityReductionThreshold = 0; // Start reducing opacity from this index
       const minIndexForOpacity = Math.min(...indices);
       const maxOpacity = 1.00;
-      const minOpacity = 0.05;
+      const minOpacity = 0.025;
 
       // Separate indices into negative and non-negative
         const negativeIndices = geojson.features.map(feature => {
@@ -1102,10 +1124,10 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
             if (channel !== channelFilter) return;
 
             const elevationData = feature.properties.elevation_data;
-            if (!elevationData || elevationData.length !== feature.geometry.coordinates[0].length) {
-                console.error(`Elevation data length does not match coordinates length for feature at index ${idx}`);
-                return; // Skip this feature
-            }
+            // if (!elevationData || elevationData.length !== feature.geometry.coordinates[0].length) {
+            //     console.error(`Elevation data length does not match coordinates length for feature at index ${idx}`);
+            //     return; // Skip this feature
+            // }
 
             // Calculate feature opacity based on its index
             let featureIndex = parseInt(feature.properties.key.split('_').pop(), 10);
@@ -1116,10 +1138,10 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
               opacity = minOpacity + (opacityRange * (featureIndex - minIndexForOpacity) / (opacityReductionThreshold - 1 - minIndexForOpacity));
             }
 
-            const material = new THREE.LineDashedMaterial({
+            const material = new THREE.LineBasicMaterial({
                 color: colorScheme.polygonColor,
                 transparent: true,
-                alphaTest: true,
+                alphaHash: true,
                 opacity: opacity,
                 dashSize: zoomLevels[1].dashSize,
                 gapSize: zoomLevels[1].gapSize,          
@@ -1175,7 +1197,7 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
         const matchingColor = colorScheme.matchingPyramidColor; // Color for features that match the channel filter
         const nonMatchingColor = colorScheme.nonMatchingPyramidColor; // Color for features that do not match
         const matchingOpacity = 0.8; // Higher opacity for matching features
-        const nonMatchingOpacity = 0.1; // Lower opacity for non-matching features
+        const nonMatchingOpacity = 0.4; // Lower opacity for non-matching features
   
         // Iterate over each feature in the GeoJSON
         geojson.features.forEach((feature) => {
@@ -1207,8 +1229,8 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
             let pyramidMaterialFM = new THREE.MeshBasicMaterial({
               color: featureColor,
               wireframe: true,
-              transparent: true,
-              alphaTest: true,
+              // transparent: true,
+              alphaHash: true,
               opacity: featureOpacity,
             });
   
@@ -1606,7 +1628,7 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
       const glowMaterial = new THREE.MeshBasicMaterial({
         color: glowColor,
         transparent: true,
-        alphaTest: true,
+        alphaHash: true,
         opacity: 0.5,
       });
       const glowTube = new THREE.Mesh(glowGeometry, glowMaterial);
@@ -1696,14 +1718,14 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
   async function loadGeoJSONData(onCriticalDataLoaded) {
     // console.log("loading...")
     const urls = [
-      'src/assets/data/public/stanford_contours_simplified1000m_20231124.geojson',
+      'src/assets/data/public/simplified/stanford_contours_simplified1000m_20231124_simplified.geojson',
       'src/assets/data/public/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson',
       // 'src/assets/data/public/FmTowers_FeaturesToJSON_AOI_20231204.geojson',
       'src/assets/data/public/study_area_admin0clip.geojson',
       'src/assets/data/public/cellServiceCentroids_2000m_20231210.geojson',
       'src/assets/data/public/fm_freq_dict.json',
       'src/assets/data/public/FM_transmitter_sites.geojson',
-      'src/assets/data/public/FM_service_contour_downsample08_10step_processed_20240324.geojson'
+      'src/assets/data/internal/fcc/fm/processed/FM_service_contour_downsample12_5step_processed_FMinfoJoin_polygon_20240324.geojson'
     ];
 
     let criticalDatasetsLoaded = 0;
@@ -1744,7 +1766,7 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
 
   function handleGeoJSONData(url, data) {
     switch (url) {
-      case 'src/assets/data/public/stanford_contours_simplified1000m_20231124.geojson':
+      case 'src/assets/data/public/simplified/stanford_contours_simplified1000m_20231124_simplified.geojson':
         contourGeojsonData = data;
         const meanElevation = calculateMeanContourElevation(data);
         addElevContourLines(data);
@@ -1755,7 +1777,7 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
         addCellTowerPts(data);
         break;
 
-      case 'src/assets/data/public/FM_service_contour_downsample08_10step_processed_20240324.geojson':
+      case 'src/assets/data/internal/fcc/fm/processed/FM_service_contour_downsample12_5step_processed_FMinfoJoin_polygon_20240324.geojson':
         fmContoursGeojsonData = data;
         addFMpropagation3D(data);
         break;

@@ -4,7 +4,7 @@ import rasterio
 from tqdm import tqdm
 
 # Path to the Digital Elevation Model (DEM) file
-dem_path = 'src/assets/data/usgs/usgs150m_wgs84/usgs150mWGS84.tif' 
+dem_path = 'src/assets/data/internal/usgs/usgs150m_wgs84/usgs150mWGS84.tif' 
 
 geojson.geometry.DEFAULT_PRECISION = 3
 
@@ -134,7 +134,7 @@ def generate_spokes_with_sampling(input_geojson, output_geojson, transmitter_out
                 })
 
             # Outward sampling
-            sampled_points_outward = sample_points_on_line(line, sampling_resolution, outward=True)
+            sampled_points_outward = sample_points_on_line(line, sampling_resolution * 2, outward=True)
             for i, point in enumerate(sampled_points_outward, start=1):
                 elevation = add_elevation(point, raster, band_array) if raster else None
                 output['features'].append({
@@ -158,9 +158,9 @@ def generate_spokes_with_sampling(input_geojson, output_geojson, transmitter_out
 
 
 # init
-input_geojson = 'src/assets/data/fcc/fm/processed/FM_service_contour_downsample08_FMinfoJoin_polygon_20240324.geojson'
-output_geojson = 'src/assets/data/fcc/fm/processed/FM_service_contour_downsample08_15step_20240324.geojson'
-transmitter_output_geojson = 'src/assets/data/fcc/fm/processed/FM_transmitter_sites.geojson'
-generate_spokes_with_sampling(input_geojson, output_geojson, transmitter_output_geojson, dem_path, sampling_resolution=7)
+input_geojson = 'src/assets/data/internal/temp/simplified/FM_service_contour_downsample12_FMinfoJoin_polygon_20240324_simplified.geojson'
+output_geojson = 'src/assets/data/internal/temp/FM_service_contour_downsample12_5step_FMinfoJoin_polygon_20240324.geojson'
+transmitter_output_geojson = 'src/assets/data/internal/fcc/fm/processed/FM_transmitter_sites.geojson'
+generate_spokes_with_sampling(input_geojson, output_geojson, transmitter_output_geojson, dem_path, sampling_resolution=4)
 
 print("done.")
