@@ -15,6 +15,7 @@
 
 // import "src/css/style.css";
 import { gfx } from './gfx.js';
+// import { serialReader } from './serial_reader.js';
 
 window.onload = () => {
   setTimeout(() => {}, 500);
@@ -22,6 +23,7 @@ window.onload = () => {
 
 // init external js
 gfx();
+// serialReader();
 
 document.getElementById('fullscreenButton');
 const threeContainer = document.getElementById('gfx');

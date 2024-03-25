@@ -225,7 +225,7 @@
                 ]
             },
             "defines": [
-                "PLATFORMIO=60113",
+                "PLATFORMIO=60114",
                 "__MK20DX256__",
                 "ARDUINO_TEENSY31",
                 "USB_SERIAL",

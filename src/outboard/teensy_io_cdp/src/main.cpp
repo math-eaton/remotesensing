@@ -7,7 +7,7 @@ const int pin2 = 1;
 
 // Encoders
 Encoder knobLeft(14, 15); 
-Encoder knobRight(2, 3);
+Encoder knobRight(16, 17);
 
 // Encoder push-button pins
 const int buttonPinLeft = 11; 
@@ -20,7 +20,7 @@ long positionRight = -999;
 // Debounce variables for buttons
 unsigned long lastDebounceTimeLeft = 0;
 unsigned long lastDebounceTimeRight = 0;
-const unsigned long debounceDelay = 50; // 50 ms debounce time
+const unsigned long debounceDelay = 50; // 50 ms debounce tim~e
 bool lastButtonStateLeft = HIGH;
 bool lastButtonStateRight = HIGH;
 bool buttonPressedLeft = false;
@@ -41,71 +41,61 @@ void setup() {
 }
 
 void loop() {
-  // Read and handle the switch position
+  // Read the state of the switch
   bool statePin1 = digitalRead(pin1);
   bool statePin2 = digitalRead(pin2);
-
+  int switchState = 0; // Default to center position
   if (!statePin1 && statePin2) {
-    Serial.println("Position 1");
+    switchState = 1; // Position 1
   } else if (statePin1 && !statePin2) {
-    Serial.println("Position 2");
-  } else if (statePin1 && statePin2) {
-    Serial.println("Center position");
-  } else {
-    Serial.println("Unexpected position");
+    switchState = 2; // Position 2
   }
 
   // Read and handle encoder positions
-  long newLeft, newRight;
-  newLeft = knobLeft.read();
-  newRight = knobRight.read();
-  if (newLeft != positionLeft || newRight != positionRight) {
-    Serial.print("Left = ");
-    Serial.print(newLeft);
-    Serial.print(", Right = ");
-    Serial.print(newRight);
-    Serial.println();
-    positionLeft = newLeft;
-    positionRight = newRight;
-  }
+  long newLeft = knobLeft.read();
+  long newRight = knobRight.read();
+  long deltaLeft = newLeft - positionLeft;
+  long deltaRight = newRight - positionRight;
+  positionLeft = newLeft;
+  positionRight = newRight;
 
-  // Reset encoders if a character is sent from the serial monitor
-  if (Serial.available()) {
-    Serial.read();
-    Serial.println("Reset both knobs to zero");
-    knobLeft.write(0);
-    knobRight.write(0);
-  }
-
-  // Button debounce logic
+  // Debounce logic for left button
   bool readingLeft = !digitalRead(buttonPinLeft);
-  bool readingRight = !digitalRead(buttonPinRight);
-
   if (readingLeft != lastButtonStateLeft) {
     lastDebounceTimeLeft = millis();
   }
+  if ((millis() - lastDebounceTimeLeft) > debounceDelay && readingLeft != buttonPressedLeft) {
+    buttonPressedLeft = readingLeft;
+    lastButtonStateLeft = readingLeft;
+  }
+
+  // Debounce logic for right button
+  bool readingRight = !digitalRead(buttonPinRight);
   if (readingRight != lastButtonStateRight) {
     lastDebounceTimeRight = millis();
   }
-
-  if ((millis() - lastDebounceTimeLeft) > debounceDelay) {
-    if (readingLeft != buttonPressedLeft) {
-      buttonPressedLeft = readingLeft;
-      if (buttonPressedLeft) {
-        Serial.println("Left button pressed!");
-      }
-    }
+  if ((millis() - lastDebounceTimeRight) > debounceDelay && readingRight != buttonPressedRight) {
+    buttonPressedRight = readingRight;
+    lastButtonStateRight = readingRight;
   }
 
-  if ((millis() - lastDebounceTimeRight) > debounceDelay) {
-    if (readingRight != buttonPressedRight) {
-      buttonPressedRight = readingRight;
-      if (buttonPressedRight) {
-        Serial.println("Right button pressed!");
-      }
-    }
+  // Prepare and send the serial message
+  Serial.print(switchState); Serial.print(",");
+  Serial.print(deltaLeft); Serial.print(",");
+  Serial.print(deltaRight); Serial.print(",");
+  Serial.print(buttonPressedLeft ? "1" : "0"); Serial.print(",");
+  Serial.println(buttonPressedRight ? "1" : "0");
+
+  // Reset button states after sending to avoid repeating messages
+  if (buttonPressedLeft) {
+    buttonPressedLeft = false;
+    lastDebounceTimeLeft = millis(); // Reset debounce timer
+  }
+  if (buttonPressedRight) {
+    buttonPressedRight = false;
+    lastDebounceTimeRight = millis(); // Reset debounce timer
   }
 
-  lastButtonStateLeft = readingLeft;
-  lastButtonStateRight = readingRight;
+  // Throttle the loop to reduce data rate (adjust as needed)
+  delay(100);
 }
