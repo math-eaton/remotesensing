@@ -7,6 +7,7 @@ from tqdm import tqdm
 dem_path = 'src/assets/data/internal/usgs/usgs150m_wgs84/usgs150mWGS84.tif' 
 
 geojson.geometry.DEFAULT_PRECISION = 3
+outwardModifier = 2
 
 print("sampling points ...")
 
@@ -18,7 +19,7 @@ def sample_points_on_line(line, num_points, outward=False):
     points = []
     if num_points > 0:
         # The distance between each point
-        point_spacing = line.length / num_points
+        point_spacing = (line.length / num_points)
         
         # Calculate the vector of the line
         line_start = Point(line.coords[0])
@@ -134,7 +135,7 @@ def generate_spokes_with_sampling(input_geojson, output_geojson, transmitter_out
                 })
 
             # Outward sampling
-            sampled_points_outward = sample_points_on_line(line, sampling_resolution * 2, outward=True)
+            sampled_points_outward = sample_points_on_line(line, 3, outward=True)
             for i, point in enumerate(sampled_points_outward, start=1):
                 elevation = add_elevation(point, raster, band_array) if raster else None
                 output['features'].append({
@@ -161,6 +162,6 @@ def generate_spokes_with_sampling(input_geojson, output_geojson, transmitter_out
 input_geojson = 'src/assets/data/internal/temp/simplified/FM_service_contour_downsample12_FMinfoJoin_polygon_20240324_simplified.geojson'
 output_geojson = 'src/assets/data/internal/temp/FM_service_contour_downsample12_5step_FMinfoJoin_polygon_20240324.geojson'
 transmitter_output_geojson = 'src/assets/data/internal/fcc/fm/processed/FM_transmitter_sites.geojson'
-generate_spokes_with_sampling(input_geojson, output_geojson, transmitter_output_geojson, dem_path, sampling_resolution=4)
+generate_spokes_with_sampling(input_geojson, output_geojson, transmitter_output_geojson, dem_path, sampling_resolution=6)
 
 print("done.")

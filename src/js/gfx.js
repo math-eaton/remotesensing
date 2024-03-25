@@ -327,7 +327,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
     renderer.setSize(width, height);
 
     // update this value to alter pixel ratio scaled with the screen
-    pixelationFactor = 0.4;
+    pixelationFactor = 0.3;
 
     // Calculate new dimensions based on the slider value
     var newWidth = Math.max(1, window.innerWidth * pixelationFactor);
@@ -412,7 +412,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
     // Log camera distance from xyz
     // logCameraDistance();
 
-    updateDashSizeForZoom(); 
+    // updateDashSizeForZoom(); 
     updatefmContourGroups();
 
     adjustMeshVisibilityBasedOnCameraDistance();
@@ -705,7 +705,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
   let globalMinElevation = Infinity;
   let meanElevation = Infinity + 1;
 
-  function addElevContourLines(geojson, contourInterval = 50) { // Only process contours at specified intervals
+  function addElevContourLines(geojson, contourInterval = 10) { // Only process contours at specified intervals
     return new Promise((resolve, reject) => {
       if (!geojson || !geojson.features) {
         reject('Invalid GeoJSON data');
@@ -1091,7 +1091,7 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
         Object.keys(fmContourGroups).forEach(groupId => {
             if (groupId !== channelFilter.toString()) {
                 fmContourGroups[groupId].isDecaying = true;
-                fmContourGroups[groupId].decayRate = 0.15; // Adjust decay rate as needed
+                fmContourGroups[groupId].decayRate = 0.2; // Adjust decay rate as needed
             }
         });
 
@@ -1102,10 +1102,10 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
       });
 
       // Determine the new range for dynamic opacity
-      const opacityReductionThreshold = 0; // Start reducing opacity from this index
+      const opacityReductionThreshold = 1; // Start reducing opacity from this index
       const minIndexForOpacity = Math.min(...indices);
-      const maxOpacity = 1.00;
-      const minOpacity = 0.025;
+      const maxOpacity = .9;
+      const minOpacity = 0.1;
 
       // Separate indices into negative and non-negative
         const negativeIndices = geojson.features.map(feature => {
@@ -1165,7 +1165,7 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
                     meshes: [],
                     opacity: 1.0, // Initial opacity
                     isDecaying: false, // No decay initially
-                    decayRate: 0.02 // Decay rate when applicable
+                    decayRate: 0.2 // Decay rate when applicable
                 };
             }
             fmContourGroups[groupId].meshes.push(lineLoop);
