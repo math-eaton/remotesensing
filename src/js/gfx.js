@@ -1074,12 +1074,18 @@ function updatefmContourGroups() {
             group.opacity = Math.max(group.opacity, 0); // Ensure opacity doesn't drop below 0
             group.meshes.forEach(mesh => {
                 mesh.material.opacity = group.opacity;
+                mesh.visible = group.opacity > 0; // Only visible if opacity is above 0
             });
 
             if (group.opacity <= 0) {
                 group.meshes.forEach(mesh => scene.remove(mesh));
                 delete fmContourGroups[groupId]; // Fully remove the group once it's invisible
             }
+          } else {
+            group.meshes.forEach(mesh => {
+                mesh.visible = true; // Make sure the mesh is visible if not decaying
+                mesh.material.opacity = 1; // Reset opacity for visibility
+            });
         }
     });
 }
@@ -1143,8 +1149,8 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
                 transparent: true,
                 alphaHash: true,
                 opacity: opacity,
-                dashSize: zoomLevels[1].dashSize,
-                gapSize: zoomLevels[1].gapSize,          
+                // dashSize: zoomLevels[1].dashSize,
+                // gapSize: zoomLevels[1].gapSize,          
             });
 
             const vertices = feature.geometry.coordinates[0].map(coord => {
@@ -1176,84 +1182,96 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
     });
 }
 
-  function addFMTowerPts(geojson, channelFilter) {
-    return new Promise((resolve, reject) => {
-      try {
-        // Define the base size and height for the pyramids for matching features
-        const baseSizeMatching = 0.004; // Size of one side of the pyramid's base for matching features
-        const pyramidHeightMatching = 0.015; // Height of the pyramid from the base to the tip for matching features
-  
-        // Define smaller size and height for non-matching features
-        const baseSizeNonMatching = baseSizeMatching * 0.5; // Smaller base size for non-matching features
-        const pyramidHeightNonMatching = pyramidHeightMatching * 0.5; // Shorter pyramid for non-matching features
-  
-        // Clear previously displayed FM towers
-        while (fmTransmitterPoints.children.length > 0) {
-          const child = fmTransmitterPoints.children.pop();
-          fmTransmitterPoints.remove(child);
-        }
-  
-        // Define characteristics for matching and non-matching features
-        const matchingColor = colorScheme.matchingPyramidColor; // Color for features that match the channel filter
-        const nonMatchingColor = colorScheme.nonMatchingPyramidColor; // Color for features that do not match
-        const matchingOpacity = 0.8; // Higher opacity for matching features
-        const nonMatchingOpacity = 0.4; // Lower opacity for non-matching features
-  
-        // Iterate over each feature in the GeoJSON
-        geojson.features.forEach((feature) => {
-          const [lon, lat] = feature.geometry.coordinates;
-          const elevation = feature.properties.elevation;
-  
-          try {
-            const [x, y] = toStatePlane(lon, lat);
-            const z = elevation * zScale; // Apply the scaling factor to the elevation
-  
-            // Check for valid coordinates before proceeding
-            if (x === null || y === null || isNaN(z)) {
-              console.error('Invalid point coordinates:', x, y, z);
-              return; // Skip this iteration
-            }
-  
-            // Determine characteristics based on channel filter match
-            const isMatching = parseInt(feature.properties.channel, 10) === channelFilter;
-            const featureColor = isMatching ? matchingColor : nonMatchingColor;
-            const featureOpacity = isMatching ? matchingOpacity : nonMatchingOpacity;
-            const baseSize = isMatching ? baseSizeMatching : baseSizeNonMatching;
-            const pyramidHeight = isMatching ? pyramidHeightMatching : pyramidHeightNonMatching;
-  
-            // Create a pyramid geometry with determined size
-            const pyramidGeometry = new THREE.ConeGeometry(baseSize, pyramidHeight, 4);
-            pyramidGeometry.rotateX(Math.PI / 2); // Rotate the pyramid to point up along the Z-axis
-  
-            // Material for the pyramids, using the determined characteristics
-            let pyramidMaterialFM = new THREE.MeshBasicMaterial({
-              color: featureColor,
-              wireframe: true,
-              // transparent: true,
-              alphaHash: true,
-              opacity: featureOpacity,
-            });
-  
-            const pyramid = new THREE.Mesh(pyramidGeometry, pyramidMaterialFM);
-            pyramid.position.set(x, y, z);
-            fmTransmitterPoints.add(pyramid);
-          } catch (error) {
-            console.error(`Error projecting point: ${error.message}`);
-          }
-        });
-  
-        // Add the FM transmitter points to the scene
-        scene.add(fmTransmitterPoints);
-        fmTransmitterPoints.visible = true;
-  
-        resolve(); // Resolve the promise when done
-      } catch (error) {
-        console.error('Error in addFMTowerPts:', error);
-        reject(`Error in addFMTowerPts: ${error.message}`);
+async function addFMTowerPts(geojson, channelFilter) {
+  try {
+    // Define the base size, height, and characteristics for the pyramids
+    const baseSizeMatching = 0.004;
+    const pyramidHeightMatching = 0.015;
+    const baseSizeNonMatching = baseSizeMatching * 0.5;
+    const pyramidHeightNonMatching = pyramidHeightMatching * 0.5;
+
+    // Define colors and opacities
+    const matchingColor = new THREE.Color(colorScheme.matchingPyramidColor);
+    const nonMatchingColor = new THREE.Color(colorScheme.nonMatchingPyramidColor);
+    const matchingOpacity = 0.8;
+    const nonMatchingOpacity = 0.4;
+
+    // Prepare instanced mesh materials
+    const materialMatching = new THREE.MeshBasicMaterial({ 
+      color: matchingColor, 
+      transparent: true, 
+      opacity: matchingOpacity 
+    });
+    const materialNonMatching = new THREE.MeshBasicMaterial({ 
+      color: nonMatchingColor, 
+      transparent: true, 
+      opacity: nonMatchingOpacity 
+    });
+
+    // Create pyramid geometries
+    const pyramidGeometryMatching = new THREE.ConeGeometry(baseSizeMatching, pyramidHeightMatching, 4);
+    pyramidGeometryMatching.rotateX(Math.PI / 2);
+    const pyramidGeometryNonMatching = new THREE.ConeGeometry(baseSizeNonMatching, pyramidHeightNonMatching, 4);
+    pyramidGeometryNonMatching.rotateX(Math.PI / 2);
+
+    // Estimate total counts for instanced meshes
+    const totalCount = geojson.features.length;
+
+    // Initialize or clear previous instanced meshes
+    if (window.instancedPyramidMatching) fmTransmitterPoints.remove(window.instancedPyramidMatching);
+    if (window.instancedPyramidNonMatching) fmTransmitterPoints.remove(window.instancedPyramidNonMatching);
+
+    window.instancedPyramidMatching = new THREE.InstancedMesh(pyramidGeometryMatching, materialMatching, totalCount);
+    window.instancedPyramidNonMatching = new THREE.InstancedMesh(pyramidGeometryNonMatching, materialNonMatching, totalCount);
+
+    let dummy = new THREE.Object3D();
+
+    geojson.features.forEach((feature, index) => {
+      const [lon, lat] = feature.geometry.coordinates;
+      const elevation = feature.properties.elevation;
+      const [x, y] = toStatePlane(lon, lat);
+      const z = elevation * zScale;
+      
+      if (x === null || y === null || isNaN(z)) return;
+      
+      const isMatching = parseInt(feature.properties.channel, 10) === channelFilter;
+      
+      dummy.position.set(x, y, z);
+      dummy.scale.set(1, 1, 1); // Default scale
+
+      // Use the same index for both matching and non-matching instances
+      dummy.updateMatrix();
+      if (isMatching) {
+        window.instancedPyramidMatching.setMatrixAt(index, dummy.matrix);
+        // Scale non-matching instances to normal size; they remain visible regardless
+        window.instancedPyramidNonMatching.setMatrixAt(index, dummy.matrix);
+      } else {
+        // Hide matching instances by scaling to zero
+        dummy.scale.set(0, 0, 0);
+        dummy.updateMatrix();
+        window.instancedPyramidMatching.setMatrixAt(index, dummy.matrix);
+        // Non-matching instances are not hidden, so we reset their scale to ensure visibility
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        window.instancedPyramidNonMatching.setMatrixAt(index, dummy.matrix);
       }
     });
+
+    // Mark matrices as needing update
+    window.instancedPyramidMatching.instanceMatrix.needsUpdate = true;
+    window.instancedPyramidNonMatching.instanceMatrix.needsUpdate = true;
+
+    // Add the instanced meshes to the fmTransmitterPoints group
+    fmTransmitterPoints.add(window.instancedPyramidMatching);
+    fmTransmitterPoints.add(window.instancedPyramidNonMatching);
+    scene.add(fmTransmitterPoints);
+    fmTransmitterPoints.visible = true;
+  } catch (error) {
+    console.error('Error in addFMTowerPts:', error);
+    throw error; // Rethrow or handle as needed
   }
-      
+}
+
   let channelFrequencies = {};
       
   function initFMsliderAndContours(frequencyData) {
@@ -1274,11 +1292,15 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
       };
 
     // Listener for slider input
+    let debounceTimer;
     slider.addEventListener('input', function(event) {
-        const channelValue = parseInt(event.target.value, 10); // Parse the value once and use it
-        updateDisplays(channelValue);
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            const channelValue = parseInt(event.target.value, 10);
+            updateDisplays(channelValue);
+        }, 20); // delay
     });
-
+    
     // Initial update based on the slider's default value
     const initialChannelValue = parseInt(slider.value, 10);
     updateDisplays(initialChannelValue);
