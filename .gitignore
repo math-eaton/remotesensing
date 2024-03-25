@@ -35,5 +35,4 @@ secret.js
 presentations
 *.code-workspace
 
-**/internal
-**/public
+data
