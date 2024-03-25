@@ -169,7 +169,7 @@ export function gfx() {
     // scene.add(directionalLight);
 
     const fogNear = 2; // The starting distance of the fog (where it begins to appear)
-    const fogFar = 9; // The ending distance of the fog (where it becomes fully opaque)
+    const fogFar = 3.5; // The ending distance of the fog (where it becomes fully opaque)
 
     // Adding fog to the scene
     scene.fog = new THREE.Fog(colorScheme.backgroundColor, fogNear, fogFar);
@@ -705,7 +705,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
   let globalMinElevation = Infinity;
   let meanElevation = Infinity + 1;
 
-  function addElevContourLines(geojson, contourInterval = 10) { // Only process contours at specified intervals
+  function addElevContourLines(geojson, contourInterval = 50) { // Only process contours at specified intervals
     return new Promise((resolve, reject) => {
       if (!geojson || !geojson.features) {
         reject('Invalid GeoJSON data');
@@ -723,6 +723,9 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
   
       geojson.features.forEach((feature, index) => {
         const contour = feature.properties.contour;
+
+        // console.log(`elevation features: ${contour}`)
+
   
         // Skip contours not at the specified interval
         if (contour % contourInterval !== 0) {
@@ -1084,7 +1087,7 @@ function updatefmContourGroups() {
           } else {
             group.meshes.forEach(mesh => {
                 mesh.visible = true; // Make sure the mesh is visible if not decaying
-                mesh.material.opacity = 1; // Reset opacity for visibility
+                // mesh.material.opacity = 1; // Reset opacity for visibility
             });
         }
     });
@@ -1308,13 +1311,13 @@ async function addFMTowerPts(geojson, channelFilter) {
     updateDisplays(initialChannelValue);
 }
   
-function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonData, channelFilter) {
-  if (!contourGeojsonData || !towerGeojsonData) {
+function updateVisualizationWithChannelFilter(fmContoursGeojsonData, towerGeojsonData, channelFilter) {
+  if (!fmContoursGeojsonData || !towerGeojsonData) {
     console.warn("GeoJSON data not available.");
     return;
   }
   
-  addFMpropagation3D(contourGeojsonData, channelFilter)
+  addFMpropagation3D(fmContoursGeojsonData, channelFilter)
     .then(() => console.log("FM contour channel updated"))
     .catch(error => console.error("Failed to update contour channel:", error));
 
@@ -1742,14 +1745,14 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
   async function loadGeoJSONData(onCriticalDataLoaded) {
     // console.log("loading...")
     const urls = [
-      'src/assets/data/stanford_contours_simplified1000m_20231124_simplified.geojson',
+      'src/assets/data/stanford_contour_simplify_1000m_zhou_20240325_simplified.geojson',
       'src/assets/data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson',
       // 'src/assets/data/FmTowers_FeaturesToJSON_AOI_20231204.geojson',
       'src/assets/data/study_area_admin0clip.geojson',
       'src/assets/data/cellServiceCentroids_2000m_20231210.geojson',
       'src/assets/data/fm_freq_dict.json',
       'src/assets/data/FM_transmitter_sites.geojson',
-      'src/assets/data/fcc/fm/processed/FM_service_contour_downsample12_5step_processed_FMinfoJoin_polygon_20240324.geojson'
+      'src/assets/data/FM_service_contour_downsample12_5step_processed_FMinfoJoin_polygon_20240324.geojson'
     ];
 
     let criticalDatasetsLoaded = 0;
@@ -1776,7 +1779,7 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
   function isCriticalDataset(url) {
     // Define logic to determine if a dataset is critical for initial rendering
     // todo: this breaks if the contours aren't required up front but they take longest to load
-    return url.includes('stanford_contours') || url.includes('service');
+    return url.includes('stanford_contour') || url.includes('service');
   }
   
 
@@ -1790,10 +1793,11 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
 
   function handleGeoJSONData(url, data) {
     switch (url) {
-      case 'src/assets/data/stanford_contours_simplified1000m_20231124_simplified.geojson':
+      case 'src/assets/data/stanford_contour_simplify_1000m_zhou_20240325_simplified.geojson':
         contourGeojsonData = data;
         const meanElevation = calculateMeanContourElevation(data);
         addElevContourLines(data);
+        console.log(`elevation features: ${data}`)
         break;
 
       case 'src/assets/data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson':
@@ -1801,7 +1805,7 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
         addCellTowerPts(data);
         break;
 
-      case 'src/assets/data/fcc/fm/processed/FM_service_contour_downsample12_5step_processed_FMinfoJoin_polygon_20240324.geojson':
+      case 'src/assets/data/FM_service_contour_downsample12_5step_processed_FMinfoJoin_polygon_20240324.geojson':
         fmContoursGeojsonData = data;
         addFMpropagation3D(data);
         break;
