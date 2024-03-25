@@ -1718,7 +1718,7 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
   async function loadGeoJSONData(onCriticalDataLoaded) {
     // console.log("loading...")
     const urls = [
-      'src/assets/data/public/simplified/stanford_contours_simplified1000m_20231124_simplified.geojson',
+      'src/assets/data/public/stanford_contours_simplified1000m_20231124_simplified.geojson',
       'src/assets/data/public/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson',
       // 'src/assets/data/public/FmTowers_FeaturesToJSON_AOI_20231204.geojson',
       'src/assets/data/public/study_area_admin0clip.geojson',
@@ -1766,7 +1766,7 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
 
   function handleGeoJSONData(url, data) {
     switch (url) {
-      case 'src/assets/data/public/simplified/stanford_contours_simplified1000m_20231124_simplified.geojson':
+      case 'src/assets/data/public/stanford_contours_simplified1000m_20231124_simplified.geojson':
         contourGeojsonData = data;
         const meanElevation = calculateMeanContourElevation(data);
         addElevContourLines(data);
