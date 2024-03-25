@@ -33,7 +33,7 @@ export function gfx() {
   // Define color scheme variables
   const colorScheme = {
     graticuleColor: '#2f2f2f0b', // Bright green
-    ambientLightColor: '#404040', // Dark gray
+    // ambientLightColor: '#404040', // Dark gray
     directionalLightColor: '#ffffff', // White
     backgroundColor: '#000000', // Black
     polygonColor: '#FF1493', // magenta
@@ -96,6 +96,7 @@ export function gfx() {
 
   function initThreeJS() {
     scene = new THREE.Scene();
+    // scene.overrideMaterial = new THREE.MeshBasicMaterial({ color: "green" });
     camera = new THREE.PerspectiveCamera(
       75,
       window.innerWidth / window.innerHeight,
@@ -104,8 +105,12 @@ export function gfx() {
     );
     camera.up.set(0, 0, 1); // Set Z as up-direction
 
-    renderer = new THREE.WebGLRenderer({ antialias: false });
-
+    renderer = new THREE.WebGLRenderer({ 
+      antialias: false,
+      precision: "lowp",
+      powerPreference: "high-performance"
+   });
+   
     renderer.setSize(window.innerWidth, window.innerHeight, false);
     renderer.setPixelRatio(1);
 
@@ -147,14 +152,14 @@ export function gfx() {
 
     // const distanceToTarget = camera.position.distanceTo(controls.target);
 
-    let ambientLight = new THREE.AmbientLight(colorScheme.ambientLightColor);
-    scene.add(ambientLight);
-    let directionalLight = new THREE.DirectionalLight(
-      colorScheme.directionalLightColor,
-      0.5,
-    );
-    directionalLight.position.set(0, 1, 0);
-    scene.add(directionalLight);
+    // let ambientLight = new THREE.AmbientLight(colorScheme.ambientLightColor);
+    // scene.add(ambientLight);
+    // let directionalLight = new THREE.DirectionalLight(
+    //   colorScheme.directionalLightColor,
+    //   0.5,
+    // );
+    // directionalLight.position.set(0, 1, 0);
+    // scene.add(directionalLight);
 
     const fogNear = 2; // The starting distance of the fog (where it begins to appear)
     const fogFar = 9; // The ending distance of the fog (where it becomes fully opaque)
@@ -315,7 +320,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
     renderer.setSize(width, height);
 
     // update this value to alter pixel ratio scaled with the screen
-    pixelationFactor = 0.5;
+    pixelationFactor = 0.4;
 
     // Calculate new dimensions based on the slider value
     var newWidth = Math.max(1, window.innerWidth * pixelationFactor);
@@ -706,8 +711,8 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
         const color = getColorForElevation(contour, minElevation, maxElevation);
   
         // Calculate logarithmic opacity scaling
-        let minOpacity = 0.2;
-        let maxOpacity = 0.8;
+        let minOpacity = 0.4;
+        let maxOpacity = .95;
         let scaleExponent = 0.75; // Adjust this to control the rate of change
 
         // Normalize contour value between 0 and 1 based on elevation range
@@ -727,7 +732,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
         let material = new THREE.LineBasicMaterial({
           color: color,
           transparent: true,
-          alphaHash: false,
+          alphaHash: true,
           opacity: opacity,
         });
 
@@ -855,6 +860,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
           const wireframeMaterial = new THREE.MeshBasicMaterial({
             color: colorScheme.cellColor, // Use your existing color scheme
             transparent: true,
+            alphaTest: true,
             opacity: 0.6,
             wireframe: true,
             side: THREE.FrontSide,
@@ -1011,7 +1017,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
   //           const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
   
   //           // Create a line loop with the geometry and material
-  //           const lineLoop = new THREE.LineLoop(geometry, material);
+  //           const lineLoop = new THREE.Line(geometry, material);
   //           lineLoop.name = 'polygon-' + i;
   //           scene.add(lineLoop);
   //           propagationPolygons.add(lineLoop);
@@ -1113,6 +1119,7 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
             const material = new THREE.LineDashedMaterial({
                 color: colorScheme.polygonColor,
                 transparent: true,
+                alphaTest: true,
                 opacity: opacity,
                 dashSize: zoomLevels[1].dashSize,
                 gapSize: zoomLevels[1].gapSize,          
@@ -1126,7 +1133,7 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
             });
 
             const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
-            const lineLoop = new THREE.LineLoop(geometry, material);
+            const lineLoop = new THREE.Line(geometry, material);
             lineLoop.computeLineDistances();
 
             // Determine the group ID from the key
@@ -1201,6 +1208,7 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
               color: featureColor,
               wireframe: true,
               transparent: true,
+              alphaTest: true,
               opacity: featureOpacity,
             });
   
@@ -1598,6 +1606,7 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
       const glowMaterial = new THREE.MeshBasicMaterial({
         color: glowColor,
         transparent: true,
+        alphaTest: true,
         opacity: 0.5,
       });
       const glowTube = new THREE.Mesh(glowGeometry, glowMaterial);

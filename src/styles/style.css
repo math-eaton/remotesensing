@@ -457,7 +457,7 @@ p, ul{
 /* Slider container */
 #fm-channel-controls {
   position: relative; 
-  margin: 1vh 2vw 0 2vw;
+  margin: 2vh 3vw 0 3vw;
   z-index: 10000000000000;
 
 }
