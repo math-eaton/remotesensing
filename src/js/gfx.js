@@ -1108,7 +1108,6 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
             // Apply dynamic opacity for indices < N through the minimum negative index
             if (featureIndex < opacityReductionThreshold) {
               opacity = minOpacity + (opacityRange * (featureIndex - minIndexForOpacity) / (opacityReductionThreshold - 1 - minIndexForOpacity));
-              console.log(featureIndex)
             }
 
             const material = new THREE.LineDashedMaterial({
@@ -1688,14 +1687,14 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
   async function loadGeoJSONData(onCriticalDataLoaded) {
     // console.log("loading...")
     const urls = [
-      'src/assets/data/colloquium_ii_data/stanford_contours_simplified1000m_20231124.geojson',
-      'src/assets/data/colloquium_ii_data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson',
-      // 'src/assets/data/colloquium_ii_data/FmTowers_FeaturesToJSON_AOI_20231204.geojson',
-      'src/assets/data/colloquium_ii_data/study_area_admin0clip.geojson',
-      'src/assets/data/colloquium_ii_data/cellServiceCentroids_2000m_20231210.geojson',
-      'src/assets/data/fcc/fm/processed/fm_freq_dict.json',
-      'src/assets/data/fcc/fm/processed/FM_transmitter_sites.geojson',
-      'src/assets/data/fcc/fm/processed/FM_service_contour_downsample08_10step_processed_20240324.geojson'
+      'src/assets/data/public/stanford_contours_simplified1000m_20231124.geojson',
+      'src/assets/data/public/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson',
+      // 'src/assets/data/public/FmTowers_FeaturesToJSON_AOI_20231204.geojson',
+      'src/assets/data/public/study_area_admin0clip.geojson',
+      'src/assets/data/public/cellServiceCentroids_2000m_20231210.geojson',
+      'src/assets/data/public/fm_freq_dict.json',
+      'src/assets/data/public/FM_transmitter_sites.geojson',
+      'src/assets/data/public/FM_service_contour_downsample08_10step_processed_20240324.geojson'
     ];
 
     let criticalDatasetsLoaded = 0;
@@ -1736,50 +1735,50 @@ function updateVisualizationWithChannelFilter(contourGeojsonData, towerGeojsonDa
 
   function handleGeoJSONData(url, data) {
     switch (url) {
-      case 'src/assets/data/colloquium_ii_data/stanford_contours_simplified1000m_20231124.geojson':
+      case 'src/assets/data/public/stanford_contours_simplified1000m_20231124.geojson':
         contourGeojsonData = data;
         const meanElevation = calculateMeanContourElevation(data);
         addElevContourLines(data);
         break;
 
-      case 'src/assets/data/colloquium_ii_data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson':
+      case 'src/assets/data/public/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson':
         cellTowerGeojsonData = data;
         addCellTowerPts(data);
         break;
 
-      case 'src/assets/data/fcc/fm/processed/FM_service_contour_downsample08_10step_processed_20240324.geojson':
+      case 'src/assets/data/public/FM_service_contour_downsample08_10step_processed_20240324.geojson':
         fmContoursGeojsonData = data;
         addFMpropagation3D(data);
         break;
 
 
-      // case 'src/assets/data/colloquium_ii_data/FmTowers_FeaturesToJSON_AOI_20231204.geojson':
+      // case 'src/assets/data/public/FmTowers_FeaturesToJSON_AOI_20231204.geojson':
       //   fmTransmitterGeojsonData = data;
       //   addFMTowerPts(data);
       //   break;
 
       // updated points using fm contour origins
-      case 'src/assets/data/fcc/fm/processed/FM_transmitter_sites.geojson':
+      case 'src/assets/data/public/FM_transmitter_sites.geojson':
         fmTransmitterGeojsonData = data;
         addFMTowerPts(data);
         break;
 
-      case 'src/assets/data/colloquium_ii_data/study_area_admin0clip.geojson':
+      case 'src/assets/data/public/study_area_admin0clip.geojson':
         boundingBoxGeojsonData = data;
         // visualizeBoundingBoxGeoJSON(data);
         break;
 
-      case 'src/assets/data/colloquium_ii_data/NYS_cellTower_viewshed_20231130.jpg':
+      case 'src/assets/data/public/NYS_cellTower_viewshed_20231130.jpg':
         viewshedJPG = data;
         // loadAndPositionRaster(data);
         break;
 
-      case 'src/assets/data/colloquium_ii_data/cellServiceCentroids_2000m_20231210.geojson':
+      case 'src/assets/data/public/cellServiceCentroids_2000m_20231210.geojson':
         cellServiceGeojsonData = data;
         // addCellServiceMesh(data);
         break;
 
-      case 'src/assets/data/fcc/fm/processed/fm_freq_dict.json':
+      case 'src/assets/data/public/fm_freq_dict.json':
         fmFreqDictionaryJson = data;
         break;
   

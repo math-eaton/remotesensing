@@ -31,8 +31,9 @@ dist-ssr
 .vscode/launch.json
 .vscode/ipch
 
-
-data
 secret.js
 presentations
 *.code-workspace
+
+**/internal
+**/public
