@@ -86,6 +86,7 @@ void loop() {
   long deltaRightPressed = 0;
 
   if (buttonPressedLeft) {
+    deltaLeft = 0; // Override deltaLeft if button is pressed
     if (positionLeftPressed == -999) { // First detection
       positionLeftPressed = newLeft;
     } else {
@@ -97,6 +98,7 @@ void loop() {
   }
 
   if (buttonPressedRight) {
+    deltaRight = 0; // Override deltaRight if button is pressed
     if (positionRightPressed == -999) { // First detection
       positionRightPressed = newRight;
     } else {
