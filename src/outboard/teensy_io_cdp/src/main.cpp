@@ -25,6 +25,10 @@ const int buttonPinRight = 12;
 long positionLeft  = -999;
 long positionRight = -999;
 
+// Initialize counters for button-encoder-spin combinations
+long positionLeftPressed = -999;
+long positionRightPressed = -999;
+
 // Debounce variables for buttons
 unsigned long lastDebounceTimeLeft = 0;
 unsigned long lastDebounceTimeRight = 0;
@@ -51,7 +55,7 @@ void setup() {
   // slide pot LED
   pinMode(ledPin, OUTPUT);
   
-  Serial.println("TwoKnobs Encoder Test:");
+  // Serial.println("TwoKnobs Encoder Test:");
 }
 
 void loop() {
@@ -73,57 +77,83 @@ void loop() {
   positionLeft = newLeft;
   positionRight = newRight;
 
+  // Debounce logic for buttons (unchanged)
+  bool buttonPressedLeft = !digitalRead(buttonPinLeft);
+  bool buttonPressedRight = !digitalRead(buttonPinRight);
+
+  // Calculate delta for press-spins
+  long deltaLeftPressed = 0;
+  long deltaRightPressed = 0;
+
+  if (buttonPressedLeft) {
+    if (positionLeftPressed == -999) { // First detection
+      positionLeftPressed = newLeft;
+    } else {
+      deltaLeftPressed = newLeft - positionLeftPressed;
+      positionLeftPressed = newLeft; // Update for next loop iteration
+    }
+  } else {
+    positionLeftPressed = -999; // Reset when button is not pressed
+  }
+
+  if (buttonPressedRight) {
+    if (positionRightPressed == -999) { // First detection
+      positionRightPressed = newRight;
+    } else {
+      deltaRightPressed = newRight - positionRightPressed;
+      positionRightPressed = newRight; // Update for next loop iteration
+    }
+  } else {
+    positionRightPressed = -999; // Reset when button is not pressed
+  }
+
   // Debounce logic for left button
   bool readingLeft = !digitalRead(buttonPinLeft);
   if (readingLeft != lastButtonStateLeft) {
     lastDebounceTimeLeft = millis();
   }
-  if ((millis() - lastDebounceTimeLeft) > debounceDelay && readingLeft != buttonPressedLeft) {
-    buttonPressedLeft = readingLeft;
-    lastButtonStateLeft = readingLeft;
+  if ((millis() - lastDebounceTimeLeft) > debounceDelay) {
+    if (readingLeft != buttonPressedLeft) {
+      buttonPressedLeft = readingLeft;
+    }
   }
+
 
   // Debounce logic for right button
   bool readingRight = !digitalRead(buttonPinRight);
   if (readingRight != lastButtonStateRight) {
     lastDebounceTimeRight = millis();
   }
-  if ((millis() - lastDebounceTimeRight) > debounceDelay && readingRight != buttonPressedRight) {
-    buttonPressedRight = readingRight;
-    lastButtonStateRight = readingRight;
+  if ((millis() - lastDebounceTimeRight) > debounceDelay) {
+    if (readingRight != buttonPressedRight) {
+      buttonPressedRight = readingRight;
+    }
   }
 
-    // read pot value
+  // read pot value
   int potValue = analogRead(potPin);
   // map the pot value to a different range
   int mappedPotValue = map(potValue, 0, 1023, 1023, 0); // Adjust the range as necessary
-
 
   // calculate pot LED brightness based on slider value
   float phase = (float(potValue) * 2 * PI * ledCycles) / 1023.0; // Calculate phase for sine wave
   int ledBrightness = (sin(phase) + 1) * 127.5; // Convert sine wave (-1 to 1) to (0 to 255) scale
 
-  // int ledBrightness = map(potValue, 0, 1023, 255, 0); // Map the pot value linearly to PWM range 
   analogWrite(ledPin, ledBrightness);
 
   // Prepare and send the serial message
   Serial.print(switchState); Serial.print(",");
   Serial.print(deltaLeft); Serial.print(",");
   Serial.print(deltaRight); Serial.print(",");
+  Serial.print(deltaLeftPressed); Serial.print(",");
+  Serial.print(deltaRightPressed); Serial.print(",");
   Serial.print(buttonPressedLeft ? "1" : "0"); Serial.print(",");
-  Serial.println(buttonPressedRight ? "1" : "0");
+  Serial.print(buttonPressedRight ? "1" : "0"); Serial.print(",");
   Serial.println(mappedPotValue);
-  // Serial.println(potValue);
 
   // Reset button states after sending to avoid repeating messages
-  if (buttonPressedLeft) {
-    buttonPressedLeft = false;
-    lastDebounceTimeLeft = millis(); // Reset debounce timer
-  }
-  if (buttonPressedRight) {
-    buttonPressedRight = false;
-    lastDebounceTimeRight = millis(); // Reset debounce timer
-  }
+  lastButtonStateLeft = readingLeft;
+  lastButtonStateRight = readingRight;
 
   // Throttle the loop to reduce data rate (adjust as needed)
   delay(100);
