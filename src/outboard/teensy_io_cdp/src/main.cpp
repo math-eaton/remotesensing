@@ -5,6 +5,9 @@
 const int pin1 = 0; 
 const int pin2 = 1; 
 
+// Slide potentiometer pin
+const int potPin = A4; // Analog input pin for the potentiometer
+
 // Encoders
 Encoder knobLeft(14, 15); 
 Encoder knobRight(16, 17);
@@ -20,7 +23,7 @@ long positionRight = -999;
 // Debounce variables for buttons
 unsigned long lastDebounceTimeLeft = 0;
 unsigned long lastDebounceTimeRight = 0;
-const unsigned long debounceDelay = 50; // 50 ms debounce tim~e
+const unsigned long debounceDelay = 50; // 50 ms debounce time
 bool lastButtonStateLeft = HIGH;
 bool lastButtonStateRight = HIGH;
 bool buttonPressedLeft = false;
@@ -36,6 +39,9 @@ void setup() {
 
   pinMode(buttonPinLeft, INPUT_PULLUP);
   pinMode(buttonPinRight, INPUT_PULLUP);
+
+  // Initialize the analog pin for the potentiometer
+  pinMode(potPin, INPUT);
   
   Serial.println("TwoKnobs Encoder Test:");
 }
@@ -79,12 +85,19 @@ void loop() {
     lastButtonStateRight = readingRight;
   }
 
+    // read pot value
+  int potValue = analogRead(potPin);
+  // map the pot value to a different range, e.g., 0 to 100
+  int mappedPotValue = map(potValue, 0, 1023, 1023, 0); // Adjust the range as necessary
+
   // Prepare and send the serial message
   Serial.print(switchState); Serial.print(",");
   Serial.print(deltaLeft); Serial.print(",");
   Serial.print(deltaRight); Serial.print(",");
   Serial.print(buttonPressedLeft ? "1" : "0"); Serial.print(",");
   Serial.println(buttonPressedRight ? "1" : "0");
+  Serial.println(mappedPotValue);
+  // Serial.println(potValue);
 
   // Reset button states after sending to avoid repeating messages
   if (buttonPressedLeft) {
