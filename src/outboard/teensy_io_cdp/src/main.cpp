@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <Encoder.h>
+// #include "TM1637Display.h"
 
 // Define the pins connected to the SPDT switch
 const int pin1 = 0; 
@@ -11,7 +12,7 @@ const int potPin = A4;
 // LED pin (PWM-capable)
 const int ledPin = A6;
 // Number of full brightness ledCycles (dark-light-dark) across the potentiometer's range
-const int ledCycles = 4;
+const int ledCycles = 3;
 
 // Encoders
 Encoder knobLeft(14, 15); 
@@ -38,6 +39,12 @@ bool lastButtonStateRight = HIGH;
 bool buttonPressedLeft = false;
 bool buttonPressedRight = false;
 
+// TM1637 Display connections
+const int CLK = 2; // Use appropriate pins for your setup
+const int DIO = 3;
+TM1637Display display(CLK, DIO);
+
+
 void setup() {
   Serial.begin(9600);
   Serial.println("System Initialization:");
@@ -55,7 +62,9 @@ void setup() {
   // slide pot LED
   pinMode(ledPin, OUTPUT);
   
-  // Serial.println("TwoKnobs Encoder Test:");
+  // Initialize the TM1637 display
+  display.setBrightness(0x0f); // Adjust brightness as needed
+  display.clear(); // Clear any existing data on the display
 }
 
 void loop() {
@@ -140,6 +149,10 @@ void loop() {
   // calculate pot LED brightness based on slider value
   float phase = (float(potValue) * 2 * PI * ledCycles) / 1023.0; // Calculate phase for sine wave
   int ledBrightness = (sin(phase) + 1) * 127.5; // Convert sine wave (-1 to 1) to (0 to 255) scale
+
+  // Assuming you want to display the raw pot value or any mapped value directly
+  int displayValue = map(potValue, 0, 1023, 0, 9999);
+  display.showNumberDec(displayValue, true); // Display the value
 
   analogWrite(ledPin, ledBrightness);
 
