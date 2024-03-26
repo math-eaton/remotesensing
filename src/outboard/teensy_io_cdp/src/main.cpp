@@ -6,7 +6,12 @@ const int pin1 = 0;
 const int pin2 = 1; 
 
 // Slide potentiometer pin
-const int potPin = A4; // Analog input pin for the potentiometer
+const int potPin = A4;
+
+// LED pin (PWM-capable)
+const int ledPin = A6;
+// Number of full brightness ledCycles (dark-light-dark) across the potentiometer's range
+const int ledCycles = 4;
 
 // Encoders
 Encoder knobLeft(14, 15); 
@@ -42,6 +47,9 @@ void setup() {
 
   // Initialize the analog pin for the potentiometer
   pinMode(potPin, INPUT);
+
+  // slide pot LED
+  pinMode(ledPin, OUTPUT);
   
   Serial.println("TwoKnobs Encoder Test:");
 }
@@ -87,8 +95,16 @@ void loop() {
 
     // read pot value
   int potValue = analogRead(potPin);
-  // map the pot value to a different range, e.g., 0 to 100
+  // map the pot value to a different range
   int mappedPotValue = map(potValue, 0, 1023, 1023, 0); // Adjust the range as necessary
+
+
+  // calculate pot LED brightness based on slider value
+  float phase = (float(potValue) * 2 * PI * ledCycles) / 1023.0; // Calculate phase for sine wave
+  int ledBrightness = (sin(phase) + 1) * 127.5; // Convert sine wave (-1 to 1) to (0 to 255) scale
+
+  // int ledBrightness = map(potValue, 0, 1023, 255, 0); // Map the pot value linearly to PWM range 
+  analogWrite(ledPin, ledBrightness);
 
   // Prepare and send the serial message
   Serial.print(switchState); Serial.print(",");
