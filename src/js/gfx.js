@@ -16,24 +16,6 @@ let visualizationReady = false;
 
 export function gfx() {
 
-
-  const ws = new WebSocket('ws://localhost:8080');
-
-  ws.onopen = function (event) {
-    console.log('Connected to WebSocket server');
-  };
-  
-  ws.onmessage = function (event) {
-    // Parse the incoming message as JSON
-    const data = JSON.parse(event.data);
-    console.log('Data received from server:', data);
-  
-    // signal is here !
-  };
-  
-  ws.onerror = function (event) {
-    console.error('WebSocket error:', event);
-  };
   
   // Define global geographic layer groups
   let fmTransmitterPoints = new THREE.Group();
@@ -55,6 +37,7 @@ export function gfx() {
 
   let sliderValue = 1;  //  default value
   const sliderLength = 100;  // Assuming 10 is the maximum value of the slider
+  let isDragging = false; // slider interaction default
 
 
   // Define color scheme variables
@@ -103,6 +86,11 @@ export function gfx() {
     const dy = point1.y - point2.y;
     return Math.sqrt(dx * dx + dy * dy);
   }
+
+  function remapValues(num, in_min, in_max, out_min, out_max) {
+    return (num - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+  }
+  
 
   //////////////////////////////////////
   // loading screen! //////////////////
@@ -243,95 +231,6 @@ export function gfx() {
   ////////////////////
   /////////// DOM stuff event listener resolution display stuff bye bye
 
-  // const layerObjects = {
-  //   'fm transmitter points': fmTransmitterPoints,
-  //   'fm minimum spanning tree lines': fmMSTLines,
-  //   'cell transmitter points': cellTransmitterPoints,
-  //   'cell MST lines': cellMSTLines,
-  //   'contour lines': contourLines,
-  //   // 'fm propagation curves': propagationPolygons,
-  //   'cell dead zones': cellServiceMesh,
-  //   'analysis area': analysisArea
-  
-  // };
-  
-  // function toggleCellServiceMeshVisibility(isVisible) {
-  //   cellServiceMesh.visible = isVisible;
-  //   cellServiceMesh.children.forEach(group => {
-  //       group.children.forEach(mesh => {
-  //           mesh.visible = isVisible;
-  //       });
-  //   });
-  // }
-  
-  // // Function to toggle layer visibility
-  // function toggleLayerVisibility(layerName, isVisible) {
-  //   if (layerObjects[layerName]) {
-  //     layerObjects[layerName].visible = isVisible;
-  
-  //     // Special handling for cellServiceMesh
-  //     if (layerName === 'cell dead zones') {
-  //       cellServiceMesh.children.forEach(group => {
-  //         group.visible = isVisible; // Set visibility for each group
-  //         group.children.forEach(mesh => {
-  //           mesh.visible = isVisible; // Set visibility for each mesh within the group
-  //         });
-  //       });
-  //     }
-  
-  //     // Update the checkbox state
-  //     const checkbox = document.getElementById(layerName);
-  //     if (checkbox) {
-  //       checkbox.checked = isVisible;
-  //     }
-  //   } else {
-  //     console.warn(`Layer "${layerName}" not found in the scene.`);
-  //   }
-  
-  //   renderer.render(scene, camera);
-  // }
-  
-  
-
-
-  // Function to update slider display
-function updateSliderDisplay(value, resolutionSlider) {
-  let sliderDisplay = '[';
-  for (let i = 0; i < sliderLength; i++) {
-      sliderDisplay += i < value ? '#' : '-';
-  }
-  sliderDisplay += ']';
-  resolutionSlider.textContent = sliderDisplay;
-  }
-  
-function updateLabelPosition() {
-  const slider = document.getElementById('fm-channel-slider');
-  const label = document.getElementById('fm-frequency-display');
-  const sliderValue = parseInt(slider.value, 10);
-  const min = parseInt(slider.min, 10);
-  const max = parseInt(slider.max, 10);
-
-  // Calculate thumb position percentage
-  const percent = ((sliderValue - min) / (max - min)) * 100;
-
-  // Adjust label position based on thumb position
-  const sliderWidth = slider.offsetWidth;
-  const labelWidth = label.offsetWidth;
-  // Dynamically adjust label's max-width
-  label.style.maxWidth = `${sliderWidth / 4}px`;
-  const leftPosition = (percent / 100) * sliderWidth - (labelWidth / 2) + (slider.getBoundingClientRect().left - label.offsetParent.getBoundingClientRect().left);
-
-  // Update the label's position
-  label.style.left = `${leftPosition}px`;
-}
-
-// Initial position update
-updateLabelPosition();
-
-// Update label position on slider input
-document.getElementById('fm-channel-slider').addEventListener('input', updateLabelPosition);
-
-
 
   //////////////////////////////////////
   // Resize function
@@ -392,6 +291,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
   // Initial call to set up the zoom level
   adjustCameraZoom();
 
+  
   ////////////
   /////////// mouseover intersection raycasting stuff here
   ////////////////////////////////
@@ -450,6 +350,35 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
     }
   }
 
+  function initWebSocketConnection() {
+    const ws = new WebSocket('ws://localhost:8080');
+  
+    ws.onopen = function() {
+      console.log('Connected to WebSocket server');
+    };
+  
+    ws.onmessage = function(event) {
+      const data = JSON.parse(event.data);
+      console.log('Data received from server:', data);
+  
+      if (data.potValue !== undefined && !isDragging) {
+        const scaledValue = Math.round(remapValues(data.potValue, 0, 1023, 300, 201));
+        const slider = document.getElementById('fm-channel-slider');
+        slider.value = scaledValue; // Programmatically update slider value
+        updateLabelPosition(scaledValue); 
+        updateDisplays(scaledValue);
+      }
+    };
+  
+    ws.onerror = function(event) {
+      console.error('WebSocket error:', event);
+    };
+  
+    // other handlers if necessary
+  }
+  
+
+
   // Function to initialize the scene and other components
   async function initialize() {
     initThreeJS(); // Initialize Three.js
@@ -470,9 +399,7 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
       updateSliderDisplay(sliderValue, resolutionSlider);
   
 
-      initFMsliderAndContours(fmFreqDictionaryJson); // Setup slider and initial visualization
-    
-
+      initWebSocketConnection();
       enableInteraction(); // Directly enable interaction without waiting for a button click
       flipCamera();
       // document.getElementById('progress-bar').style.display = 'none'; // Hide the progress bar
@@ -941,149 +868,6 @@ document.getElementById('fm-channel-slider').addEventListener('input', updateLab
     });
   }
 
-  // original radiating triangle fill polys
-  // function addFilledPolygons(geojson, stride = 10) {
-  //   return new Promise((resolve, reject) => {
-  //     try {
-  //       for (let i = 0; i < geojson.features.length; i += stride) {
-  //         const feature = geojson.features[i];
-
-  //         // Create a new material for each polygon
-  //         const material = new THREE.MeshBasicMaterial({
-  //           color: colorScheme.polygonColor,
-  //           transparent: true,
-  //           wireframe: true,
-  //           dithering: true,
-  //           opacity: 0.8, // Start with lower opacity
-  //           side: THREE.FrontSide,
-  //         });
-
-  //         try {
-  //           const shapeCoords = feature.geometry.coordinates[0]; // Assuming no holes in the polygon for simplicity
-  //           const vertices = [];
-  //           let centroid = new THREE.Vector3(0, 0, 0);
-
-  //           // Convert coordinates to vertices and calculate centroid
-  //           shapeCoords.forEach((coord) => {
-  //             const [x, y] = toStatePlane(coord[0], coord[1]);
-  //             const z = meanElevation * zScale; // Set Z to the lowest contour elevation
-  //             vertices.push(new THREE.Vector3(x, y, z));
-  //             centroid.add(new THREE.Vector3(x, y, z));
-  //           });
-
-  //           centroid.divideScalar(shapeCoords.length); // Average to find centroid
-  //           vertices.unshift(centroid); // Add centroid as the first vertex
-
-  //           const shapeGeometry = new THREE.BufferGeometry();
-  //           const positions = [];
-
-  //           // The centroid is the first vertex, and it's connected to every other vertex
-  //           for (let j = 1; j <= shapeCoords.length; j++) {
-  //             // Add centroid
-  //             positions.push(centroid.x, centroid.y, centroid.z);
-
-  //             // Add current vertex
-  //             positions.push(
-  //               vertices[j % shapeCoords.length].x,
-  //               vertices[j % shapeCoords.length].y,
-  //               vertices[j % shapeCoords.length].z,
-  //             );
-
-  //             // Add next vertex
-  //             positions.push(
-  //               vertices[(j + 1) % shapeCoords.length].x,
-  //               vertices[(j + 1) % shapeCoords.length].y,
-  //               vertices[(j + 1) % shapeCoords.length].z,
-  //             );
-  //           }
-
-  //           shapeGeometry.setAttribute(
-  //             'position',
-  //             new THREE.Float32BufferAttribute(positions, 3),
-  //           );
-  //           shapeGeometry.computeVertexNormals();
-
-  //           const mesh = new THREE.Mesh(shapeGeometry, material);
-  //           mesh.name = 'polygon-' + i;
-  //           scene.add(mesh);
-  //           propagationPolygons.add(mesh);
-  //         } catch (error) {
-  //           console.error(`Error processing feature at index ${i}:`, error);
-  //         }
-  //       }
-  //       // Add the propagationPolygons group to the scene
-  //       scene.add(propagationPolygons);
-
-  //       // Set the initial visibility of the fm propagation curves layer to false
-  //       propagationPolygons.visible = false;
-
-  //       resolve(); // Resolve the promise when done
-  //     } catch (error) {
-  //       reject(`Error in addPolygons: ${error.message}`);
-  //     }
-  //   });
-  // }
-
-
-  // function addPolygons(geojson, stride = 5) {
-  //   return new Promise((resolve, reject) => {
-  //     try {
-  //       for (let i = 0; i < geojson.features.length; i += stride) {
-  //         const feature = geojson.features[i];
-  
-  //         // Create a new material for the outline
-  //         const material = new THREE.LineBasicMaterial({
-  //           color: colorScheme.polygonColor, // Adjust the color as needed
-  //           transparent: false,
-  //           opacity: 0.8, // Adjust opacity as needed
-  //         });
-  
-  //         try {
-  //           const shapeCoords = feature.geometry.coordinates[0]; // Assuming no holes in the polygon for simplicity
-  //           // console.log(shapeCoords)
-  //           const vertices = [];
-  
-  //           // Convert coordinates to vertices
-  //           shapeCoords.forEach((coord) => {
-  //             const [x, y] = toStatePlane(coord[0], coord[1]);
-  //             let meanElevation = calculateMeanContourElevation(geojson);
-  //             let z = meanElevation * zScale; // Default Z value if not provided
-  //             console.log(z)
-              
-  //             // If there's a third element (elevation), and it's not null, use it
-  //             if (coord.length > 2 && coord[2] != null) {
-  //                 z = coord[2];
-  //             }
-              
-  //             vertices.push(new THREE.Vector3(x, y, z));
-  //         });
-            
-  //           // Create a geometry and add vertices to it
-  //           const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
-  
-  //           // Create a line loop with the geometry and material
-  //           const lineLoop = new THREE.Line(geometry, material);
-  //           lineLoop.name = 'polygon-' + i;
-  //           scene.add(lineLoop);
-  //           propagationPolygons.add(lineLoop);
-  //         } catch (error) {
-  //           // console.error(`Error processing feature at index ${i}:`, error);
-  //         }
-  //       }
-  //       // Add the propagationPolygons group to the scene
-  //       scene.add(propagationPolygons);
-  //       // console.log(propagationPolygons)
-  
-  //       // Set the initial visibility of the fm propagation curves layer to false
-  //       propagationPolygons.visible = false;
-  
-  //       resolve(); // Resolve the promise when done
-  //     } catch (error) {
-  //       // reject(`Error in addPolygons: ${error.message}`);
-  //     }
-  //   });
-  // }
-  
 
 // Define an array to track all line loops and their decay status
 let fmContourGroups = {}; // Object to store line loop groups
@@ -1297,184 +1081,7 @@ async function addFMTowerPts(geojson, channelFilter) {
   }
 }
 
-  let channelFrequencies = {};
-      
-  function initFMsliderAndContours(frequencyData) {
-    channelFrequencies = frequencyData;
-
-    const slider = document.getElementById('fm-channel-slider');
-    const display = document.getElementById('fm-channel-display');
-    const frequencyLabel = document.getElementById('fm-frequency-display'); 
-
-    // Update both channel display and frequency label
-    const updateDisplays = (channelValue) => {
-        const frequencyText = channelFrequencies[channelValue.toString()] || "Frequency not found";
-        display.textContent = `FM channel: ${channelValue}`;
-        frequencyLabel.textContent = frequencyText; // Use frequencyLabel for the frequency text
-
-        // Update the visualization based on the new channel value
-        updateVisualizationWithChannelFilter(fmContoursGeojsonData, fmTransmitterGeojsonData, channelValue);
-      };
-
-    // Listener for slider input
-    let debounceTimer;
-    slider.addEventListener('input', function(event) {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-            const channelValue = parseInt(event.target.value, 10);
-            updateDisplays(channelValue);
-        }, 20); // delay
-    });
-    
-    // Initial update based on the slider's default value
-    const initialChannelValue = parseInt(slider.value, 10);
-    updateDisplays(initialChannelValue);
-}
   
-function updateVisualizationWithChannelFilter(fmContoursGeojsonData, towerGeojsonData, channelFilter) {
-  if (!fmContoursGeojsonData || !towerGeojsonData) {
-    console.warn("GeoJSON data not available.");
-    return;
-  }
-  
-  addFMpropagation3D(fmContoursGeojsonData, channelFilter)
-    .then(() => console.log("FM contour channel updated"))
-    .catch(error => console.error("Failed to update contour channel:", error));
-
-  addFMTowerPts(towerGeojsonData, channelFilter)
-    .then(() => console.log(towerGeojsonData))
-    .catch(error => console.error("Failed to update tower channel:", error));
-}
-  
-  
-
-  
-
-  // function addFMTowerPts(geojson) {
-  //   return new Promise((resolve, reject) => {
-  //     try {
-  //       // Define the base size and height for the pyramids
-  //       const baseSize = 0.003; // Size of one side of the pyramid's base
-  //       const pyramidHeight = 0.015; // Height of the pyramid from the base to the tip
-
-  //       // Material for the wireframe pyramids
-  //       let pyramidMaterialFM = new THREE.MeshBasicMaterial({
-  //         color: colorScheme.pyramidColorFM,
-  //         wireframe: true,
-  //         transparent: true,
-  //         opacity: 0.5,
-  //       });
-
-  //       const points = []; // Array to store points for the convex hull
-
-  //       // Parse the POINT data from the GeoJSON
-  //       geojson.features.forEach((feature) => {
-  //         if (feature.geometry.type === 'Point') {
-  //           const [lon, lat] = feature.geometry.coordinates;
-  //           const elevation = feature.properties.Z;
-
-  //           try {
-  //             // Convert the lon/lat to State Plane coordinates
-  //             const [x, y] = toStatePlane(lon, lat);
-  //             const z = elevation * zScale; // Apply the scaling factor to the elevation
-
-  //             // Check for valid coordinates before proceeding
-  //             if (x === null || y === null || isNaN(z)) {
-  //               console.error('Invalid point coordinates:', x, y, z);
-  //               return; // Skip this iteration
-  //             }
-
-  //             // Create a cone geometry for the pyramid
-  //             const pyramidGeometry = new THREE.ConeGeometry(
-  //               baseSize,
-  //               pyramidHeight,
-  //               5,
-  //             );
-  //             pyramidGeometry.rotateX(Math.PI / 2); // Rotate the pyramid to point up along the Z-axis
-
-  //             const pyramid = new THREE.Mesh(
-  //               pyramidGeometry,
-  //               pyramidMaterialFM,
-  //             );
-  //             pyramid.position.set(x, y, z);
-  //             fmTransmitterPoints.add(pyramid);
-
-  //             // Check for coincident points and get a z-offset
-  //             const label = `fm`;
-  //             const zOffset = 8;
-  //             //   const zOffset = getCoincidentPointOffset(lon, lat, 8, 0.00001);
-  //             // const zOffset = getCoincidentPointOffset(lon, lat, label, 4, 0.0001)
-  //             // Ensure Callsign or another property is correctly referenced
-  //             // const label = feature.properties.Callsign || `Tower ${index}`;
-
-  //             // const textSprite = makeTextSprite(` ${label} `, {
-  //             //   fontsize: 24,
-  //             //   strokeColor: 'rgba(255, 255, 255, 0.9)',
-  //             //   strokeWidth: 1,
-
-  //             //   // borderColor: { r: 255, g: 0, b: 0, a: 1.0 },
-  //             //   // backgroundColor: { r: 255, g: 100, b: 100, a: 0.8 }
-  //             // });
-
-  //             // Position the sprite above the pyramid
-  //             const pyramidHeightScaled = pyramidHeight * zScale;
-
-  //             // Position the sprite above the pyramid, applying the offset for coincident points
-  //             // textSprite.position.set(
-  //             //   x,
-  //             //   y,
-  //             //   z + pyramidHeightScaled + zOffset + 0.009,
-  //             // );
-  //             // textSprite.scale.set(0.05, 0.025, 1.0);
-
-  //             // fmTransmitterPoints.add(textSprite);
-  //             // console.log(`creating label for ${label}`);
-
-  //             // Add the position to the points array for convex hull calculation
-  //             points.push(new THREE.Vector3(x, y, z));
-  //           } catch (error) {
-  //             console.error(`Error projecting point: ${error.message}`);
-  //           }
-  //         } else {
-  //           console.error(
-  //             `Unsupported geometry type for points: ${feature.geometry.type}`,
-  //           );
-  //         }
-  //       });
-
-  //       // Add the FM points to the scene
-  //       scene.add(fmTransmitterPoints);
-  //       fmTransmitterPoints.visible = true;
-
-  //       // Create and add the convex hull to the scene
-  //       if (points.length > 0) {
-  //         // Additional checks and functionality as needed...
-
-  //         // Construct the MST
-  //         const fmMstEdges = primsAlgorithm(points);
-
-  //         // Draw the MST
-  //         drawMSTEdges(
-  //           fmMstEdges,
-  //           '#FFFFFF',
-  //           colorScheme.mstFmColor,
-  //           0.00025,
-  //           0.00075,
-  //           fmMSTLines,
-  //         );
-  //       }
-
-  //       // Add the MST lines to the scene
-  //       scene.add(fmMSTLines);
-  //       fmMSTLines.visible = false;
-  //       resolve(); // Resolve the promise when done
-  //     } catch (error) {
-  //       console.error('Error in addFMTowerPts:', error);
-  //       reject(`Error in addFMTowerPts: ${error.message}`);
-  //     }
-  //   });
-  // }
-
   // Function to add wireframe pyramids and text labels for POINT data from GeoJSON
   function addCellTowerPts(geojson) {
     return new Promise((resolve, reject) => {
@@ -1592,6 +1199,115 @@ function updateVisualizationWithChannelFilter(fmContoursGeojsonData, towerGeojso
       }
     });
   }
+
+
+  //////////////////////
+  ///////// slider stuff
+
+
+
+  // Function to update slider display
+  function updateSliderDisplay(value, resolutionSlider) {
+    let sliderDisplay = '[';
+    for (let i = 0; i < sliderLength; i++) {
+        sliderDisplay += i < value ? '#' : '-';
+    }
+    sliderDisplay += ']';
+    resolutionSlider.textContent = sliderDisplay;
+    }
+    
+    function updateLabelPosition(sliderValue) {
+      const slider = document.getElementById('fm-channel-slider');
+      const label = document.getElementById('fm-frequency-display');
+    
+      const min = parseInt(slider.min, 10);
+      const max = parseInt(slider.max, 10);
+    
+      // Calculate thumb position percentage
+      const percent = ((sliderValue - min) / (max - min)) * 100;
+    
+      // Adjust label position based on thumb position
+      const sliderWidth = slider.offsetWidth;
+      const labelWidth = label.offsetWidth;
+      label.style.maxWidth = `${sliderWidth / 4}px`; // Dynamically adjust label's max-width
+      const leftPosition = (percent / 100) * sliderWidth - (labelWidth / 2) + (slider.getBoundingClientRect().left - label.offsetParent.getBoundingClientRect().left);
+    
+      // Update the label's position
+      label.style.left = `${leftPosition}px`;
+    }
+      
+  // Initial position update
+  updateLabelPosition();
+  
+  // Update label position on slider input
+  document.getElementById('fm-channel-slider').addEventListener('input', function() {
+    updateLabelPosition(parseInt(this.value, 10));
+  });
+  
+  
+  document.getElementById('fm-channel-slider').addEventListener('mousedown', function() {
+    isDragging = true;
+  });
+  
+  document.addEventListener('mouseup', function() {
+    isDragging = false;
+  });
+
+  let channelFrequencies = {}; // Ensure this is accessible globally
+
+  function updateDisplays(channelValue) {
+      const display = document.getElementById('fm-channel-display');
+      const frequencyLabel = document.getElementById('fm-frequency-display'); 
+      const frequencyText = channelFrequencies[Math.round(channelValue).toString()] || "Frequency not found";
+      
+      display.textContent = `FM channel: ${Math.round(channelValue)}`;
+      frequencyLabel.textContent = frequencyText; // Use frequencyLabel for the frequency text
+      console.log(channelValue);
+  
+      // Update the visualization based on the new channel value
+      if (fmContoursGeojsonData && fmTransmitterGeojsonData) {
+          updateVisualizationWithChannelFilter(fmContoursGeojsonData, fmTransmitterGeojsonData, channelValue);
+      } else {
+          console.warn("GeoJSON data not available.");
+      }
+  }
+  
+  function initFMsliderAndContours(frequencyData) {
+    channelFrequencies = frequencyData;
+
+    const slider = document.getElementById('fm-channel-slider');
+
+    // Listener for slider input
+    let debounceTimer;
+    slider.addEventListener('input', function(event) {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            const channelValue = Math.round(parseInt(event.target.value, 10));
+            updateDisplays(channelValue);
+        }, 20); // delay
+    });
+    
+    // Initial update based on the slider's default value
+    const initialChannelValue = Math.round(parseInt(slider.value, 10));
+    updateDisplays(initialChannelValue);
+}
+  
+function updateVisualizationWithChannelFilter(fmContoursGeojsonData, towerGeojsonData, channelFilter) {
+  if (!fmContoursGeojsonData || !towerGeojsonData) {
+    console.warn("GeoJSON data not available.");
+    return;
+  }
+  
+  addFMpropagation3D(fmContoursGeojsonData, channelFilter)
+    .then(() => console.log("FM contour channel updated"))
+    .catch(error => console.error("Failed to update contour channel:", error));
+
+  addFMTowerPts(towerGeojsonData, channelFilter)
+    .catch(error => console.error("Failed to update tower channel:", error));
+}
+
+
+
 
   //////////////////////
 
@@ -1901,10 +1617,7 @@ function updateVisualizationWithChannelFilter(fmContoursGeojsonData, towerGeojso
     // Apply constraints to camera and update controls
     constrainCamera(controls, boundingBox);
 
-
-    // console.log(`State Plane X: ${cameraPositionStatePlane[0]}, State Plane Y: ${cameraPositionStatePlane[1]}`);
-    // console.log(`Camera X: ${camera.position.x}, Camera Y: ${camera.position.y}, Camera Z: ${camera.position.z}`);
-
+    initFMsliderAndContours(fmFreqDictionaryJson); // Setup slider and initial visualization
 
     controls.update();
 }
