@@ -15,6 +15,26 @@ let visualizationReady = false;
 
 
 export function gfx() {
+
+
+  const ws = new WebSocket('ws://localhost:8080');
+
+  ws.onopen = function (event) {
+    console.log('Connected to WebSocket server');
+  };
+  
+  ws.onmessage = function (event) {
+    // Parse the incoming message as JSON
+    const data = JSON.parse(event.data);
+    console.log('Data received from server:', data);
+  
+    // signal is here !
+  };
+  
+  ws.onerror = function (event) {
+    console.error('WebSocket error:', event);
+  };
+  
   // Define global geographic layer groups
   let fmTransmitterPoints = new THREE.Group();
   let fmMSTLines = new THREE.Group();
