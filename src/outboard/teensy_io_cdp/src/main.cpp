@@ -40,10 +40,17 @@ bool buttonPressedLeft = false;
 bool buttonPressedRight = false;
 
 // Debounce variables for potentiometer
-const int potDebounceDelay = 10; // Potentiometer debounce time in ms
-int lastPotValue = -1; // Store the last stable pot value
-unsigned long lastPotReadTime = 0; // Last time the pot value was read
-const int potStabilityThreshold = 5; // Acceptable change in value to consider stable
+// const int potDebounceDelay = 200; // Potentiometer debounce time in ms
+// int lastPotValue = -1; // Store the last stable pot value
+// unsigned long lastPotReadTime = 0; // Last time the pot value was read
+// const int potStabilityThreshold = 100; // Acceptable change in value to consider stable
+
+// Sampling and averaging for potentiometer debounce
+const int numSamples = 5;
+int potSamples[numSamples]; // Array to store potentiometer samples
+int sampleIndex = 0; // Current index in the samples array
+long totalPotValue = 0; // Total of the samples
+int averagePotValue = 0; // Average of the samples
 
 
 // // TM1637 Display connections
@@ -72,6 +79,12 @@ void setup() {
   // Initialize the TM1637 display
   // display.setBrightness(0x0f); // Adjust brightness as needed
   // display.clear(); // Clear any existing data on the display
+
+
+  // Initialize potSamples array
+  for(int i = 0; i < numSamples; i++) {
+    potSamples[i] = 0;
+  }
 }
 
 void loop() {
@@ -93,7 +106,7 @@ void loop() {
   positionLeft = newLeft;
   positionRight = newRight;
 
-  // Debounce logic for buttons (unchanged)
+  // Debounce logic for buttons
   bool buttonPressedLeft = !digitalRead(buttonPinLeft);
   bool buttonPressedRight = !digitalRead(buttonPinRight);
 
@@ -148,23 +161,40 @@ void loop() {
     }
   }
 
-  // read pot value
-  // and debounce on em
-  int potValue = analogRead(potPin);
-  if (abs(potValue - lastPotValue) <= potStabilityThreshold || lastPotValue == -1) {
-    if ((millis() - lastPotReadTime) > potDebounceDelay) {
-      // Value has stabilized; update the last stable value
-      lastPotValue = potValue;
-      lastPotReadTime = millis();
-    }
-  } else {
-    // Value has changed significantly; reset the debounce timer
-    lastPotReadTime = millis();
-  }
+  // // read pot value
+  // // and debounce on em
+  // int potValue = analogRead(potPin);
+  // if (abs(potValue - lastPotValue) <= potStabilityThreshold || lastPotValue == -1) {
+  //   if ((millis() - lastPotReadTime) > potDebounceDelay) {
+  //     // Value has stabilized; update the last stable value
+  //     lastPotValue = potValue;
+  //     lastPotReadTime = millis();
+  //   }
+  // } else {
+  //   // Value has changed significantly; reset the debounce timer
+  //   lastPotReadTime = millis();
+  // }
 
-  // use the last stable pot value and
-  // map the value to a different range
-  int mappedPotValue = map(potValue, 0, 1023, 1023, 0); 
+  // // use the last stable pot value and
+  // // map the value to a different range
+  // int mappedPotValue = map(potValue, 0, 1023, 1023, 0); 
+
+    // Take a new potentiometer reading
+  int potValue = analogRead(potPin);
+  // Subtract the last reading
+  totalPotValue -= potSamples[sampleIndex];
+  // Read from the sensor and store it into the array
+  potSamples[sampleIndex] = potValue;
+  // Add the reading to the total
+  totalPotValue += potSamples[sampleIndex];
+  // Advance to the next position in the array
+  sampleIndex = (sampleIndex + 1) % numSamples;
+  
+  // Calculate the average
+  averagePotValue = totalPotValue / numSamples;
+
+  // Now use averagePotValue instead of potValue for mapping and further logic
+  int mappedPotValue = map(averagePotValue, 0, 1023, 300, 201); 
 
   // calculate pot LED brightness based on slider value
   float phase = (float(potValue) * 2 * PI * ledCycles) / 1023.0; // Calculate phase for sine wave

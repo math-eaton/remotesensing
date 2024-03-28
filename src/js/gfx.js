@@ -364,7 +364,7 @@ export function gfx() {
       console.log('Data received from server:', data);
   
       if (data.potValue !== undefined && !isDragging) {
-        const scaledValue = Math.round(remapValues(data.potValue, 0, 1023, 300, 201));
+        const scaledValue = Math.round(remapValues(data.potValue, 201, 300, 300, 201));
         const slider = document.getElementById('fm-channel-slider');
         slider.value = scaledValue; // Programmatically update slider value
         updateLabelPosition(scaledValue); 
