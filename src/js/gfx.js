@@ -121,6 +121,7 @@ export function gfx() {
     camera.up.set(0, 0, 1); // Set Z as up-direction
 
     renderer = new THREE.WebGLRenderer({ 
+      canvas: document.querySelector('#canvas'),
       antialias: false,
       precision: "lowp",
       powerPreference: "high-performance"
@@ -248,7 +249,7 @@ export function gfx() {
     // update this value to alter pixel ratio scaled with the screen
     pixelationFactor = 0.3;
 
-    // Calculate new dimensions based on the slider value
+    // Calculate new dimensions based on the value
     var newWidth = Math.max(1, window.innerWidth * pixelationFactor);
     var newHeight = Math.max(1, window.innerHeight * pixelationFactor);
 
@@ -298,56 +299,57 @@ export function gfx() {
 
   // Function to animate your scene
   function animate() {
-    requestAnimationFrame(animate);
-    // checkIntersection(); // Check for mouse-polygon intersection
-    controls.update();
-
-
-    // Rotate the camera if isCameraRotating is true
-    // Check if camera and controls are initialized
-    if (camera && controls) {
-      if (isCameraRotating) {
-        // Calculate the distance to the target
-        const distanceToTarget = camera.position.distanceTo(controls.target);
-        const angle = rotationSpeed; // Define the angle for rotation
-
-        // Calculate the new position
-        const relativePosition = new THREE.Vector3().subVectors(
-          camera.position,
-          controls.target,
-        );
-        const axis = new THREE.Vector3(0, 0, 1); // Z-axis for rotation
-        const quaternion = new THREE.Quaternion().setFromAxisAngle(axis, angle);
-        relativePosition.applyQuaternion(quaternion);
-
-        // Apply the new position while maintaining the distance
-        camera.position
-          .copy(controls.target)
-          .add(relativePosition.setLength(distanceToTarget));
-
-        // Ensure the camera keeps looking at the target
-        camera.lookAt(controls.target);
-      }
-    }
-    // Log camera distance from xyz
-    // logCameraDistance();
-
-    // updateDashSizeForZoom(); 
-    updatefmContourGroups();
-
-    adjustMeshVisibilityBasedOnCameraDistance();
-
-
-    // console.log(`Camera X: ${camera.position.x}, Camera Y: ${camera.position.y}, Camera Z: ${camera.position.z}`);
-
     delta += clock.getDelta();
 
     if (delta  > interval) {
+      // checkIntersection(); // Check for mouse-polygon intersection
+      controls.update();
+
+
+      // Rotate the camera if isCameraRotating is true
+      // Check if camera and controls are initialized
+      if (camera && controls) {
+        if (isCameraRotating) {
+          // Calculate the distance to the target
+          const distanceToTarget = camera.position.distanceTo(controls.target);
+          const angle = rotationSpeed; // Define the angle for rotation
+
+          // Calculate the new position
+          const relativePosition = new THREE.Vector3().subVectors(
+            camera.position,
+            controls.target,
+          );
+          const axis = new THREE.Vector3(0, 0, 1); // Z-axis for rotation
+          const quaternion = new THREE.Quaternion().setFromAxisAngle(axis, angle);
+          relativePosition.applyQuaternion(quaternion);
+
+          // Apply the new position while maintaining the distance
+          camera.position
+            .copy(controls.target)
+            .add(relativePosition.setLength(distanceToTarget));
+
+          // Ensure the camera keeps looking at the target
+          camera.lookAt(controls.target);
+        }
+      }
+      // Log camera distance from xyz
+      // logCameraDistance();
+
+      // updateDashSizeForZoom(); 
+      updatefmContourGroups();
+
+      adjustMeshVisibilityBasedOnCameraDistance();
+
+
+      // console.log(`Camera X: ${camera.position.x}, Camera Y: ${camera.position.y}, Camera Z: ${camera.position.z}`);
+
+    
       // The draw or time dependent code are here
       renderer.render(scene, camera);
 
       delta = delta % interval;
     }
+    requestAnimationFrame(animate);
   }
 
   function initWebSocketConnection() {
@@ -652,8 +654,9 @@ export function gfx() {
   let globalMinElevation = Infinity;
   let meanElevation = Infinity + 1;
 
-  function addElevContourLines(geojson, contourInterval = 50) { // Only process contours at specified intervals
+  function addElevContourLines(geojson, contourInterval = 100) { // Only process contours at specified intervals
     return new Promise((resolve, reject) => {
+      console.log('adding elevation');
       if (!geojson || !geojson.features) {
         reject('Invalid GeoJSON data');
         return;
@@ -668,10 +671,10 @@ export function gfx() {
       const maxElevationLog = Math.log(maxElevation + minElevationPositive);
       const minElevationLog = Math.log(minElevationPositive);
   
+      // console.log('terrain features: ', geojson.features.length / 2);
       geojson.features.forEach((feature, index) => {
         const contour = feature.properties.contour;
 
-        // console.log(`elevation features: ${contour}`)
 
   
         // Skip contours not at the specified interval
@@ -679,7 +682,7 @@ export function gfx() {
           return;
         }
   
-          const coordinates = feature.geometry.coordinates; // Array of [lon, lat] pairs
+        const coordinates = feature.geometry.coordinates; // Array of [lon, lat] pairs
         const color = getColorForElevation(contour, minElevation, maxElevation);
   
         // Calculate logarithmic opacity scaling
@@ -898,7 +901,7 @@ function updatefmContourGroups() {
 }
 
 // Function to add FM propagation 3D line loops
-function addFMpropagation3D(geojson, channelFilter, stride = 1) {
+function addFMpropagation3D(geojson, channelFilter, stride = 5) {
     return new Promise((resolve, reject) => {
         // Existing groups not matching the current channelFilter are marked for decay
         Object.keys(fmContourGroups).forEach(groupId => {
@@ -930,6 +933,8 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
         const maxNegativeIndex = Math.max(...negativeIndices); // Closer to 0
         const minNegativeIndex = Math.min(...negativeIndices); // Further from 0
         const opacityRange = maxOpacity - minOpacity; // Defined range for negatives
+
+        console.log(geojson.features.length)
 
         geojson.features.forEach((feature, idx) => {
             if (idx % stride !== 0) return;
@@ -992,8 +997,8 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
 async function addFMTowerPts(geojson, channelFilter) {
   try {
     // Define the base size, height, and characteristics for the pyramids
-    const baseSizeMatching = 0.004;
-    const pyramidHeightMatching = 0.015;
+    const baseSizeMatching = 0.008;
+    const pyramidHeightMatching = 0.03;
     const baseSizeNonMatching = baseSizeMatching * 0.5;
     const pyramidHeightNonMatching = pyramidHeightMatching * 0.5;
 
@@ -1532,8 +1537,8 @@ function updateVisualizationWithChannelFilter(fmContoursGeojsonData, towerGeojso
       case 'src/assets/data/stanford_contour_simplify_1000m_zhou_20240325_simplified.geojson':
         contourGeojsonData = data;
         const meanElevation = calculateMeanContourElevation(data);
+        // console.log(`mean elevation: ${meanElevation}`)
         addElevContourLines(data);
-        console.log(`elevation features: ${data}`)
         break;
 
       case 'src/assets/data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson':
@@ -1543,9 +1548,8 @@ function updateVisualizationWithChannelFilter(fmContoursGeojsonData, towerGeojso
 
       case 'src/assets/data/FM_service_contour_downsample12_5step_processed_FMinfoJoin_polygon_20240324.geojson':
         fmContoursGeojsonData = data;
-        addFMpropagation3D(data);
+        // addFMpropagation3D(data); don't need this here i guess?
         break;
-
 
       // case 'src/assets/data/FmTowers_FeaturesToJSON_AOI_20231204.geojson':
       //   fmTransmitterGeojsonData = data;
