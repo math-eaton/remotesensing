@@ -39,10 +39,17 @@ bool lastButtonStateRight = HIGH;
 bool buttonPressedLeft = false;
 bool buttonPressedRight = false;
 
-// TM1637 Display connections
-const int CLK = 2; // Use appropriate pins for your setup
-const int DIO = 3;
-TM1637Display display(CLK, DIO);
+// Debounce variables for potentiometer
+const int potDebounceDelay = 10; // Potentiometer debounce time in ms
+int lastPotValue = -1; // Store the last stable pot value
+unsigned long lastPotReadTime = 0; // Last time the pot value was read
+const int potStabilityThreshold = 5; // Acceptable change in value to consider stable
+
+
+// // TM1637 Display connections
+// const int CLK = 2; // Use appropriate pins for your setup
+// const int DIO = 3;
+// TM1637Display display(CLK, DIO);
 
 
 void setup() {
@@ -63,8 +70,8 @@ void setup() {
   pinMode(ledPin, OUTPUT);
   
   // Initialize the TM1637 display
-  display.setBrightness(0x0f); // Adjust brightness as needed
-  display.clear(); // Clear any existing data on the display
+  // display.setBrightness(0x0f); // Adjust brightness as needed
+  // display.clear(); // Clear any existing data on the display
 }
 
 void loop() {
@@ -142,17 +149,30 @@ void loop() {
   }
 
   // read pot value
+  // and debounce on em
   int potValue = analogRead(potPin);
-  // map the pot value to a different range
-  int mappedPotValue = map(potValue, 0, 1023, 1023, 0); // Adjust the range as necessary
+  if (abs(potValue - lastPotValue) <= potStabilityThreshold || lastPotValue == -1) {
+    if ((millis() - lastPotReadTime) > potDebounceDelay) {
+      // Value has stabilized; update the last stable value
+      lastPotValue = potValue;
+      lastPotReadTime = millis();
+    }
+  } else {
+    // Value has changed significantly; reset the debounce timer
+    lastPotReadTime = millis();
+  }
+
+  // use the last stable pot value and
+  // map the value to a different range
+  int mappedPotValue = map(potValue, 0, 1023, 1023, 0); 
 
   // calculate pot LED brightness based on slider value
   float phase = (float(potValue) * 2 * PI * ledCycles) / 1023.0; // Calculate phase for sine wave
   int ledBrightness = (sin(phase) + 1) * 127.5; // Convert sine wave (-1 to 1) to (0 to 255) scale
 
   // Assuming you want to display the raw pot value or any mapped value directly
-  int displayValue = map(potValue, 0, 1023, 0, 9999);
-  display.showNumberDec(displayValue, true); // Display the value
+  // int displayValue = map(potValue, 0, 1023, 0, 9999);
+  // display.showNumberDec(displayValue, true); // Display the value
 
   analogWrite(ledPin, ledBrightness);
 
