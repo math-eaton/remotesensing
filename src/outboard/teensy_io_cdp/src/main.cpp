@@ -46,7 +46,7 @@ bool buttonPressedRight = false;
 // const int potStabilityThreshold = 100; // Acceptable change in value to consider stable
 
 // Sampling and averaging for potentiometer debounce
-const int numSamples = 5;
+const int numSamples = 3;
 int potSamples[numSamples]; // Array to store potentiometer samples
 int sampleIndex = 0; // Current index in the samples array
 long totalPotValue = 0; // Total of the samples
