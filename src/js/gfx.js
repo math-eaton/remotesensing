@@ -37,8 +37,6 @@ export function gfx() {
 
   let sliderValue = 1;  //  default value
   const sliderLength = 100;  // Assuming 10 is the maximum value of the slider
-  let isDragging = false; // slider interaction default
-  let lastChannelValue = null; // track rate of change of slider values for debouncing purposes
   let lastSliderValue = null;
   let globalDeltaLeftPressed = 0;
   let globalDeltaRightPressed = 0;
@@ -1287,54 +1285,47 @@ async function addFMTowerPts(geojson, channelFilter) {
   ///////// slider stuff
 
 
-
-  // Function to update slider display
+  let lastChannelValue = null; // For tracking significant channel value changes
+  let debounceTimer = null; // For debouncing updates to the display
+  
   function updateSliderDisplay(value, resolutionSlider) {
     let sliderDisplay = '[';
     for (let i = 0; i < sliderLength; i++) {
-        sliderDisplay += i < value ? '#' : '-';
+      sliderDisplay += i < value ? '#' : '-';
     }
     sliderDisplay += ']';
     resolutionSlider.textContent = sliderDisplay;
-    }
-    
-    function updateLabelPosition(sliderValue) {
-      // only update if the slider value has changed by at least two or if it's the first update
-      if (lastSliderValue === null || Math.abs(lastSliderValue - sliderValue) >= 2) {
-        const slider = document.getElementById('fm-channel-slider');
-        const label = document.getElementById('fm-frequency-display');
-    
-        const min = parseInt(slider.min, 10);
-        const max = parseInt(slider.max, 10);
-    
-        // Calculate thumb position percentage
-        const percent = ((sliderValue - min) / (max - min)) * 100;
-    
-        // Adjust label position based on thumb position
-        const sliderWidth = slider.offsetWidth;
-        const labelWidth = label.offsetWidth;
-        label.style.maxWidth = `${sliderWidth / 4}px`; // Dynamically adjust label's max-width
-        const leftPosition = (percent / 100) * sliderWidth - (labelWidth / 2) + (slider.getBoundingClientRect().left - label.offsetParent.getBoundingClientRect().left);
-    
-        // Update the label's position
-        label.style.left = `${leftPosition}px`;
-    
-        // Update lastSliderValue with the current value for future comparisons
-        lastSliderValue = sliderValue;
-      } else {
-        // console.log("Slider change not significant.");
-      }
-    }
-          
-  // Initial position update
-  updateLabelPosition();
+  }
+  
+  function updateLabelPosition(sliderValue) {
+    const slider = document.getElementById('fm-channel-slider');
+    const label = document.getElementById('fm-frequency-display');
+  
+    const min = parseInt(slider.min, 10);
+    const max = parseInt(slider.max, 10);
+  
+    // Calculate thumb position percentage
+    const percent = ((sliderValue - min) / (max - min)) * 100;
+  
+    // Adjust label position based on thumb position
+    const sliderWidth = slider.offsetWidth;
+    const labelWidth = label.offsetWidth;
+    label.style.maxWidth = `${sliderWidth / 4}px`;
+    const leftPosition = (percent / 100) * sliderWidth - (labelWidth / 2) + (slider.getBoundingClientRect().left - label.offsetParent.getBoundingClientRect().left);
+  
+    // Update the label's position
+    label.style.left = `${leftPosition}px`;
+  }
+  
+  // Initialize the position update
+  updateLabelPosition(parseInt(document.getElementById('fm-channel-slider').value, 10));
   
   // Update label position on slider input
   document.getElementById('fm-channel-slider').addEventListener('input', function() {
     updateLabelPosition(parseInt(this.value, 10));
   });
   
-  
+  let isDragging = false;
   document.getElementById('fm-channel-slider').addEventListener('mousedown', function() {
     isDragging = true;
   });
@@ -1342,63 +1333,55 @@ async function addFMTowerPts(geojson, channelFilter) {
   document.addEventListener('mouseup', function() {
     isDragging = false;
   });
-
+  
   let channelFrequencies = {}; // Ensure this is accessible globally
-
+  
   function updateDisplays(channelValue) {
-    const display = document.getElementById('fm-channel-display');
-    const frequencyLabel = document.getElementById('fm-frequency-display');
-    const frequencyText = channelFrequencies[Math.round(channelValue).toString()] || "Frequency not found";
-
-    display.textContent = `FM channel: ${Math.round(channelValue)}`;
-    frequencyLabel.textContent = frequencyText; // Use frequencyLabel for the frequency text
-    // console.log(channelValue);
-
-    // Check if the channel value has changed significantly (by at least two values)
-    if (fmContoursGeojsonData && fmTransmitterGeojsonData && (lastChannelValue === null || Math.abs(lastChannelValue - channelValue) >= 2)) {
-        updateVisualizationWithChannelFilter(fmContoursGeojsonData, fmTransmitterGeojsonData, channelValue);
-        lastChannelValue = channelValue; // Update lastChannelValue with the new value
-    } else {
-        // console.log("Channel change not significant or GeoJSON data not available.");
-    }
+    // Debounce logic to only update if the channel value changes significantly
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      if (lastChannelValue === null || Math.abs(lastChannelValue - channelValue) >= 2) {
+        const display = document.getElementById('fm-channel-display');
+        const frequencyLabel = document.getElementById('fm-frequency-display');
+        const frequencyText = channelFrequencies[Math.round(channelValue).toString()] || "Frequency not found";
+  
+        display.textContent = `FM channel: ${Math.round(channelValue)}`;
+        frequencyLabel.textContent = frequencyText;
+        if (fmContoursGeojsonData && fmTransmitterGeojsonData) {
+          updateVisualizationWithChannelFilter(fmContoursGeojsonData, fmTransmitterGeojsonData, channelValue);
+          lastChannelValue = channelValue; // Update lastChannelValue
+        }
+      }
+    }, 20); // Delay for debouncing
   }
   
   function initFMsliderAndContours(frequencyData) {
     channelFrequencies = frequencyData;
-
+  
     const slider = document.getElementById('fm-channel-slider');
-
-    // Listener for slider input
-    let debounceTimer;
-    slider.addEventListener('input', function(event) {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-            const channelValue = Math.round(parseInt(event.target.value, 10));
-            updateDisplays(channelValue);
-        }, 20); // delay
+    // No need to setup another debouncing here as `updateDisplays` is already debounced
+    slider.addEventListener('input', function() {
+      const channelValue = Math.round(parseInt(this.value, 10));
+      updateDisplays(channelValue);
     });
     
     // Initial update based on the slider's default value
     const initialChannelValue = Math.round(parseInt(slider.value, 10));
     updateDisplays(initialChannelValue);
-}
-  
-function updateVisualizationWithChannelFilter(fmContoursGeojsonData, towerGeojsonData, channelFilter) {
-  if (!fmContoursGeojsonData || !towerGeojsonData) {
-    console.warn("GeoJSON data not available.");
-    return;
   }
   
-  addFMpropagation3D(fmContoursGeojsonData, channelFilter)
-    // .then(() => console.log("FM contour channel updated"))
-    .catch(error => console.error("Failed to update contour channel:", error));
-
-  addFMTowerPts(towerGeojsonData, channelFilter)
-    .catch(error => console.error("Failed to update tower channel:", error));
-}
-
-
-
+  function updateVisualizationWithChannelFilter(fmContoursGeojsonData, towerGeojsonData, channelFilter) {
+    if (!fmContoursGeojsonData || !towerGeojsonData) {
+      console.warn("GeoJSON data not available.");
+      return;
+    }
+  
+    addFMpropagation3D(fmContoursGeojsonData, channelFilter)
+      .catch(error => console.error("Failed to update contour channel:", error));
+  
+    addFMTowerPts(towerGeojsonData, channelFilter)
+      .catch(error => console.error("Failed to update tower channel:", error));
+  }
 
   //////////////////////
 
