@@ -417,6 +417,10 @@ export function gfx() {
     };
   
     ws.onmessage = function(event) {
+
+      // hide mouse cursor if/when data is received
+      document.body.style.cursor = 'none';
+
       const data = JSON.parse(event.data);
       // console.log('Data received from server:', data);
   
@@ -510,6 +514,10 @@ export function gfx() {
     initialize();
   });
 
+  document.addEventListener('mousemove', function() {
+    document.body.style.cursor = ''; // reset to default cursor if we got a mouse going
+  });
+  
   ///////////////////////////////////////////////////
   // MOUSEOVER TRANSITIONS /////////////////////////
 

@@ -15,7 +15,7 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
-  cursor: url("/src/cursor/arrow.cur"), auto;
+  /* cursor: url("/src/cursor/arrow.cur"), auto; */
   overscroll-behavior: none;
   overflow: hidden;
   overflow-y: auto;
@@ -447,7 +447,7 @@ p, ul{
   margin: 0 auto;
   text-align: center;
   overflow: hidden;
-  cursor: url("/src/cursor/whiteCrosshair.cur"), auto;
+  /* cursor: url("/src/cursor/whiteCrosshair.cur"), auto; */
   transition: filter 0.25s linear; /* Transition applies to the filter property */
   image-rendering: pixelated;
   /* filter: invert(1); */
