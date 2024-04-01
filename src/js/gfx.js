@@ -202,7 +202,11 @@ export function gfx() {
     adjustCameraZoom();
   }
 
-  // rotation logic //////////////////////
+  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  // CAMERA CONTROLS /////////////////////////////
+  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  // rotation logic on load //////////////////////
   function flipCamera() {
     // Calculate the distance to the target
     const distanceToTarget = camera.position.distanceTo(controls.target);
@@ -235,11 +239,6 @@ export function gfx() {
     }
             
   
-
-  ////////////////////
-  /////////// DOM stuff event listener resolution display stuff bye bye
-
-
   //////////////////////////////////////
   // Resize function
   function onWindowResize() {
@@ -299,25 +298,34 @@ export function gfx() {
   // Initial call to set up the zoom level
   adjustCameraZoom();
 
-
+  // hardware xy panning - manual camera controls
   function applyPan(deltaX, deltaY) {
-    // Scale factors to control the sensitivity of panning
+    // pan sensitivity
     const panScaleX = 0.005;
     const panScaleY = 0.005;
   
-    // Calculate the panning vector
-    let panOffset = new THREE.Vector3(deltaX * panScaleX, deltaY * panScaleY, 0);
+    // camera right vector (east-west direction)
+    let right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
   
-    // Applying the pan to the camera and the controls target
-    camera.position.add(panOffset);
-    controls.target.add(panOffset);
+    // forward vector that's perpendicular to the right vector and the global up vector (Z-up)
+    // aka recalculate a forward vector that's parallel to the XY plane
+    let globalUp = new THREE.Vector3(0, 0, 1);
+    let forward = new THREE.Vector3().crossVectors(globalUp, right).normalize();
   
-    // Update controls to ensure smooth movement and proper internal state
+    // adjust encoder deltaX and deltaY movements to the camera's present orientation
+    let panVectorX = right.multiplyScalar(deltaX * panScaleX);
+    let panVectorY = forward.multiplyScalar(deltaY * panScaleY);
+  
+    // Combine the adjusted vectors for complete pan direction
+    let panVector = new THREE.Vector3().addVectors(panVectorX, panVectorY);
+  
+    // Apply the pan to the camera and the controls target
+    camera.position.add(panVector);
+    controls.target.add(panVector);
+  
     controls.update();
   }
-  
-  
-
+    
   
   ////////////
   /////////// mouseover intersection raycasting stuff here
@@ -335,6 +343,7 @@ export function gfx() {
       // Check if camera and controls are initialized
       if (camera && controls) {
         if (isCameraRotating) {
+          // autorotate stuff first //////////////
           // Calculate the distance to the target
           const distanceToTarget = camera.position.distanceTo(controls.target);
           const angle = rotationSpeed; // Define the angle for rotation
@@ -353,9 +362,11 @@ export function gfx() {
             .copy(controls.target)
             .add(relativePosition.setLength(distanceToTarget));
 
+          ///// now hardware movement
           // encoder strafing + panning
           if (globalDeltaLeft !== 0 || globalDeltaRight !== 0) {
-            applyPan(globalDeltaLeft, globalDeltaRight);
+            // inverted values to align with etch a sketch style : )
+            applyPan(-globalDeltaLeft, -globalDeltaRight);
       
             // Reset global deltas to prevent continuous panning
             globalDeltaLeft = 0;
@@ -407,7 +418,7 @@ export function gfx() {
   
     ws.onmessage = function(event) {
       const data = JSON.parse(event.data);
-      console.log('Data received from server:', data);
+      // console.log('Data received from server:', data);
   
       if (data.potValue !== undefined && !isDragging) {
         const scaledValue = Math.round(remapValues(data.potValue, 201, 300, 300, 201));
@@ -1303,7 +1314,7 @@ async function addFMTowerPts(geojson, channelFilter) {
         // Update lastSliderValue with the current value for future comparisons
         lastSliderValue = sliderValue;
       } else {
-        console.log("Slider change not significant.");
+        // console.log("Slider change not significant.");
       }
     }
           
@@ -1333,14 +1344,14 @@ async function addFMTowerPts(geojson, channelFilter) {
 
     display.textContent = `FM channel: ${Math.round(channelValue)}`;
     frequencyLabel.textContent = frequencyText; // Use frequencyLabel for the frequency text
-    console.log(channelValue);
+    // console.log(channelValue);
 
     // Check if the channel value has changed significantly (by at least two values)
     if (fmContoursGeojsonData && fmTransmitterGeojsonData && (lastChannelValue === null || Math.abs(lastChannelValue - channelValue) >= 2)) {
         updateVisualizationWithChannelFilter(fmContoursGeojsonData, fmTransmitterGeojsonData, channelValue);
         lastChannelValue = channelValue; // Update lastChannelValue with the new value
     } else {
-        console.log("Channel change not significant or GeoJSON data not available.");
+        // console.log("Channel change not significant or GeoJSON data not available.");
     }
   }
   
@@ -1371,7 +1382,7 @@ function updateVisualizationWithChannelFilter(fmContoursGeojsonData, towerGeojso
   }
   
   addFMpropagation3D(fmContoursGeojsonData, channelFilter)
-    .then(() => console.log("FM contour channel updated"))
+    // .then(() => console.log("FM contour channel updated"))
     .catch(error => console.error("Failed to update contour channel:", error));
 
   addFMTowerPts(towerGeojsonData, channelFilter)
