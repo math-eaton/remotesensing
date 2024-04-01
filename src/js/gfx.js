@@ -40,6 +40,11 @@ export function gfx() {
   let isDragging = false; // slider interaction default
   let lastChannelValue = null; // track rate of change of slider values for debouncing purposes
   let lastSliderValue = null;
+  let globalDeltaLeftPressed = 0;
+  let globalDeltaRightPressed = 0;
+  let globalDeltaLeft = 0;
+  let globalDeltaRight = 0;
+
 
 
   // Define color scheme variables
@@ -294,6 +299,25 @@ export function gfx() {
   // Initial call to set up the zoom level
   adjustCameraZoom();
 
+
+  function applyPan(deltaX, deltaY) {
+    // Scale factors to control the sensitivity of panning
+    const panScaleX = 0.005;
+    const panScaleY = 0.005;
+  
+    // Calculate the panning vector
+    let panOffset = new THREE.Vector3(deltaX * panScaleX, deltaY * panScaleY, 0);
+  
+    // Applying the pan to the camera and the controls target
+    camera.position.add(panOffset);
+    controls.target.add(panOffset);
+  
+    // Update controls to ensure smooth movement and proper internal state
+    controls.update();
+  }
+  
+  
+
   
   ////////////
   /////////// mouseover intersection raycasting stuff here
@@ -308,7 +332,6 @@ export function gfx() {
       controls.update();
 
 
-      // Rotate the camera if isCameraRotating is true
       // Check if camera and controls are initialized
       if (camera && controls) {
         if (isCameraRotating) {
@@ -329,6 +352,27 @@ export function gfx() {
           camera.position
             .copy(controls.target)
             .add(relativePosition.setLength(distanceToTarget));
+
+          // encoder strafing + panning
+          if (globalDeltaLeft !== 0 || globalDeltaRight !== 0) {
+            applyPan(globalDeltaLeft, globalDeltaRight);
+      
+            // Reset global deltas to prevent continuous panning
+            globalDeltaLeft = 0;
+            globalDeltaRight = 0;
+          }
+      
+          // encoder rotation and tilt
+          if (globalDeltaLeftPressed !== 0 || globalDeltaRightPressed !== 0) {
+            const deltaXScale = 0.01;
+            const deltaYScale = 0.01;
+            camera.position.y += globalDeltaRightPressed * deltaYScale;
+            camera.position.x += globalDeltaLeftPressed * deltaXScale;
+    
+            // Reset deltas after applying
+            globalDeltaLeftPressed = 0;
+            globalDeltaRightPressed = 0;
+          }    
 
           // Ensure the camera keeps looking at the target
           camera.lookAt(controls.target);
@@ -372,6 +416,18 @@ export function gfx() {
         updateLabelPosition(scaledValue); 
         updateDisplays(scaledValue);
       }
+
+      if (data.deltaLeft !== undefined && data.deltaRight !== undefined) {
+        globalDeltaLeft = data.deltaLeft;
+        globalDeltaRight = data.deltaRight;
+      }
+
+
+      if (data.deltaLeftPressed !== undefined && data.deltaRightPressed !== undefined) {
+        globalDeltaLeftPressed = data.deltaLeftPressed;
+        globalDeltaRightPressed = data.deltaRightPressed;
+      }
+
     };
   
     ws.onerror = function(event) {
@@ -903,7 +959,7 @@ function updatefmContourGroups() {
 }
 
 // Function to add FM propagation 3D line loops
-function addFMpropagation3D(geojson, channelFilter, stride = 5) {
+function addFMpropagation3D(geojson, channelFilter, stride = 2) {
     return new Promise((resolve, reject) => {
         // Existing groups not matching the current channelFilter are marked for decay
         Object.keys(fmContourGroups).forEach(groupId => {
@@ -1497,14 +1553,14 @@ function updateVisualizationWithChannelFilter(fmContoursGeojsonData, towerGeojso
   async function loadGeoJSONData(onCriticalDataLoaded) {
     // console.log("loading...")
     const urls = [
-      'src/assets/data/stanford_contour_simplify_1000m_zhou_20240325_simplified.geojson',
+      'src/assets/data/elevation_contours_shaved.geojson',
       'src/assets/data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson',
       // 'src/assets/data/FmTowers_FeaturesToJSON_AOI_20231204.geojson',
       'src/assets/data/study_area_admin0clip.geojson',
       'src/assets/data/cellServiceCentroids_2000m_20231210.geojson',
       'src/assets/data/fm_freq_dict.json',
       'src/assets/data/FM_transmitter_sites.geojson',
-      'src/assets/data/FM_service_contour_downsample12_5step_processed_FMinfoJoin_polygon_20240324.geojson'
+      'src/assets/data/fm_contours_shaved.geojson'
     ];
 
     let criticalDatasetsLoaded = 0;
@@ -1531,7 +1587,7 @@ function updateVisualizationWithChannelFilter(fmContoursGeojsonData, towerGeojso
   function isCriticalDataset(url) {
     // Define logic to determine if a dataset is critical for initial rendering
     // todo: this breaks if the contours aren't required up front but they take longest to load
-    return url.includes('stanford_contour') || url.includes('service');
+    return url.includes('elevation') || url.includes('contour');
   }
   
 
@@ -1545,7 +1601,7 @@ function updateVisualizationWithChannelFilter(fmContoursGeojsonData, towerGeojso
 
   function handleGeoJSONData(url, data) {
     switch (url) {
-      case 'src/assets/data/stanford_contour_simplify_1000m_zhou_20240325_simplified.geojson':
+      case 'src/assets/data/elevation_contours_shaved.geojson':
         contourGeojsonData = data;
         const meanElevation = calculateMeanContourElevation(data);
         // console.log(`mean elevation: ${meanElevation}`)
@@ -1557,7 +1613,7 @@ function updateVisualizationWithChannelFilter(fmContoursGeojsonData, towerGeojso
         addCellTowerPts(data);
         break;
 
-      case 'src/assets/data/FM_service_contour_downsample12_5step_processed_FMinfoJoin_polygon_20240324.geojson':
+      case 'src/assets/data/fm_contours_shaved.geojson':
         fmContoursGeojsonData = data;
         // addFMpropagation3D(data); don't need this here i guess?
         break;
