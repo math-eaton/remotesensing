@@ -64,7 +64,7 @@ export function gfx() {
     // highestElevationColor: "#ff0000", // Red
     mstFmColor: '#FF5F1F', // yellow
     mstCellColor: '#FFFF00', // neon orange
-    boundingBoxColor: '#0b0b0b',
+    boundingBoxColor: '#101010',
     coastlineColor: '#303030',
     contoursLabelColor: '#00ff00',
     // cellColor: '#FFFF00', // magenta
@@ -178,7 +178,7 @@ export function gfx() {
     controls.maxDistance = 2; // max camera zoom out (perspective cam)
     controls.minDistance = 0.5; // min camera zoom in (perspective cam)
     controls.maxZoom = 1.7; // max camera zoom out (ortho cam)
-    controls.minZoom = 0.5; // min camera zoom in (ortho cam)
+    controls.minZoom = 0.3; // min camera zoom in (ortho cam)
 
     // console.log(controls.angle)
 
@@ -265,7 +265,7 @@ export function gfx() {
     renderer.setSize(width, height);
 
     // update this value to alter pixel ratio scaled with the screen
-    pixelationFactor = 0.3;
+    pixelationFactor = 0.4;
 
     // Calculate new dimensions based on the value
     var newWidth = Math.max(1, window.innerWidth * pixelationFactor);
@@ -679,8 +679,8 @@ export function gfx() {
   // GEOGRAPHIC DATA VIS /////////////////////////////
 
   // Define a scaling factor for the Z values (elevation)
-  const zScale = 0.00025; // Change this value to scale the elevation up or down
-  // const zScale = 0.0005; // Change this value to scale the elevation up or down
+  // const zScale = 0.00025; // Change this value to scale the elevation up or down
+  const zScale = 0.0007;
 
   // Function to get color based on elevation
   function getColorForElevation(elevation, minElevation, maxElevation) {
@@ -1741,7 +1741,7 @@ async function addFMTowerPts(geojson, channelFilter) {
           if (feature.geometry.type === 'Polygon') {
             // Create a flat array of vertex coordinates for Earcut
             const vertices = [];
-            const holes = []; // This will remain empty in this example but is useful for polygons with holes
+            const holes = []; //useful for polygons with holes
             feature.geometry.coordinates[0].forEach(coord => {
               const [lon, lat] = coord;
               const [x, y] = toStatePlane(lon, lat); // Assuming this function returns planar coordinates suitable for your application
@@ -1751,24 +1751,20 @@ async function addFMTowerPts(geojson, channelFilter) {
             // Use Earcut to triangulate the vertices. No holes in this case, so the second argument is null.
             const indices = Earcut.triangulate(vertices, null, 2);
 
-            // Convert vertices array to a THREE.BufferAttribute for positions
             const positionAttribute = new THREE.Float32BufferAttribute(vertices, 2);
 
-            // Create a BufferGeometry
             const geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', positionAttribute);
 
             // Set the indices returned by Earcut as the element index array for the geometry
             geometry.setIndex(indices);
 
-            // Since we're working in 2D (x, y) and Earcut works with 2D data, we need to modify the vertex positions
+            // earcut is 2d only, so modify the vertex positions
             // to add a z-coordinate (which is 0 in this case)
             geometry.attributes.position.array = new Float32Array(geometry.attributes.position.array.map((value, index) => index % 3 === 2 ? 0 : value));
 
-            // Create the mesh with the material
             const mesh = new THREE.Mesh(geometry, material);
 
-            // Add the mesh to your scene or analysis area
             scene.add(mesh);
             analysisArea.add(mesh);
             }    
@@ -1874,7 +1870,7 @@ async function addFMTowerPts(geojson, channelFilter) {
       'src/assets/data/fm_contours_shaved.geojson',
       'src/assets/data/CellYesService_points_2000m_20240403.geojson',
       'src/assets/data/ne_50m_ocean_aoiClip.geojson',
-      'src/assets/data/NYS_fullElevDEM_boundingBox.geojson'
+      'src/assets/data/compositeSurface_polygon_surface.geojson'
     ];
 
     let criticalDatasetsLoaded = 0;
@@ -1946,7 +1942,7 @@ async function addFMTowerPts(geojson, channelFilter) {
         addFMTowerPts(data);
         break;
 
-      case 'src/assets/data/NYS_fullElevDEM_boundingBox.geojson':
+      case 'src/assets/data/compositeSurface_polygon_surface.geojson':
         boundingBoxGeojsonData = data;
         visualizeBoundingBoxGeoJSON(data);
         break;
