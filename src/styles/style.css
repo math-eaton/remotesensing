@@ -30,6 +30,8 @@
   min-width: 100vw;
   overflow: hidden;
   /* mix-blend-mode: screen; */
+  /* filter: grayscale(1); */
+  /* filter: hue-rotate(270deg); */
 }
 
 a {

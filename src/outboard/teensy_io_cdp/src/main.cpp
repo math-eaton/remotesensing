@@ -3,24 +3,24 @@
 // #include "TM1637Display.h"
 
 // Define the pins connected to the SPDT switch
-const int pin1 = 0; 
-const int pin2 = 1; 
+const int pin1 = 6; 
+const int pin2 = 7; 
 
 // Slide potentiometer pin
-const int potPin = A4;
+const int potPin = A7;
 
 // LED pin (PWM-capable)
-const int ledPin = A6;
+const int ledPin = A8;
 // Number of full brightness ledCycles (dark-light-dark) across the potentiometer's range
 const int ledCycles = 3;
 
 // Encoders
-Encoder knobLeft(14, 15); 
-Encoder knobRight(16, 17);
+Encoder knobLeft(9, 10); 
+Encoder knobRight(16, 15);
 
 // Encoder push-button pins
 const int buttonPinLeft = 11; 
-const int buttonPinRight = 12;
+const int buttonPinRight = 14;
 
 // Encoder positions
 long positionLeft  = -999;
@@ -194,7 +194,7 @@ void loop() {
   averagePotValue = totalPotValue / numSamples;
 
   // Now use averagePotValue instead of potValue for mapping and further logic
-  int mappedPotValue = map(averagePotValue, 0, 1023, 300, 201); 
+  int mappedPotValue = map(averagePotValue, 0, 1023, 201, 300); 
 
   // calculate pot LED brightness based on slider value
   float phase = (float(potValue) * 2 * PI * ledCycles) / 1023.0; // Calculate phase for sine wave

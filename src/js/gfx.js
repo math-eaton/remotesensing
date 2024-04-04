@@ -6,6 +6,7 @@ import proj4 from 'proj4';
 import hull from 'convex-hull';
 import Delaunator from 'delaunator';
 import { GeoJSON } from 'geojson';
+import { Earcut } from 'three/src/extras/Earcut.js'
 // import { GeoJSON } from 'geojson';
 // import Graph from 'graphology';
 // import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
@@ -24,9 +25,13 @@ export function gfx() {
   let cellMSTLines = new THREE.Group();
   let elevContourLines = new THREE.Group();
   let propagationPolygons = new THREE.Group();
-  let cellServiceMesh = new THREE.Group();
+  let waterPolys = new THREE.Group();
+  let cellNoServiceMesh = new THREE.Group();
+  let cellYesServiceMesh = new THREE.Group();
   let analysisArea = new THREE.Group();
-  cellServiceMesh.visible = false; // Set the mesh to be invisible initially
+  let coastline = new THREE.Group();
+  cellNoServiceMesh.visible = false; // Set the mesh to be invisible initially
+  cellYesServiceMesh.visible = true; // Set the mesh to be invisible initially
 
   // downsample framerate for performance
   let clock = new THREE.Clock();
@@ -59,11 +64,15 @@ export function gfx() {
     // highestElevationColor: "#ff0000", // Red
     mstFmColor: '#FF5F1F', // yellow
     mstCellColor: '#FFFF00', // neon orange
-    boundingBoxColor: '#303030',
+    boundingBoxColor: '#0b0b0b',
+    coastlineColor: '#303030',
     contoursLabelColor: '#00ff00',
-    cellColor: '#FFFF00', // magenta
+    // cellColor: '#FFFF00', // magenta
+    cellYesColor: '#FFFF00',
+    cellNoColor: '#e50000',
     matchingPyramidColor: '#FFFF00',
     nonMatchingPyramidColor: '#FF1493',
+    waterColor: '#303030',
   };
 
   // Define the custom projection with its PROJ string
@@ -117,11 +126,13 @@ export function gfx() {
   function initThreeJS() {
     scene = new THREE.Scene();
     // scene.overrideMaterial = new THREE.MeshBasicMaterial({ color: "green" });
-    camera = new THREE.PerspectiveCamera(
-      75,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      1000,
+    // camera = new THREE.PerspectiveCamera(
+    //   75,
+    //   window.innerWidth / window.innerHeight,
+    //   0.1,
+    //   1000,
+    // );
+    camera = new THREE.OrthographicCamera(
     );
     camera.up.set(0, 0, 1); // Set Z as up-direction
 
@@ -164,8 +175,11 @@ export function gfx() {
     controls.minPolarAngle = 0; // 0 radians (0 degrees) - directly above the target
     controls.maxPolarAngle = Math.PI / 6; // π/n radians (z degrees) - on the horizon
     // Set the maximum distance the camera can dolly out
-    controls.maxDistance = 2; // max camera zoom out
-    controls.minDistance = 0.5; // min camera zoom in
+    controls.maxDistance = 2; // max camera zoom out (perspective cam)
+    controls.minDistance = 0.5; // min camera zoom in (perspective cam)
+    controls.maxZoom = 1.7; // max camera zoom out (ortho cam)
+    controls.minZoom = 0.5; // min camera zoom in (ortho cam)
+
     // console.log(controls.angle)
 
     // const audioListener = new THREE.AudioListener();
@@ -533,7 +547,8 @@ export function gfx() {
       const distanceToTarget = camera.position.distanceTo(controls.target);
       const threshold = 5;
 
-      cellServiceMesh.visible = distanceToTarget <= threshold;
+      cellNoServiceMesh.visible = distanceToTarget <= threshold;
+      cellYesServiceMesh.visible = distanceToTarget <= threshold;
     } else {
       console.log('Camera or controls not defined.');
     }
@@ -840,12 +855,96 @@ export function gfx() {
       }
     });
   }
+
+  //   // radiating triangle fill polys - needs closed geom
+  // function addWaterPoly(geojson, stride = 1) {
+  //   return new Promise((resolve, reject) => {
+  //     try {
+  //       for (let i = 0; i < geojson.features.length; i += stride) {
+  //         const feature = geojson.features[i];
+
+  //         // Create a new material for each polygon
+  //         const material = new THREE.MeshBasicMaterial({
+  //           color: colorScheme.waterColor,
+  //           transparent: true,
+  //           wireframe: true,
+  //           dithering: true,
+  //           opacity: 0.8, // Start with lower opacity
+  //           side: THREE.FrontSide,
+  //         });
+
+  //         try {
+  //           const shapeCoords = feature.geometry.coordinates[0];
+  //           const vertices = [];
+  //           let centroid = new THREE.Vector3(0, 0, 0);
+
+  //           // Convert coordinates to vertices and calculate centroid
+  //           shapeCoords.forEach((coord) => {
+  //             const [x, y] = toStatePlane(coord[0], coord[1]);
+  //             const z = meanElevation * zScale; // Set Z to a hardcoded contour elevation
+  //             vertices.push(new THREE.Vector3(x, y, z));
+  //             centroid.add(new THREE.Vector3(x, y, z));
+  //           });
+
+  //           centroid.divideScalar(shapeCoords.length); // Average to find centroid
+  //           vertices.unshift(centroid); // Add centroid as the first vertex
+
+  //           const shapeGeometry = new THREE.BufferGeometry();
+  //           const positions = [];
+
+  //           // The centroid is the first vertex, and it's connected to every other vertex
+  //           for (let j = 1; j <= shapeCoords.length; j++) {
+  //             // Add centroid
+  //             positions.push(centroid.x, centroid.y, centroid.z);
+
+  //             // Add current vertex
+  //             positions.push(
+  //               vertices[j % shapeCoords.length].x,
+  //               vertices[j % shapeCoords.length].y,
+  //               vertices[j % shapeCoords.length].z,
+  //             );
+
+  //             // Add next vertex
+  //             positions.push(
+  //               vertices[(j + 1) % shapeCoords.length].x,
+  //               vertices[(j + 1) % shapeCoords.length].y,
+  //               vertices[(j + 1) % shapeCoords.length].z,
+  //             );
+  //           }
+
+  //           shapeGeometry.setAttribute(
+  //             'position',
+  //             new THREE.Float32BufferAttribute(positions, 3),
+  //           );
+  //           shapeGeometry.computeVertexNormals();
+
+  //           const mesh = new THREE.Mesh(shapeGeometry, material);
+  //           mesh.name = 'polygon-' + i;
+  //           scene.add(mesh);
+  //           waterPolys.add(mesh);
+  //         } catch (error) {
+  //           console.error(`Error processing feature at index ${i}:`, error);
+  //         }
+  //       }
+  //       // Add the water poly group to the scene
+  //       scene.add(waterPolys);
+
+  //       // Set the initial visibility of the fm propagation curves layer to false
+  //       waterPolys.visible = false;
+
+  //       resolve(); // Resolve the promise when done
+  //     } catch (error) {
+  //       reject(`Error in addPolygons: ${error.message}`);
+  //     }
+  //   });
+  // }
+
     
-  function addCellServiceMesh(geojson, stride = 3) {
+  function addCellNoServiceMesh(geojson, stride = 1) {
     return new Promise((resolve, reject) => {
       try {
         // Reset/clear the group to avoid adding duplicate meshes
-        cellServiceMesh.clear();
+        cellNoServiceMesh.clear();
 
         // Downsample and group points by 'group_ID'
         const groups = {};
@@ -908,7 +1007,7 @@ export function gfx() {
 
           // Wireframe material
           const wireframeMaterial = new THREE.MeshBasicMaterial({
-            color: colorScheme.cellColor, // Use your existing color scheme
+            color: colorScheme.cellNoColor, // Use your existing color scheme
             transparent: true,
             alphaHash: true,
             opacity: 0.6,
@@ -929,19 +1028,125 @@ export function gfx() {
           // group.add(fillMesh);
           group.add(wireframeMesh);
 
-          // Add the group to the cellServiceMesh group
-          cellServiceMesh.add(group);
+          // Add the group to the cellNoServiceMesh group
+          cellNoServiceMesh.add(group);
         });
 
-        // Add the cellServiceMesh group to the scene
-        scene.add(cellServiceMesh);
+        // Add the cellNoServiceMesh group to the scene
+        scene.add(cellNoServiceMesh);
 
         // Set the initial visibility of the cell service mesh layer to false
-        cellServiceMesh.visible = false;
+        cellNoServiceMesh.visible = false;
 
-        resolve(cellServiceMesh); // Optionally return the group for further manipulation
+        resolve(cellNoServiceMesh); // Optionally return the group for further manipulation
       } catch (error) {
-        reject(`Error in addCellServiceMesh: ${error.message}`);
+        reject(`Error in addCellNoServiceMesh: ${error.message}`);
+      }
+    });
+  }
+
+   
+  function addCellYesServiceMesh(geojson, stride = 1) {
+    return new Promise((resolve, reject) => {
+      try {
+        // Reset/clear the group to avoid adding duplicate meshes
+        cellYesServiceMesh.clear();
+
+        // Downsample and group points by 'group_ID'
+        const groups = {};
+        for (let i = 0; i < geojson.features.length; i += stride) {
+          const feature = geojson.features[i];
+          const groupId = feature.properties.Group_ID;
+          const [lon, lat] = feature.geometry.coordinates;
+          const [x, y] = toStatePlane(lon, lat); // Project to State Plane
+          const z = feature.properties.Z * zScale; // Apply Z scaling
+
+          if (!groups[groupId]) {
+            groups[groupId] = [];
+          }
+          groups[groupId].push(new THREE.Vector3(x, y, z));
+        }
+
+        // Process each group separately and create meshes
+        Object.keys(groups).forEach((groupId) => {
+          const pointsForDelaunay = groups[groupId];
+
+          var delaunay = Delaunator.from(
+            pointsForDelaunay.map((p) => [p.x, p.y]),
+          );
+          var meshIndex = [];
+          const thresholdDistance = 0.125; // Set your distance threshold here
+
+          for (let i = 0; i < delaunay.triangles.length; i += 3) {
+            const p1 = pointsForDelaunay[delaunay.triangles[i]];
+            const p2 = pointsForDelaunay[delaunay.triangles[i + 1]];
+            const p3 = pointsForDelaunay[delaunay.triangles[i + 2]];
+
+            // Check distances between each pair of points in a triangle
+            if (
+              distanceBetweenPoints(p1, p2) <= thresholdDistance &&
+              distanceBetweenPoints(p2, p3) <= thresholdDistance &&
+              distanceBetweenPoints(p3, p1) <= thresholdDistance
+            ) {
+              meshIndex.push(
+                delaunay.triangles[i],
+                delaunay.triangles[i + 1],
+                delaunay.triangles[i + 2],
+              );
+            }
+          }
+
+          var geom = new THREE.BufferGeometry().setFromPoints(
+            pointsForDelaunay,
+          );
+          geom.setIndex(meshIndex);
+          geom.computeVertexNormals();
+
+          // Solid fill material (black fill)
+          const fillMaterial = new THREE.MeshBasicMaterial({
+            color: 0x000000, // Black color for the fill
+            transparent: false,
+            // opacity: 0.75, // Adjust opacity as needed
+            // alphaHash: true,
+            side: THREE.DoubleSide, //
+          });
+
+          // Wireframe material
+          const wireframeMaterial = new THREE.MeshBasicMaterial({
+            color: colorScheme.cellYesColor, // Use your existing color scheme
+            transparent: true,
+            alphaHash: true,
+            opacity: 0.6,
+            wireframe: true,
+            side: THREE.FrontSide,
+          });
+
+          // Create mesh with the fill material
+          var fillMesh = new THREE.Mesh(geom, fillMaterial);
+          fillMesh.name = 'fillMesh-' + groupId;
+
+          // Create mesh with the wireframe material
+          var wireframeMesh = new THREE.Mesh(geom, wireframeMaterial);
+          wireframeMesh.name = 'wireframeMesh-' + groupId;
+
+          // Group to hold both meshes
+          var group = new THREE.Group();
+          // group.add(fillMesh);
+          group.add(wireframeMesh);
+
+          // Add the group to the cellYesServiceMesh group
+          cellYesServiceMesh.add(group);
+        });
+
+        // Add the cellYesServiceMesh group to the scene
+        scene.add(cellYesServiceMesh);
+
+        // Set the initial visibility of the cell service mesh layer to false
+        cellYesServiceMesh.visible = false;
+
+        resolve(cellYesServiceMesh); // Optionally return the group for further manipulation
+      } catch (error) {
+        reject(`Error in addCellYesServiceMesh: ${error.message}`);
       }
     });
   }
@@ -976,7 +1181,7 @@ function updatefmContourGroups() {
 }
 
 // Function to add FM propagation 3D line loops
-function addFMpropagation3D(geojson, channelFilter, stride = 2) {
+function addFMpropagation3D(geojson, channelFilter, stride = 1) {
     return new Promise((resolve, reject) => {
         // Existing groups not matching the current channelFilter are marked for decay
         Object.keys(fmContourGroups).forEach(groupId => {
@@ -1477,8 +1682,10 @@ async function addFMTowerPts(geojson, channelFilter) {
   function visualizeBoundingBoxGeoJSON(geojson) {
     return new Promise((resolve, reject) => {
       try {
-        const material = new THREE.LineBasicMaterial({
-          color: colorScheme.boundingBoxColor,
+        const material = new THREE.MeshBasicMaterial({
+          color: colorScheme.boundingBoxColor, // Use the existing color scheme
+          wireframe: true,
+          side: THREE.FrontSide // Render both sides of the polygon
         }); // bounding box color
 
         geojson.features.forEach((feature) => {
@@ -1507,6 +1714,107 @@ async function addFMTowerPts(geojson, channelFilter) {
               polygon.forEach((linearRing) => {
                 const geometry = new THREE.BufferGeometry();
                 const vertices = [];
+                console.log("here?")
+
+                linearRing.forEach((coord) => {
+                  const [lon, lat] = coord;
+                  const [x, y] = toStatePlane(lon, lat);
+                  const z = zScale * 20;
+                  vertices.push(new THREE.Vector3(x, y, z));
+                });
+
+                // Close the loop for each linear ring
+                if (linearRing.length > 2) {
+                  const [lon, lat] = linearRing[0];
+                  const [x, y] = toStatePlane(lon, lat);
+                  const z = zScale * 20;
+                  vertices.push(new THREE.Vector3(x, y, z));
+                }
+
+                geometry.setFromPoints(vertices);
+                const line = new THREE.Mesh(geometry, material);
+                scene.add(line);
+                analysisArea.add(line);
+              });
+            });
+          }
+          if (feature.geometry.type === 'Polygon') {
+            // Create a flat array of vertex coordinates for Earcut
+            const vertices = [];
+            const holes = []; // This will remain empty in this example but is useful for polygons with holes
+            feature.geometry.coordinates[0].forEach(coord => {
+              const [lon, lat] = coord;
+              const [x, y] = toStatePlane(lon, lat); // Assuming this function returns planar coordinates suitable for your application
+              vertices.push(x, y); // Earcut expects a flat array of coordinates
+            });
+
+            // Use Earcut to triangulate the vertices. No holes in this case, so the second argument is null.
+            const indices = Earcut.triangulate(vertices, null, 2);
+
+            // Convert vertices array to a THREE.BufferAttribute for positions
+            const positionAttribute = new THREE.Float32BufferAttribute(vertices, 2);
+
+            // Create a BufferGeometry
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', positionAttribute);
+
+            // Set the indices returned by Earcut as the element index array for the geometry
+            geometry.setIndex(indices);
+
+            // Since we're working in 2D (x, y) and Earcut works with 2D data, we need to modify the vertex positions
+            // to add a z-coordinate (which is 0 in this case)
+            geometry.attributes.position.array = new Float32Array(geometry.attributes.position.array.map((value, index) => index % 3 === 2 ? 0 : value));
+
+            // Create the mesh with the material
+            const mesh = new THREE.Mesh(geometry, material);
+
+            // Add the mesh to your scene or analysis area
+            scene.add(mesh);
+            analysisArea.add(mesh);
+            }    
+          });
+            scene.add(analysisArea);
+            resolve(); // Resolve the promise when done
+          } catch (error) {
+            reject(`Error in visualizeBoundingBoxGeoJSON: ${error.message}`);
+          }
+        });
+      }
+      
+  // Function to visualize bounding box from GeoJSON
+  function addCoastline(geojson) {
+    return new Promise((resolve, reject) => {
+      try {
+        const material = new THREE.LineBasicMaterial({
+          color: colorScheme.coastlineColor,
+        }); // bounding box color
+
+        geojson.features.forEach((feature) => {
+          // Handle MultiLineString
+          if (feature.geometry.type === 'MultiLineString') {
+            feature.geometry.coordinates.forEach((lineString) => {
+              const geometry = new THREE.BufferGeometry();
+              const vertices = [];
+
+              lineString.forEach((coord) => {
+                const [lon, lat] = coord;
+                const [x, y] = toStatePlane(lon, lat);
+                const z = zScale * 20;
+                vertices.push(new THREE.Vector3(x, y, z));
+              });
+
+              geometry.setFromPoints(vertices);
+              const line = new THREE.Line(geometry, material);
+              scene.add(line);
+              coastline.add(line);
+            });
+          }
+          // Handle MultiPolygon
+          else if (feature.geometry.type === 'MultiPolygon') {
+            feature.geometry.coordinates.forEach((polygon) => {
+              polygon.forEach((linearRing) => {
+                const geometry = new THREE.BufferGeometry();
+                const vertices = [];
 
                 linearRing.forEach((coord) => {
                   const [lon, lat] = coord;
@@ -1526,14 +1834,14 @@ async function addFMTowerPts(geojson, channelFilter) {
                 geometry.setFromPoints(vertices);
                 const line = new THREE.Line(geometry, material);
                 scene.add(line);
-                analysisArea.add(line);
+                coastline.add(line);
               });
             });
           }
           // Add handling for other geometry types if necessary
         });
 
-        scene.add(analysisArea);
+        scene.add(coastline);
 
         resolve(); // Resolve the promise when done
       } catch (error) {
@@ -1541,6 +1849,7 @@ async function addFMTowerPts(geojson, channelFilter) {
       }
     });
   }
+
 
   /////////////////////////////////////////////////////
   // CHECK FOR COINCIDENT POINTS IN GEOJSON //////////
@@ -1558,11 +1867,14 @@ async function addFMTowerPts(geojson, channelFilter) {
       'src/assets/data/elevation_contours_shaved.geojson',
       'src/assets/data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson',
       // 'src/assets/data/FmTowers_FeaturesToJSON_AOI_20231204.geojson',
-      'src/assets/data/study_area_admin0clip.geojson',
+      'src/assets/data/ne_50m_coastline_aoiClip.geojson',
       'src/assets/data/cellServiceCentroids_2000m_20231210.geojson',
       'src/assets/data/fm_freq_dict.json',
       'src/assets/data/FM_transmitter_sites.geojson',
-      'src/assets/data/fm_contours_shaved.geojson'
+      'src/assets/data/fm_contours_shaved.geojson',
+      'src/assets/data/CellYesService_points_2000m_20240403.geojson',
+      'src/assets/data/ne_50m_ocean_aoiClip.geojson',
+      'src/assets/data/NYS_fullElevDEM_boundingBox.geojson'
     ];
 
     let criticalDatasetsLoaded = 0;
@@ -1598,7 +1910,10 @@ async function addFMTowerPts(geojson, channelFilter) {
     fmContoursGeojsonData,
     fmTransmitterGeojsonData,
     boundingBoxGeojsonData,
-    cellServiceGeojsonData,
+    coastlineGeojsonData,
+    waterPolyGeojsonData,
+    cellNoServiceGeojsonData,
+    cellYesServiceGeojsonData,
     fmFreqDictionaryJson;
 
   function handleGeoJSONData(url, data) {
@@ -1620,10 +1935,10 @@ async function addFMTowerPts(geojson, channelFilter) {
         // addFMpropagation3D(data); don't need this here i guess?
         break;
 
-      // case 'src/assets/data/FmTowers_FeaturesToJSON_AOI_20231204.geojson':
-      //   fmTransmitterGeojsonData = data;
-      //   addFMTowerPts(data);
-      //   break;
+      case 'src/assets/data/FmTowers_FeaturesToJSON_AOI_20231204.geojson':
+        fmTransmitterGeojsonData = data;
+        addFMTowerPts(data);
+        break;
 
       // updated points using fm contour origins
       case 'src/assets/data/FM_transmitter_sites.geojson':
@@ -1631,9 +1946,14 @@ async function addFMTowerPts(geojson, channelFilter) {
         addFMTowerPts(data);
         break;
 
-      case 'src/assets/data/study_area_admin0clip.geojson':
+      case 'src/assets/data/NYS_fullElevDEM_boundingBox.geojson':
         boundingBoxGeojsonData = data;
-        // visualizeBoundingBoxGeoJSON(data);
+        visualizeBoundingBoxGeoJSON(data);
+        break;
+
+      case 'src/assets/data/ne_50m_coastline_aoiClip.geojson':
+        coastlineGeojsonData = data;
+        addCoastline(data);
         break;
 
       case 'src/assets/data/NYS_cellTower_viewshed_20231130.jpg':
@@ -1642,10 +1962,20 @@ async function addFMTowerPts(geojson, channelFilter) {
         break;
 
       case 'src/assets/data/cellServiceCentroids_2000m_20231210.geojson':
-        cellServiceGeojsonData = data;
-        // addCellServiceMesh(data);
+        cellNoServiceGeojsonData = data;
+        // addCellNoServiceMesh(data);
         break;
 
+      case 'src/assets/data/CellYesService_points_2000m_20240403.geojson':
+        cellYesServiceGeojsonData = data;
+        // addCellYesServiceMesh(data);
+        break;  
+
+      case 'src/assets/data/ne_50m_ocean_aoiClip.geojson':
+        waterPolyGeojsonData = data;
+        // addWaterPoly(data);
+        break;
+  
       case 'src/assets/data/fm_freq_dict.json':
         fmFreqDictionaryJson = data;
         break;
