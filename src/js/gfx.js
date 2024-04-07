@@ -28,6 +28,7 @@ export function gfx() {
   let waterPolys = new THREE.Group();
   let cellNoServiceMesh = new THREE.Group();
   let cellYesServiceMesh = new THREE.Group();
+  let accessibilityPoly = new THREE.Group();
   let analysisArea = new THREE.Group();
   let coastline = new THREE.Group();
   cellNoServiceMesh.visible = false; // Set the mesh to be invisible initially
@@ -64,7 +65,7 @@ export function gfx() {
     // highestElevationColor: "#ff0000", // Red
     mstFmColor: '#FF5F1F', // yellow
     mstCellColor: '#FFFF00', // neon orange
-    boundingBoxColor: '#101010',
+    boundingBoxColor: '#3d3d3d',
     coastlineColor: '#303030',
     contoursLabelColor: '#00ff00',
     // cellColor: '#FFFF00', // magenta
@@ -123,6 +124,12 @@ export function gfx() {
   const rayGeometry = new THREE.BufferGeometry();
   const rayLine = new THREE.Line(rayGeometry, rayMaterial);
 
+  let raycaster = new THREE.Raycaster();
+  let pointer = new THREE.Vector2();
+
+  document.addEventListener('pointermove', onPointerMove);
+
+
   function initThreeJS() {
     scene = new THREE.Scene();
     // scene.overrideMaterial = new THREE.MeshBasicMaterial({ color: "green" });
@@ -156,9 +163,11 @@ export function gfx() {
     );
 
     // Create the line and add it to the scene
-    scene.add(rayLine);
-    rayLine.scale.set(1, 1, 1); // Make sure the scale is appropriate
-    rayLine.material.linewidth = 2; // Increase the line width for visibility
+    // scene.add(rayLine);
+    // rayLine.scale.set(1, 1, 1); // Make sure the scale is appropriate
+    // rayLine.material.linewidth = 2; // Increase the line width for visibility
+
+
 
     // Initialize MapControls
     controls = new MapControls(camera, renderer.domElement);
@@ -172,8 +181,8 @@ export function gfx() {
 
 
     // Set the minimum and maximum polar angles (in radians) to prevent the camera from going over the vertical
-    controls.minPolarAngle = 0; // 0 radians (0 degrees) - directly above the target
-    controls.maxPolarAngle = Math.PI / 6; // π/n radians (z degrees) - on the horizon
+    controls.minPolarAngle = 0 * (Math.PI / 180); // 0 radians (0 degrees) - directly above the target
+    controls.maxPolarAngle = 30 * (Math.PI / 180); // π/n radians (z degrees) - on the horizon
     // Set the maximum distance the camera can dolly out
     controls.maxDistance = 2; // max camera zoom out (perspective cam)
     controls.minDistance = 0.5; // min camera zoom in (perspective cam)
@@ -287,6 +296,13 @@ export function gfx() {
     adjustCameraZoom();
   }
 
+  function onPointerMove(event) {
+    // Convert mouse position to normalized device coordinates (-1 to +1) for both axes
+    pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+    pointer.y = - (event.clientY / window.innerHeight) * 2 + 1;
+  }
+  
+
   function adjustCameraZoom() {
     if (camera) {
       // Example of dynamic FOV scaling:
@@ -348,7 +364,7 @@ export function gfx() {
     delta += clock.getDelta();
 
     if (delta  > interval) {
-      // checkIntersection(); // Check for mouse-polygon intersection
+
       controls.update();
 
 
@@ -399,6 +415,20 @@ export function gfx() {
 
           // Ensure the camera keeps looking at the target
           camera.lookAt(controls.target);
+
+
+          // Update the picking ray with the camera and pointer position
+          raycaster.setFromCamera(pointer, camera);
+
+          // Calculate objects intersecting the picking ray. Replace scene.children with analysisArea.children if you only want to check for that group
+          const intersects = raycaster.intersectObjects(analysisArea.children, true);
+
+          if (intersects.length > 0) {
+            // Log the point of intersection in world coordinates
+            console.log('Intersected object:', intersects[0].object);
+            console.log('Intersection point:', intersects[0].point);
+          }
+
         }
       }
       // Log camera distance from xyz
@@ -680,7 +710,7 @@ export function gfx() {
 
   // Define a scaling factor for the Z values (elevation)
   // const zScale = 0.00025; // Change this value to scale the elevation up or down
-  const zScale = 0.0007;
+  const zScale = 0.0005;
 
   // Function to get color based on elevation
   function getColorForElevation(elevation, minElevation, maxElevation) {
@@ -764,8 +794,6 @@ export function gfx() {
       // console.log('terrain features: ', geojson.features.length / 2);
       geojson.features.forEach((feature, index) => {
         const contour = feature.properties.contour;
-
-
   
         // Skip contours not at the specified interval
         if (contour % contourInterval !== 0) {
@@ -776,8 +804,8 @@ export function gfx() {
         const color = getColorForElevation(contour, minElevation, maxElevation);
   
         // Calculate logarithmic opacity scaling
-        let minOpacity = 0.333;
-        let maxOpacity = .666;
+        let minOpacity = 0.2;
+        let maxOpacity = 0.95;
         let scaleExponent = 0.75; // Adjust this to control the rate of change
 
         // Normalize contour value between 0 and 1 based on elevation range
@@ -797,7 +825,7 @@ export function gfx() {
         let material = new THREE.LineBasicMaterial({
           color: color,
           transparent: true,
-          alphaHash: true,
+          alphaHash: false,
           opacity: opacity,
         });
 
@@ -1678,13 +1706,80 @@ async function addFMTowerPts(geojson, channelFilter) {
     });
   }
 
+  // Function to visualize MultiPolygon geometries from GeoJSON with Three.js
+  function drawAccessibilityPoly(geojson) {
+    return new Promise((resolve, reject) => {
+      try {
+        const material = new THREE.MeshBasicMaterial({
+          color: colorScheme.boundingBoxColor, // Use the existing color scheme
+          side: THREE.DoubleSide // Render both sides of the mesh
+        });
+  
+        geojson.features.forEach((feature) => {
+          // Only process MultiPolygon features
+          if (feature.geometry.type === 'MultiPolygon') {
+            feature.geometry.coordinates.forEach((multiPolygon) => {
+              multiPolygon.forEach((polygon) => {
+                polygon.forEach((ring) => {
+                  // Initialize arrays for vertices and holeIndices
+                  const vertices = [];
+                  const holeIndices = [];
+                  let flatVertices = []; // Flatten vertices for Earcut
+                  
+                  ring.forEach((coord, coordIndex) => {
+                    // Ensure coord is an array before proceeding
+                    if (!Array.isArray(coord)) {
+                      throw new Error("Coordinate is not an array");
+                    }
+                    
+                    const [lon, lat] = coord;
+                    const [x, y] = toStatePlane(lon, lat); // Convert to planar coordinates
+                    vertices.push(new THREE.Vector2(x, y)); // Used for THREE.Shape
+                    flatVertices.push(x, y); // Flatten for Earcut
+                  });
+  
+                  if (vertices.length > 0) {
+                    const shape = new THREE.Shape(vertices);
+                    
+                    // Triangulate using Earcut for complex polygons (with holes)
+                    const indices = Earcut.triangulate(flatVertices, holeIndices, 2);
+                    const geometry = new THREE.BufferGeometry();
+                    const positionArray = new Float32Array(flatVertices);
+                    
+                    // Convert flat vertex positions back into Vector3 for THREE.js
+                    for (let i = 0; i < positionArray.length; i += 2) {
+                      geometry.vertices.push(new THREE.Vector3(positionArray[i], positionArray[i + 1], 0));
+                    }
+  
+                    geometry.setFromPoints(vertices);
+                    geometry.setIndex(indices); // Apply triangulation indices
+  
+                    const mesh = new THREE.Mesh(geometry, material);
+                    scene.add(mesh);
+                    accessibilityPoly.add(mesh);
+                  }
+                });
+              });
+            });
+          }
+        });
+  
+        scene.add(accessibilityPoly);
+        resolve(); // Resolve the promise when done
+      } catch (error) {
+        reject(`Error in drawAccessibility: ${error.message}`);
+      }
+    });
+  }
+  
+
   // Function to visualize bounding box from GeoJSON
   function visualizeBoundingBoxGeoJSON(geojson) {
     return new Promise((resolve, reject) => {
       try {
         const material = new THREE.MeshBasicMaterial({
           color: colorScheme.boundingBoxColor, // Use the existing color scheme
-          wireframe: true,
+          wireframe: false,
           side: THREE.FrontSide // Render both sides of the polygon
         }); // bounding box color
 
@@ -1870,7 +1965,8 @@ async function addFMTowerPts(geojson, channelFilter) {
       'src/assets/data/fm_contours_shaved.geojson',
       'src/assets/data/CellYesService_points_2000m_20240403.geojson',
       'src/assets/data/ne_50m_ocean_aoiClip.geojson',
-      'src/assets/data/compositeSurface_polygon_surface.geojson'
+      'src/assets/data/compositeSurface_polygon_surface.geojson',
+      'src/assets/data/NYS_fullElevDEM_boundingBox.geojson'
     ];
 
     let criticalDatasetsLoaded = 0;
@@ -1906,6 +2002,7 @@ async function addFMTowerPts(geojson, channelFilter) {
     fmContoursGeojsonData,
     fmTransmitterGeojsonData,
     boundingBoxGeojsonData,
+    accessibilityPolyGeojsonData,
     coastlineGeojsonData,
     waterPolyGeojsonData,
     cellNoServiceGeojsonData,
@@ -1943,6 +2040,12 @@ async function addFMTowerPts(geojson, channelFilter) {
         break;
 
       case 'src/assets/data/compositeSurface_polygon_surface.geojson':
+        accessibilityPolyGeojsonData = data;
+        drawAccessibilityPoly(data);
+        break;
+  
+
+      case 'src/assets/data/NYS_fullElevDEM_boundingBox.geojson':
         boundingBoxGeojsonData = data;
         visualizeBoundingBoxGeoJSON(data);
         break;
