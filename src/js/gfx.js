@@ -28,11 +28,13 @@ export function gfx() {
   let waterPolys = new THREE.Group();
   let cellNoServiceMesh = new THREE.Group();
   let cellYesServiceMesh = new THREE.Group();
+  let cellServiceMesh = new THREE.Group();
   let accessibilityPoly = new THREE.Group();
   let analysisArea = new THREE.Group();
   let coastline = new THREE.Group();
-  cellNoServiceMesh.visible = false; // Set the mesh to be invisible initially
-  cellYesServiceMesh.visible = true; // Set the mesh to be invisible initially
+  cellServiceMesh.visible = true; // Set the mesh to be invisible initially
+  // cellNoServiceMesh.visible = false; // Set the mesh to be invisible initially
+  // cellYesServiceMesh.visible = true; // Set the mesh to be invisible initially
 
   // downsample framerate for performance
   let clock = new THREE.Clock();
@@ -50,6 +52,14 @@ export function gfx() {
   let globalDeltaRight = 0;
 
 
+  // temp geometry for raycast testing
+  const squareSize = 0.25; // Adjust based on your scale
+  const squareGeometry = new THREE.PlaneGeometry(squareSize, squareSize);
+  const wireframeGeometry = new THREE.EdgesGeometry(squareGeometry); // Get the edges for a wireframe
+  const squareMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 2 }); // Red color
+  const squareWireframe = new THREE.LineSegments(wireframeGeometry, squareMaterial);
+  
+  
 
   // Define color scheme variables
   const colorScheme = {
@@ -68,12 +78,13 @@ export function gfx() {
     boundingBoxColor: '#3d3d3d',
     coastlineColor: '#303030',
     contoursLabelColor: '#00ff00',
-    // cellColor: '#FFFF00', // magenta
+    cellColor: '#FFFF00', // magenta
     cellYesColor: '#FFFF00',
     cellNoColor: '#e50000',
     matchingPyramidColor: '#FFFF00',
     nonMatchingPyramidColor: '#FF1493',
     waterColor: '#303030',
+    // accessibilityPolyColor: '#ff0000'
   };
 
   // Define the custom projection with its PROJ string
@@ -133,14 +144,21 @@ export function gfx() {
   function initThreeJS() {
     scene = new THREE.Scene();
     // scene.overrideMaterial = new THREE.MeshBasicMaterial({ color: "green" });
-    // camera = new THREE.PerspectiveCamera(
-    //   75,
-    //   window.innerWidth / window.innerHeight,
-    //   0.1,
-    //   1000,
-    // );
-    camera = new THREE.OrthographicCamera(
+
+
+    camera = new THREE.PerspectiveCamera(
+      75,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      1000,
     );
+
+
+    // camera = new THREE.OrthographicCamera(
+    // );
+
+
+
     camera.up.set(0, 0, 1); // Set Z as up-direction
 
     renderer = new THREE.WebGLRenderer({ 
@@ -195,15 +213,6 @@ export function gfx() {
     // camera.add(audioListener);
 
     // const distanceToTarget = camera.position.distanceTo(controls.target);
-
-    // let ambientLight = new THREE.AmbientLight(colorScheme.ambientLightColor);
-    // scene.add(ambientLight);
-    // let directionalLight = new THREE.DirectionalLight(
-    //   colorScheme.directionalLightColor,
-    //   0.5,
-    // );
-    // directionalLight.position.set(0, 1, 0);
-    // scene.add(directionalLight);
 
     const fogNear = 2; // The starting distance of the fog (where it begins to appear)
     const fogFar = 3.5; // The ending distance of the fog (where it becomes fully opaque)
@@ -296,13 +305,6 @@ export function gfx() {
     adjustCameraZoom();
   }
 
-  function onPointerMove(event) {
-    // Convert mouse position to normalized device coordinates (-1 to +1) for both axes
-    pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
-    pointer.y = - (event.clientY / window.innerHeight) * 2 + 1;
-  }
-  
-
   function adjustCameraZoom() {
     if (camera) {
       // Example of dynamic FOV scaling:
@@ -313,18 +315,72 @@ export function gfx() {
       const maxWidth = 1200;
       const minFov = 90;
       const maxFov = 60;
+      const minZoom = 0.3;
+      const maxZoom = 1.7;
 
       // Map the window width to the FOV range
       const scale = (window.innerWidth - minWidth) / (maxWidth - minWidth);
-      const fov = minFov + (maxFov - minFov) * Math.max(0, Math.min(1, scale));
 
+    if (camera.isPerspectiveCamera) {
+
+
+      let fov = minFov + (maxFov - minFov) * Math.max(0, Math.min(1, scale));
       camera.fov = fov;
+
+    }
+
+    else if (camera.isOrthographicCamera) {
+
+
+      let fov = minZoom + (maxZoom - minZoom) * Math.max(0, Math.min(1, scale));
+      camera.fov = fov;
+
+
+    }
+
       camera.updateProjectionMatrix();
     }
   }
 
   // Initial call to set up the zoom level
   adjustCameraZoom();
+
+
+  // function adjustCameraZoom() {
+  //   if (!camera) return;
+  
+  //   const minWidth = 600;
+  //   const maxWidth = 1200;
+  //   const maxFov = 60;
+  //   const minFov = 90;
+  //   const maxZoom = 1.7;
+  //   const minZoom = 0.3;
+  
+  //   // Calculate the scale for linear interpolation
+  //   const scale = (window.innerWidth - minWidth) / (maxWidth - minWidth);
+  //   const normalizedScale = Math.max(0, Math.min(1, scale));
+  
+  //   if (camera.isPerspectiveCamera) {
+  //     // Adjust FOV for perspective camera
+  //     const fov = minFov + (maxFov - minFov) * normalizedScale;
+  //     camera.fov = fov;
+  //     console.log('Perspective camera adjusted');
+  //   } else if (camera.isOrthographicCamera) {
+
+  //   }
+  
+  //   camera.updateProjectionMatrix();
+  // }
+  
+  // // Initial call to set up the zoom level
+  // adjustCameraZoom();
+
+  function onPointerMove(event) {
+    // Convert mouse position to normalized device coordinates (-1 to +1) for both axes
+    pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+    pointer.y = - (event.clientY / window.innerHeight) * 2 + 1;
+  }
+
 
   // hardware xy panning - manual camera controls
   function applyPan(deltaX, deltaY) {
@@ -418,17 +474,29 @@ export function gfx() {
 
 
           // Update the picking ray with the camera and pointer position
-          raycaster.setFromCamera(pointer, camera);
-
-          // Calculate objects intersecting the picking ray. Replace scene.children with analysisArea.children if you only want to check for that group
-          const intersects = raycaster.intersectObjects(analysisArea.children, true);
-
+          raycaster.setFromCamera( new THREE.Vector2(), camera );  
+          const intersects = raycaster.intersectObjects(accessibilityPoly.children, true);
+        
           if (intersects.length > 0) {
-            // Log the point of intersection in world coordinates
-            console.log('Intersected object:', intersects[0].object);
-            console.log('Intersection point:', intersects[0].point);
-          }
+            // Intersection point
+            const intersectPoint = intersects[0].point;
 
+            // console.log('Intersected object:', intersects[0].object);
+            // console.log('Intersection point:', intersects[0].point);
+
+        
+            // Adjust square position
+            squareWireframe.position.x = intersectPoint.x;
+            squareWireframe.position.y = intersectPoint.y;
+            squareWireframe.position.z = intersectPoint.z; // Position square exactly at the intersection point
+        
+            // Add the square to the scene if it's not already
+            if (!squareWireframe.parent) scene.add(squareWireframe);
+          } else {
+            // If there are no intersections, remove the square from the scene
+            if (squareWireframe.parent) scene.remove(squareWireframe);
+          }
+        
         }
       }
       // Log camera distance from xyz
@@ -577,6 +645,7 @@ export function gfx() {
       const distanceToTarget = camera.position.distanceTo(controls.target);
       const threshold = 5;
 
+      cellServiceMesh.visible = distanceToTarget <= threshold;
       cellNoServiceMesh.visible = distanceToTarget <= threshold;
       cellYesServiceMesh.visible = distanceToTarget <= threshold;
     } else {
@@ -629,44 +698,54 @@ export function gfx() {
   }
       
   function getBoundingBoxOfGeoJSON(geojson) {
+    if (!geojson || geojson.type !== "FeatureCollection" || !Array.isArray(geojson.features)) {
+        console.error('GeoJSON data is invalid or not a FeatureCollection:', geojson);
+        throw new Error('GeoJSON data is invalid or not a FeatureCollection');
+    }
+
     let minX = Infinity;
     let maxX = -Infinity;
     let minY = Infinity;
     let maxY = -Infinity;
 
-    // Function to process each coordinate pair
-    const processCoordinates = (coords) => {
-      coords.forEach((coord) => {
-        // If it's a MultiLineString, coord will be an array of coordinate pairs
-        if (Array.isArray(coord[0])) {
-          processCoordinates(coord); // Recursive call for arrays of coordinates
-        } else {
-          // Assuming coord is [longitude, latitude]
-          const [lon, lat] = coord;
-
-          // Transform the coordinates
-          const [x, y] = toStatePlane(lon, lat);
-
-          // Update the min and max values
-          minX = Math.min(minX, x);
-          maxX = Math.max(maxX, x);
-          minY = Math.min(minY, y);
-          maxY = Math.max(maxY, y);
-        }
-      });
-    };
-
-    // Iterate over each feature
     geojson.features.forEach((feature) => {
-      processCoordinates(feature.geometry.coordinates);
+        const geometry = feature.geometry;
+        const coordinates = geometry.coordinates;
+
+        switch (geometry.type) {
+            case 'Polygon':
+                coordinates.forEach(polygon => {
+                    polygon.forEach(coord => {
+                        const [x, y] = toStatePlane(coord[0], coord[1]);
+                        minX = Math.min(minX, x);
+                        maxX = Math.max(maxX, x);
+                        minY = Math.min(minY, y);
+                        maxY = Math.max(maxY, y);
+                    });
+                });
+                break;
+            case 'MultiPolygon':
+                coordinates.forEach(polygons => {
+                    polygons.forEach(polygon => {
+                        polygon.forEach(coord => {
+                            const [x, y] = toStatePlane(coord[0], coord[1]);
+                            minX = Math.min(minX, x);
+                            maxX = Math.max(maxX, x);
+                            minY = Math.min(minY, y);
+                            maxY = Math.max(maxY, y);
+                        });
+                    });
+                });
+                break;
+        }
     });
 
-    // Return bounding box with min and max as THREE.Vector3 objects
+
     return {
-      min: new THREE.Vector3(minX - 2, minY - 2, -Infinity),
-      max: new THREE.Vector3(maxX + 2, maxY + 2, Infinity),
+        min: new THREE.Vector3(minX, minY, -Infinity),
+        max: new THREE.Vector3(maxX, maxY, Infinity),
     };
-  }
+}
 
   function constrainCamera(controls, boundingBox) {
     controls.addEventListener('change', () => {
@@ -966,6 +1045,112 @@ export function gfx() {
   //     }
   //   });
   // }
+
+  function addCellServiceMesh(geojson, stride = 1) {
+    return new Promise((resolve, reject) => {
+      try {
+        // Reset/clear the group to avoid adding duplicate meshes
+        cellNoServiceMesh.clear();
+
+        // Downsample and group points by 'group_ID'
+        const groups = {};
+        for (let i = 0; i < geojson.features.length; i += stride) {
+          const feature = geojson.features[i];
+          const groupId = feature.properties.grid_code;
+          const [lon, lat] = feature.geometry.coordinates;
+          const [x, y] = toStatePlane(lon, lat); // Project to State Plane
+          const z = feature.properties.Z * zScale; // Apply Z scaling
+
+          if (!groups[groupId]) {
+            groups[groupId] = [];
+          }
+          groups[groupId].push(new THREE.Vector3(x, y, z));
+        }
+
+        // Process each group separately and create meshes
+        Object.keys(groups).forEach((groupId) => {
+          const pointsForDelaunay = groups[groupId];
+
+          var delaunay = Delaunator.from(
+            pointsForDelaunay.map((p) => [p.x, p.y]),
+          );
+          var meshIndex = [];
+          const thresholdDistance = 0.125; // Set your distance threshold here
+
+          for (let i = 0; i < delaunay.triangles.length; i += 3) {
+            const p1 = pointsForDelaunay[delaunay.triangles[i]];
+            const p2 = pointsForDelaunay[delaunay.triangles[i + 1]];
+            const p3 = pointsForDelaunay[delaunay.triangles[i + 2]];
+
+            // Check distances between each pair of points in a triangle
+            if (
+              distanceBetweenPoints(p1, p2) <= thresholdDistance &&
+              distanceBetweenPoints(p2, p3) <= thresholdDistance &&
+              distanceBetweenPoints(p3, p1) <= thresholdDistance
+            ) {
+              meshIndex.push(
+                delaunay.triangles[i],
+                delaunay.triangles[i + 1],
+                delaunay.triangles[i + 2],
+              );
+            }
+          }
+
+          var geom = new THREE.BufferGeometry().setFromPoints(
+            pointsForDelaunay,
+          );
+          geom.setIndex(meshIndex);
+          geom.computeVertexNormals();
+
+          // Solid fill material (black fill)
+          const fillMaterial = new THREE.MeshBasicMaterial({
+            color: 0x000000, // Black color for the fill
+            transparent: true,
+            opacity: 0.9, 
+            alphaHash: true,
+            side: THREE.DoubleSide, //
+            wireframe: false,
+          });
+
+          // Wireframe material
+          const wireframeMaterial = new THREE.MeshBasicMaterial({
+            color: colorScheme.cellColor, // Use your existing color scheme
+            transparent: true,
+            alphaHash: true,
+            opacity: 0.6,
+            wireframe: true,
+            side: THREE.DoubleSide,
+          });
+
+          // Create mesh with the fill material
+          var fillMesh = new THREE.Mesh(geom, fillMaterial);
+          fillMesh.name = 'fillMesh-' + groupId;
+
+          // Create mesh with the wireframe material
+          var wireframeMesh = new THREE.Mesh(geom, wireframeMaterial);
+          wireframeMesh.name = 'wireframeMesh-' + groupId;
+
+          // Group to hold both meshes
+          var group = new THREE.Group();
+          group.add(fillMesh);
+          group.add(wireframeMesh);
+
+          // Add the group to the cellServiceMesh group
+          cellServiceMesh.add(group);
+        });
+
+        // Add the cellServiceMesh group to the scene
+        scene.add(cellServiceMesh);
+
+        // Set the initial visibility of the cell service mesh layer to false
+        cellServiceMesh.visible = false;
+
+        resolve(cellServiceMesh); // Optionally return the group for further manipulation
+      } catch (error) {
+        reject(`Error in addCellServiceMesh: ${error.message}`);
+      }
+    });
+  }
 
     
   function addCellNoServiceMesh(geojson, stride = 1) {
@@ -1609,8 +1794,8 @@ async function addFMTowerPts(geojson, channelFilter) {
       return;
     }
   
-    addFMpropagation3D(fmContoursGeojsonData, channelFilter)
-      .catch(error => console.error("Failed to update contour channel:", error));
+    // addFMpropagation3D(fmContoursGeojsonData, channelFilter)
+    //   .catch(error => console.error("Failed to update contour channel:", error));
   
     addFMTowerPts(towerGeojsonData, channelFilter)
       .catch(error => console.error("Failed to update tower channel:", error));
@@ -1710,68 +1895,96 @@ async function addFMTowerPts(geojson, channelFilter) {
   function drawAccessibilityPoly(geojson) {
     return new Promise((resolve, reject) => {
       try {
-        const material = new THREE.MeshBasicMaterial({
-          color: colorScheme.boundingBoxColor, // Use the existing color scheme
-          side: THREE.DoubleSide // Render both sides of the mesh
-        });
-  
         geojson.features.forEach((feature) => {
-          // Only process MultiPolygon features
-          if (feature.geometry.type === 'MultiPolygon') {
-            feature.geometry.coordinates.forEach((multiPolygon) => {
-              multiPolygon.forEach((polygon) => {
-                polygon.forEach((ring) => {
-                  // Initialize arrays for vertices and holeIndices
-                  const vertices = [];
-                  const holeIndices = [];
-                  let flatVertices = []; // Flatten vertices for Earcut
-                  
-                  ring.forEach((coord, coordIndex) => {
-                    // Ensure coord is an array before proceeding
-                    if (!Array.isArray(coord)) {
-                      throw new Error("Coordinate is not an array");
-                    }
-                    
-                    const [lon, lat] = coord;
-                    const [x, y] = toStatePlane(lon, lat); // Convert to planar coordinates
-                    vertices.push(new THREE.Vector2(x, y)); // Used for THREE.Shape
-                    flatVertices.push(x, y); // Flatten for Earcut
-                  });
+          const color = getColorFromContour(feature.properties.ContourMax);
+          const material = new THREE.MeshBasicMaterial({
+            color: color,
+            side: THREE.FrontSide,
+            wireframe: true,
+            opacity: 0,
+          });
   
-                  if (vertices.length > 0) {
-                    const shape = new THREE.Shape(vertices);
-                    
-                    // Triangulate using Earcut for complex polygons (with holes)
-                    const indices = Earcut.triangulate(flatVertices, holeIndices, 2);
-                    const geometry = new THREE.BufferGeometry();
-                    const positionArray = new Float32Array(flatVertices);
-                    
-                    // Convert flat vertex positions back into Vector3 for THREE.js
-                    for (let i = 0; i < positionArray.length; i += 2) {
-                      geometry.vertices.push(new THREE.Vector3(positionArray[i], positionArray[i + 1], 0));
-                    }
+          const processPolygon = (polygon) => {
+            polygon.forEach((ring) => {
+              const vertices = [];
+              ring.forEach((coord) => {
+                if (!Array.isArray(coord)) {
+                  throw new Error("Coordinate is not an array");
+                }
   
-                    geometry.setFromPoints(vertices);
-                    geometry.setIndex(indices); // Apply triangulation indices
-  
-                    const mesh = new THREE.Mesh(geometry, material);
-                    scene.add(mesh);
-                    accessibilityPoly.add(mesh);
-                  }
-                });
+                const [lon, lat] = coord;
+                const [x, y] = toStatePlane(lon, lat);
+                vertices.push(x, y);
               });
+  
+              if (vertices.length > 0) {
+                const geometry = new THREE.BufferGeometry();
+                const verticesArray = new Float32Array(vertices);
+                const indices = Earcut.triangulate(vertices, null, 2);
+                const positionArray = new Float32Array(indices.length * 3);
+  
+                indices.forEach((index, i) => {
+                  positionArray[i * 3] = vertices[index * 2];
+                  positionArray[i * 3 + 1] = vertices[index * 2 + 1];
+                  positionArray[i * 3 + 2] = 0; // Z coordinate
+                });
+  
+                geometry.setAttribute('position', new THREE.BufferAttribute(positionArray, 3));
+                const mesh = new THREE.Mesh(geometry, material);
+                scene.add(mesh);
+                accessibilityPoly.add(mesh);
+              }
             });
+          };
+  
+          if (feature.geometry.type === 'Polygon') {
+            processPolygon(feature.geometry.coordinates);
+          } else if (feature.geometry.type === 'MultiPolygon') {
+            feature.geometry.coordinates.forEach(processPolygon);
           }
         });
   
         scene.add(accessibilityPoly);
-        resolve(); // Resolve the promise when done
+        resolve();
       } catch (error) {
         reject(`Error in drawAccessibility: ${error.message}`);
       }
     });
   }
+    
+  // Utility function to determine color based on access composite property ContourMax
+  function getColorFromContour(contourMax) {
+    // Example gradient: blue (low) to red (high)
+    const lowValueColor = 0x0000FF; // Blue
+    const highValueColor = 0xFF0000; // Red
+    const minValue = 0;
+    const maxValue = 14; 
   
+    // Normalize ContourMax value between 0 and 1
+    const normalizedValue = (contourMax - minValue) / (maxValue - minValue);
+  
+    // Calculate intermediate color
+    const color = interpolateColors(lowValueColor, highValueColor, normalizedValue);
+    return color;
+  }
+  
+  // Interpolate between two colors based on a factor (0 to 1)
+  function interpolateColors(color1, color2, factor) {
+    const r1 = (color1 >> 16) & 0xFF;
+    const g1 = (color1 >> 8) & 0xFF;
+    const b1 = color1 & 0xFF;
+    
+    const r2 = (color2 >> 16) & 0xFF;
+    const g2 = (color2 >> 8) & 0xFF;
+    const b2 = color2 & 0xFF;
+    
+    const r = Math.round(r1 + (r2 - r1) * factor);
+    const g = Math.round(g1 + (g2 - g1) * factor);
+    const b = Math.round(b1 + (b2 - b1) * factor);
+    
+    return (r << 16) | (g << 8) | b;
+  }
+    
 
   // Function to visualize bounding box from GeoJSON
   function visualizeBoundingBoxGeoJSON(geojson) {
@@ -1780,6 +1993,8 @@ async function addFMTowerPts(geojson, channelFilter) {
         const material = new THREE.MeshBasicMaterial({
           color: colorScheme.boundingBoxColor, // Use the existing color scheme
           wireframe: false,
+          transparent: true,
+          opacity: 0.1,
           side: THREE.FrontSide // Render both sides of the polygon
         }); // bounding box color
 
@@ -1966,7 +2181,8 @@ async function addFMTowerPts(geojson, channelFilter) {
       'src/assets/data/CellYesService_points_2000m_20240403.geojson',
       'src/assets/data/ne_50m_ocean_aoiClip.geojson',
       'src/assets/data/compositeSurface_polygon_surface.geojson',
-      'src/assets/data/NYS_fullElevDEM_boundingBox.geojson'
+      'src/assets/data/NYS_fullElevDEM_boundingBox.geojson',
+      'src/assets/data/cellService_contours_5KM_pts_20240407.geojson'
     ];
 
     let criticalDatasetsLoaded = 0;
@@ -2005,17 +2221,24 @@ async function addFMTowerPts(geojson, channelFilter) {
     accessibilityPolyGeojsonData,
     coastlineGeojsonData,
     waterPolyGeojsonData,
+    cellServiceGeojsonData,
     cellNoServiceGeojsonData,
     cellYesServiceGeojsonData,
     fmFreqDictionaryJson;
 
   function handleGeoJSONData(url, data) {
     switch (url) {
+
       case 'src/assets/data/elevation_contours_shaved.geojson':
         contourGeojsonData = data;
         const meanElevation = calculateMeanContourElevation(data);
         // console.log(`mean elevation: ${meanElevation}`)
-        addElevContourLines(data);
+        // addElevContourLines(data);
+        break;
+
+      case 'src/assets/data/NYS_fullElevDEM_boundingBox.geojson':
+        boundingBoxGeojsonData = data;
+        getBoundingBoxOfGeoJSON(data);
         break;
 
       case 'src/assets/data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson':
@@ -2044,31 +2267,25 @@ async function addFMTowerPts(geojson, channelFilter) {
         drawAccessibilityPoly(data);
         break;
   
-
-      case 'src/assets/data/NYS_fullElevDEM_boundingBox.geojson':
-        boundingBoxGeojsonData = data;
-        visualizeBoundingBoxGeoJSON(data);
-        break;
-
       case 'src/assets/data/ne_50m_coastline_aoiClip.geojson':
         coastlineGeojsonData = data;
         addCoastline(data);
         break;
 
       case 'src/assets/data/NYS_cellTower_viewshed_20231130.jpg':
-        viewshedJPG = data;
+        accessibilityRaster = data;
         // loadAndPositionRaster(data);
         break;
 
-      case 'src/assets/data/cellServiceCentroids_2000m_20231210.geojson':
-        cellNoServiceGeojsonData = data;
-        // addCellNoServiceMesh(data);
+      case 'src/assets/data/cellService_contours_5KM_pts_20240407.geojson':
+        cellServiceGeojsonData = data;
+        addCellServiceMesh(data);
         break;
 
-      case 'src/assets/data/CellYesService_points_2000m_20240403.geojson':
-        cellYesServiceGeojsonData = data;
-        // addCellYesServiceMesh(data);
-        break;  
+      // case 'src/assets/data/CellYesService_points_2000m_20240403.geojson':
+      //   cellYesServiceGeojsonData = data;
+      //   // addCellYesServiceMesh(data);
+      //   break;  
 
       case 'src/assets/data/ne_50m_ocean_aoiClip.geojson':
         waterPolyGeojsonData = data;
@@ -2086,17 +2303,17 @@ async function addFMTowerPts(geojson, channelFilter) {
   }
 
   function postLoadOperations() {
-    const boundingBox = getBoundingBoxOfGeoJSON(contourGeojsonData);
+    const boundingBox = getBoundingBoxOfGeoJSON(boundingBoxGeojsonData);
+
 
     // Calculate center and size of bounding box
     const center = getCenterOfBoundingBox(boundingBox);
     const size = getSizeOfBoundingBox(boundingBox);
+
     const maxDim = Math.max(size.x, size.y);
 
     const geoCameraPositionLonLat = [-74.68057752571633, 42.79146513478376];
 
-
-    
     const cameraPositionStatePlane = toStatePlane(...geoCameraPositionLonLat);
 
     // Adjust camera Z to be closer
@@ -2109,6 +2326,8 @@ async function addFMTowerPts(geojson, channelFilter) {
       cameraPositionStatePlane[1], // y position
       cameraZ
     );
+
+    // console.log(`bounding box: ${boundingBox}`)
 
     // Set controls target to the center of bounding box
     controls.target.set(camera.position.x, camera.position.y, 0);
