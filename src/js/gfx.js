@@ -149,7 +149,8 @@ function applyPreset(preset) {
 
   function initThreeJS() {
     scene = new THREE.Scene();
-    // scene.overrideMaterial = new THREE.MeshBasicMaterial({ color: "green" });
+  //   scene.overrideMaterial = new THREE.MeshBasicMaterial({ color: "green",
+  // wireframe: true, });
 
 
     camera = new THREE.PerspectiveCamera(
@@ -297,7 +298,7 @@ function applyPreset(preset) {
     renderer.setSize(width, height);
 
     // update this value to alter pixel ratio scaled with the screen
-    pixelationFactor = 0.4;
+    pixelationFactor = 1;
 
     // Calculate new dimensions based on the value
     var newWidth = Math.max(1, window.innerWidth * pixelationFactor);
@@ -403,6 +404,7 @@ function applyPreset(preset) {
   // Create a geometry for the ray line
   const rayGeometry = new THREE.BufferGeometry();
   let cellServiceRaycaster = new THREE.Raycaster();
+  let currentGridCode = null; // Keep track of the last gridCode encountered
 
   // Registry for storing raycasters
   const raycasterDict = {
@@ -416,15 +418,29 @@ function applyPreset(preset) {
   // document.addEventListener('pointermove', onPointerMove);
 
   function raycastCellServiceMesh(intersection, gridCode) {
-    if (synthPresets && synthPresets.presets && synthPresets.presets[gridCode]) {
-      const preset = synthPresets.presets[gridCode];
-      applyPreset(preset);
-      synth.triggerAttackRelease(["C4", "E4", "G4"], "4n");
-    } else {
-      console.warn(`Preset for gridCode ${gridCode} is not available or presets not loaded yet.`);
+    // Check if the gridCode has changed
+    if (gridCode !== currentGridCode) {
+      // Update the currentGridCode
+      currentGridCode = gridCode;
+  
+      // Access the preset for the new gridCode
+      const preset = synthPresets.presets["cellService"][gridCode];
+      if (preset) {
+        // Apply the new preset
+        applyPreset(preset);
+  
+        // Stop any currently playing notes
+        synth.releaseAll(); // This stops all currently playing notes. Adjust if your synth setup is different.
+  
+        // Start a new note or drone. Adjust the note and duration as needed.
+        synth.triggerAttack(["C2", "E2", "G2"]); // Use triggerAttack for a continuous sound. Adjust notes as desired.
+      } else {
+        console.log(`Intersected unspecified gridCode ${gridCode}`, intersection);
+      }
     }
   }
-    
+  
+      
 //   function raycastCellServiceMesh(intersection, gridCode) {
 //     // Based on the gridCode, trigger different events or actions
 //     switch (gridCode) {
@@ -1134,7 +1150,7 @@ function applyPreset(preset) {
             pointsForDelaunay.map((p) => [p.x, p.y]),
           );
           var meshIndex = [];
-          const thresholdDistance = 0.175; // Set your distance threshold here
+          const thresholdDistance = 0.11; // Set your distance threshold here
 
           for (let i = 0; i < delaunay.triangles.length; i += 3) {
             const p1 = pointsForDelaunay[delaunay.triangles[i]];
