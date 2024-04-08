@@ -473,13 +473,28 @@ export function gfx() {
           camera.lookAt(controls.target);
 
 
-          // Update the picking ray with the camera and pointer position
+          // RAYCASTERS!!!!!!!!!!!!!!!!!!!! //
+          ////////////////////////////////////
           cellServiceRaycaster.setFromCamera( new THREE.Vector2(), camera );  
           const cellServiceIntersects = cellServiceRaycaster.intersectObjects(cellServiceMesh.children, true);
         
           if (cellServiceIntersects.length > 0) {
             // Intersection point
             var intersectPoint = cellServiceIntersects[0].point;
+
+            // TODO: calculate distances to each point feature (placeholder for now) and find the nearest
+            let nearestDistance = Infinity;
+            let nearestPoint = null;
+            // for (const feature of pointFeatures) {
+            //     const distance = intersectPoint.distanceTo(feature.position);
+            //     if (distance < nearestDistance) {
+            //         nearestDistance = distance;
+            //         nearestPoint = feature;
+            //     }
+            // }
+
+            // console.log("Nearest distance:", nearestDistance);
+
 
             // console.log('Intersected object:', intersects[0].object);
             // console.log('Intersection point:', intersects[0].point);
@@ -1075,7 +1090,7 @@ export function gfx() {
             pointsForDelaunay.map((p) => [p.x, p.y]),
           );
           var meshIndex = [];
-          const thresholdDistance = 0.125; // Set your distance threshold here
+          const thresholdDistance = 0.175; // Set your distance threshold here
 
           for (let i = 0; i < delaunay.triangles.length; i += 3) {
             const p1 = pointsForDelaunay[delaunay.triangles[i]];
@@ -1111,10 +1126,10 @@ export function gfx() {
 
                 // Wireframe material
                 wireframeMaterial = new THREE.MeshBasicMaterial({
-                  color: 0xffffff,
+                  color: '#ff0000',
                   transparent: true,
                   alphaHash: true,
-                  opacity: 0.6,
+                  opacity: 0.5,
                   wireframe: true,
                   side: THREE.DoubleSide,
                 });
@@ -1135,10 +1150,10 @@ export function gfx() {
 
                 // Wireframe material
                 wireframeMaterial = new THREE.MeshBasicMaterial({
-                  color: 0x00ff00,
+                  color: '#494949',
                   transparent: true,
                   alphaHash: true,
-                  opacity: 0.6,
+                  opacity: 0.3,
                   wireframe: true,
                   side: THREE.DoubleSide,
                 });
@@ -1157,6 +1172,16 @@ export function gfx() {
 
               default:
 
+                wireframeMaterial = new THREE.MeshBasicMaterial({
+                  color: 0xffffff,
+                  transparent: true,
+                  alphaHash: true,
+                  opacity: 0.3,
+                  wireframe: true,
+                  side: THREE.DoubleSide,
+                });
+
+
                 // Solid fill material (black fill)
                 fillMaterial = new THREE.MeshBasicMaterial({
                   color: 0x000000, // Black color for the fill
@@ -1167,27 +1192,6 @@ export function gfx() {
                   wireframe: false,
                 });
 
-
-            // default:
-            //   // Solid fill material (black fill)
-            //   fillMaterial = new THREE.MeshBasicMaterial({
-            //     color: 0x000000, // Black color for the fill
-            //     transparent: true,
-            //     opacity: 0.9, 
-            //     alphaHash: true,
-            //     side: THREE.DoubleSide, //
-            //     wireframe: false,
-            //   });
-
-            //   // Wireframe material
-            //   wireframeMaterial = new THREE.MeshBasicMaterial({
-            //     color: colorScheme.cellColor, // Use your existing color scheme
-            //     transparent: true,
-            //     alphaHash: true,
-            //     opacity: 0.6,
-            //     wireframe: true,
-            //     side: THREE.DoubleSide,
-            //   });
 
             }
 
@@ -1203,7 +1207,7 @@ export function gfx() {
           // Group to hold both meshes
           var group = new THREE.Group();
           group.add(wireframeMesh);
-          group.add(fillMesh);
+          // group.add(fillMesh);
 
           // Add the group to the cellServiceMesh group
           cellServiceMesh.add(group);
