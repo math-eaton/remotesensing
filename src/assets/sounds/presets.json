@@ -1,0 +1,27 @@
+{
+    "presets": {
+      "0": {
+        "oscillator": {"type": "sine"},
+        "modulationIndex": 12.22,
+        "harmonicity": 3.1,
+        "envelope": {
+          "attack": 0.1,
+          "decay": 0.2,
+          "sustain": 0.3,
+          "release": 0.4
+        }
+      },
+      "1": {
+        "oscillator": {"type": "square"},
+        "modulationIndex": 14.5,
+        "harmonicity": 2.0,
+        "envelope": {
+          "attack": 0.2,
+          "decay": 0.3,
+          "sustain": 0.4,
+          "release": 0.5
+        }
+      }
+    }
+  }
+  

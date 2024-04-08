@@ -7,6 +7,10 @@ import hull from 'convex-hull';
 import Delaunator from 'delaunator';
 import { GeoJSON } from 'geojson';
 import { Earcut } from 'three/src/extras/Earcut.js'
+import Stats from 'three/addons/libs/stats.module.js'
+import * as Tone from 'tone';
+// import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
+// import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 // import { GeoJSON } from 'geojson';
 // import Graph from 'graphology';
 // import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
@@ -17,7 +21,6 @@ let visualizationReady = false;
 
 export function gfx() {
 
-  
   // Define global geographic layer groups
   let fmTransmitterPoints = new THREE.Group();
   let fmMSTLines = new THREE.Group();
@@ -41,6 +44,7 @@ export function gfx() {
   // N fps
   let interval = 1 / 24;
 
+  let synthPresets = {};
 
   let sliderValue = 1;  //  default value
   const sliderLength = 100;
@@ -49,6 +53,9 @@ export function gfx() {
   let globalDeltaRightPressed = 0;
   let globalDeltaLeft = 0;
   let globalDeltaRight = 0;
+  let globalSwitch1 = 0;
+  let globalSwitch2 = 0;
+  let globalSwitch3 = 0;
 
 
   // temp geometry for raycast testing
@@ -86,6 +93,10 @@ export function gfx() {
     // accessibilityPolyColor: '#ff0000'
   };
 
+
+
+///////////////////////// MAP /////////////////////////////
+////////////////////// PROJECTION /////////////////////////////////
   // Define the custom projection with its PROJ string
   const statePlaneProjString =
     '+proj=longlat +lat_0=40 +lon_0=-76.58333333333333 +k=0.9999375 +x_0=249999.9998983998 +y_0=0 +ellps=GRS80 +datum=NAD83 +to_meter=0.3048006096012192 +no_defs';
@@ -117,15 +128,24 @@ export function gfx() {
   }
   
 
+  // tone.js ////////////////////////////
+  //////////////
+  const synth = new Tone.PolySynth(Tone.FMSynth).toDestination();
+
+  // Function to apply a preset to the synthesizer
+function applyPreset(preset) {
+  synth.set(preset);
+}
+
+  
+
   //////////////////////////////////////
   // loading screen! //////////////////
 
   // Three.js - Initialize the Scene
-  let scene, camera, renderer, controls, pixelationFactor;
+  let scene, camera, renderer, controls, stats, pixelationFactor;
   let isCameraRotating = true; // Flag to track camera rotation
   const rotationSpeed = 0.00001; // Define the speed of rotation
-
-
 
   function initThreeJS() {
     scene = new THREE.Scene();
@@ -157,7 +177,15 @@ export function gfx() {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
     renderer.setPixelRatio(1);
 
+
+    stats = new Stats();
+
+    document.getElementById('gfx').appendChild(stats.domElement);
+
+
+
     document.getElementById('gfx').appendChild(renderer.domElement);
+
     
 
     // Set initial positions - We'll update these later
@@ -387,14 +415,37 @@ export function gfx() {
 
   // document.addEventListener('pointermove', onPointerMove);
 
-  function raycastCellServiceMesh(intersections) {
-    // Handle intersections, e.g., triggering events or updating UI
-    console.log("FM Transmitter Points intersected:", intersections);
+  function raycastCellServiceMesh(intersection, gridCode) {
+    if (synthPresets && synthPresets.presets && synthPresets.presets[gridCode]) {
+      const preset = synthPresets.presets[gridCode];
+      applyPreset(preset);
+      synth.triggerAttackRelease(["C4", "E4", "G4"], "4n");
+    } else {
+      console.warn(`Preset for gridCode ${gridCode} is not available or presets not loaded yet.`);
+    }
+  }
+    
+//   function raycastCellServiceMesh(intersection, gridCode) {
+//     // Based on the gridCode, trigger different events or actions
+//     switch (gridCode) {
+//         case '0':
+//             // Trigger event or action for gridCode 0
+//             console.log("Intersected gridCode 0", intersection);
+//             break;
+//         case '1':
+//             // Trigger event or action for gridCode 1
+//             console.log("Intersected gridCode 1", intersection);
+//             break;
+//         // Handle other cases as needed
+//         default:
+//             // Default action if gridCode doesn't match specific cases
+//             console.log(`Intersected unspecified gridCode ${gridCode}`, intersection);
+//     }
+// }
 
-  }    
   
   ////////////
-  /////////// mouseover intersection raycasting stuff here
+  /////////// 
   ////////////////////////////////
 
   // Function to animate your scene
@@ -404,7 +455,6 @@ export function gfx() {
     if (delta  > interval) {
 
       controls.update();
-
 
       // Check if camera and controls are initialized
       if (camera && controls) {
@@ -455,6 +505,8 @@ export function gfx() {
           camera.lookAt(controls.target);
 
 
+
+
           // RAYCASTERS!!!!!!!!!!!!!!!!!!!! //
           ////////////////////////////////////
           // cell service mesh caster
@@ -465,13 +517,16 @@ export function gfx() {
                   const raycaster = new THREE.Raycaster();
                   raycaster.setFromCamera({ x: 0, y: 0 }, camera); // Use the center of the camera view
                   const intersections = raycaster.intersectObjects(group.children, true);
-
-                  if (intersections.length > 0) {
-                      // Call the associated intersection handler
-                      onIntersect(intersections);
-                  }
+          
+                  intersections.forEach(intersection => {
+                      if (intersection.object.userData.gridCode) {
+                          const gridCode = intersection.object.userData.gridCode;
+                          onIntersect(intersection, gridCode);
+                      }
+                  });
               }
           });
+
 
 
         }}
@@ -488,6 +543,9 @@ export function gfx() {
       // The draw or time dependent code are here
       renderer.render(scene, camera);
 
+      stats.update();
+
+
       delta = delta % interval;
     }
     requestAnimationFrame(animate);
@@ -501,12 +559,10 @@ export function gfx() {
     };
   
     ws.onmessage = function(event) {
-
       // hide mouse cursor if/when data is received
       document.body.style.cursor = 'none';
 
       const data = JSON.parse(event.data);
-      // console.log('Data received from server:', data);
   
       if (data.potValue !== undefined && !isDragging) {
         const scaledValue = Math.round(remapValues(data.potValue, 201, 300, 300, 201));
@@ -521,22 +577,44 @@ export function gfx() {
         globalDeltaRight = data.deltaRight;
       }
 
-
       if (data.deltaLeftPressed !== undefined && data.deltaRightPressed !== undefined) {
         globalDeltaLeftPressed = data.deltaLeftPressed;
         globalDeltaRightPressed = data.deltaRightPressed;
       }
 
+      // Check for switchState in the data and toggle group visibility accordingly
+      if (data.switchState !== undefined) {
+          toggleGroupVisibility(data.switchState);
+      }
     };
   
     ws.onerror = function(event) {
       console.error('WebSocket error:', event);
     };
   
-    // other handlers if necessary
-  }
+}
   
+  function toggleGroupVisibility(switchState) {
+    groupLayer1.visible = false;
+    groupLayer2.visible = false;
+    groupLayer3.visible = false;
 
+    // Then, based on the switchState, make the corresponding group visible
+    switch (switchState) {
+        case 1:
+            groupLayer1.visible = true;
+            break;
+        case 2:
+            groupLayer2.visible = true;
+            break;
+        case 3:
+            groupLayer3.visible = true;
+            break;
+        default:
+            console.log("Invalid switchState value:", switchState);
+            break;
+    }
+}
 
   // Function to initialize the scene and other components
   async function initialize() {
@@ -818,8 +896,17 @@ export function gfx() {
   
     return meanElevation;
   }
-  
 
+  function loadSynthPresets(data) {
+    synthPresets = data;
+    console.log("Synth presets loaded", synthPresets);
+  }
+  
+  function applyPreset(preset) {
+    // The `set` method applies the preset parameters to the synth
+    synth.set(preset);
+  }
+    
   // Define a variable to store the minimum elevation
   // This should be determined from the addElevContourLines function
   let globalMinElevation = Infinity;
@@ -1160,6 +1247,10 @@ export function gfx() {
           // Create mesh with the wireframe material
           var wireframeMesh = new THREE.Mesh(geom, wireframeMaterial);
           wireframeMesh.name = 'wireframeMesh-' + gridCode;
+
+          // add metadata to the meshes for raycaster triggers
+          fillMesh.userData.gridCode = gridCode;
+          wireframeMesh.userData.gridCode = gridCode;
 
           // Group to hold both meshes
           var group = new THREE.Group();
@@ -1720,7 +1811,7 @@ async function addFMTowerPts(geojson, channelFilter) {
             color: color,
             side: THREE.FrontSide,
             wireframe: true,
-            opacity: 0,
+            opacity: 1,
             visible: false,
           });
   
@@ -2003,6 +2094,7 @@ async function addFMTowerPts(geojson, channelFilter) {
       'src/assets/data/NYS_fullElevDEM_boundingBox.geojson',
       'src/assets/data/cellService_contours_5KM_pts_20240407.geojson',
       'src/assets/data/cellService_contours_5KM_explode_mini.geojson',
+      'src/assets/sounds/presets.json'
     ];
 
     let criticalDatasetsLoaded = 0;
@@ -2107,10 +2199,14 @@ async function addFMTowerPts(geojson, channelFilter) {
         // loadAndPositionRaster(data);
         break;
 
+      /////////////////////// sound
 
+      case 'src/assets/sounds/presets.json':
+        synthPresets = data;
+        loadSynthPresets(data);
+        break;
+  
       //////////////////// ancillary
-
-
 
       case 'src/assets/data/ne_50m_ocean_aoiClip.geojson':
         waterPolyGeojsonData = data;

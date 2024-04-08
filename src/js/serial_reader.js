@@ -20,7 +20,7 @@ export function serialReader() {
       const deltaRightPressed = parseInt(parts[4], 10);
       const buttonPressedLeft = parts[5] === '1';
       const buttonPressedRight = parts[6] === '1';
-      const potValue = parseInt(parts[7], 10); // Assuming the last part is the potentiometer value
+      const potValue = parseInt(parts[7], 10); 
 
       // Example: Call functions or update parameters based on the parsed values
       // updateSwitchState(switchState);
