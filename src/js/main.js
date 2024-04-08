@@ -17,14 +17,14 @@
 import { gfx } from './gfx.js';
 // import { serialReader } from './serial_reader.js';
 
-window.onload = () => {
-  setTimeout(() => {}, 500);
-};
+// window.onload = () => {
+//   setTimeout(() => {}, 500);
+// };
 
 // init external js
-gfx();
 // serialReader();
 // websocket();
+setTimeout(gfx(), 500);
 
 document.getElementById('fullscreenButton');
 const threeContainer = document.getElementById('gfx');

@@ -44,8 +44,6 @@ export function gfx() {
   // N fps
   let interval = 1 / 24;
 
-  let synthPresets = {};
-
   let sliderValue = 1;  //  default value
   const sliderLength = 100;
   let lastSliderValue = null;
@@ -130,12 +128,19 @@ export function gfx() {
 
   // tone.js ////////////////////////////
   //////////////
-  const synth = new Tone.PolySynth(Tone.FMSynth).toDestination();
+  // const synth = new Tone.PolySynth(Tone.FMSynth).toDestination();
+  const synth = new Tone.NoiseSynth().toDestination();
 
-  // Function to apply a preset to the synthesizer
-function applyPreset(preset) {
-  synth.set(preset);
-}
+
+  function loadSynthPresets(data) {
+    synthPresets = data;
+    console.log("Synth presets loaded", synthPresets);
+  }
+
+    // Function to apply a preset to the synthesizer
+  function applyPreset(preset) {
+    synth.set(preset);
+  }
 
   
 
@@ -430,10 +435,10 @@ function applyPreset(preset) {
         applyPreset(preset);
   
         // Stop any currently playing notes
-        synth.releaseAll(); // This stops all currently playing notes. Adjust if your synth setup is different.
+        // synth.triggerRelease(); // This stops all currently playing notes. Adjust if your synth setup is different.
   
         // Start a new note or drone. Adjust the note and duration as needed.
-        synth.triggerAttack(["C2", "E2", "G2"]); // Use triggerAttack for a continuous sound. Adjust notes as desired.
+        synth.triggerAttack([Tone.immediate()]); // Use triggerAttack for a continuous sound
       } else {
         console.log(`Intersected unspecified gridCode ${gridCode}`, intersection);
       }
@@ -637,7 +642,7 @@ function applyPreset(preset) {
     initThreeJS(); // Initialize Three.js
 
     // Initialize pixelationFactor
-    pixelationFactor = 1;
+    pixelationFactor = 0.4;
 
     onWindowResize(); // Update the resolution
 
@@ -913,16 +918,7 @@ function applyPreset(preset) {
     return meanElevation;
   }
 
-  function loadSynthPresets(data) {
-    synthPresets = data;
-    console.log("Synth presets loaded", synthPresets);
-  }
   
-  function applyPreset(preset) {
-    // The `set` method applies the preset parameters to the synth
-    synth.set(preset);
-  }
-    
   // Define a variable to store the minimum elevation
   // This should be determined from the addElevContourLines function
   let globalMinElevation = Infinity;
@@ -2114,7 +2110,7 @@ async function addFMTowerPts(geojson, channelFilter) {
     ];
 
     let criticalDatasetsLoaded = 0;
-    const criticalDatasetsCount = 2; // Set this to the number of datasets critical for initial rendering
+    const criticalDatasetsCount = 3; // Set this to the number of datasets critical for initial rendering
 
     urls.forEach((url) => {
       fetch(url)
@@ -2137,7 +2133,7 @@ async function addFMTowerPts(geojson, channelFilter) {
   function isCriticalDataset(url) {
     // Define logic to determine if a dataset is critical for initial rendering
     // todo: this breaks if the contours aren't required up front but they take longest to load
-    return url.includes('elevation') || url.includes('contour');
+    return url.includes('elevation') || url.includes('contour') || url.includes('presets')
   }
   
 
@@ -2151,6 +2147,9 @@ async function addFMTowerPts(geojson, channelFilter) {
     cellServiceGeojsonData,
     accessibilityPolyGeojsonData,
     fmFreqDictionaryJson;
+
+  let synthPresets = {};
+
 
   function handleGeoJSONData(url, data) {
     switch (url) {
