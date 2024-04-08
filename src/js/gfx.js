@@ -135,7 +135,7 @@ export function gfx() {
   const rayGeometry = new THREE.BufferGeometry();
   const rayLine = new THREE.Line(rayGeometry, rayMaterial);
 
-  let raycaster = new THREE.Raycaster();
+  let cellServiceRaycaster = new THREE.Raycaster();
   let pointer = new THREE.Vector2();
 
   document.addEventListener('pointermove', onPointerMove);
@@ -474,12 +474,12 @@ export function gfx() {
 
 
           // Update the picking ray with the camera and pointer position
-          raycaster.setFromCamera( new THREE.Vector2(), camera );  
-          const intersects = raycaster.intersectObjects(accessibilityPoly.children, true);
+          cellServiceRaycaster.setFromCamera( new THREE.Vector2(), camera );  
+          const cellServiceIntersects = cellServiceRaycaster.intersectObjects(cellServiceMesh.children, true);
         
-          if (intersects.length > 0) {
+          if (cellServiceIntersects.length > 0) {
             // Intersection point
-            const intersectPoint = intersects[0].point;
+            var intersectPoint = cellServiceIntersects[0].point;
 
             // console.log('Intersected object:', intersects[0].object);
             // console.log('Intersection point:', intersects[0].point);
@@ -788,8 +788,8 @@ export function gfx() {
   // GEOGRAPHIC DATA VIS /////////////////////////////
 
   // Define a scaling factor for the Z values (elevation)
-  // const zScale = 0.00025; // Change this value to scale the elevation up or down
-  const zScale = 0.0005;
+  const zScale = 0.00025; // Change this value to scale the elevation up or down
+  // const zScale = 0.0005;
 
   // Function to get color based on elevation
   function getColorForElevation(elevation, minElevation, maxElevation) {
@@ -1056,21 +1056,21 @@ export function gfx() {
         const groups = {};
         for (let i = 0; i < geojson.features.length; i += stride) {
           const feature = geojson.features[i];
-          const groupId = feature.properties.grid_code;
+          const gridCode = feature.properties.grid_code;
           const [lon, lat] = feature.geometry.coordinates;
-          const [x, y] = toStatePlane(lon, lat); // Project to State Plane
-          const z = feature.properties.Z * zScale; // Apply Z scaling
-
-          if (!groups[groupId]) {
-            groups[groupId] = [];
+          const [x, y] = toStatePlane(lon, lat);
+          const z = feature.properties.Z * zScale; 
+  
+          if (!groups[gridCode]) {
+            groups[gridCode] = [];
           }
-          groups[groupId].push(new THREE.Vector3(x, y, z));
+          groups[gridCode].push(new THREE.Vector3(x, y, z));
         }
-
-        // Process each group separately and create meshes
-        Object.keys(groups).forEach((groupId) => {
-          const pointsForDelaunay = groups[groupId];
-
+  
+        // Process each grid_code group separately
+        Object.keys(groups).forEach((gridCode) => {
+          const pointsForDelaunay = groups[gridCode];
+  
           var delaunay = Delaunator.from(
             pointsForDelaunay.map((p) => [p.x, p.y]),
           );
@@ -1101,39 +1101,109 @@ export function gfx() {
           );
           geom.setIndex(meshIndex);
           geom.computeVertexNormals();
+          
 
-          // Solid fill material (black fill)
-          const fillMaterial = new THREE.MeshBasicMaterial({
-            color: 0x000000, // Black color for the fill
-            transparent: true,
-            opacity: 0.9, 
-            alphaHash: true,
-            side: THREE.DoubleSide, //
-            wireframe: false,
-          });
+          // unique symbols based on grid_code
+          let wireframeMaterial, fillMaterial;
+          switch (gridCode) {
 
-          // Wireframe material
-          const wireframeMaterial = new THREE.MeshBasicMaterial({
-            color: colorScheme.cellColor, // Use your existing color scheme
-            transparent: true,
-            alphaHash: true,
-            opacity: 0.6,
-            wireframe: true,
-            side: THREE.DoubleSide,
-          });
+            case `0`:
+
+                // Wireframe material
+                wireframeMaterial = new THREE.MeshBasicMaterial({
+                  color: 0xffffff,
+                  transparent: true,
+                  alphaHash: true,
+                  opacity: 0.6,
+                  wireframe: true,
+                  side: THREE.DoubleSide,
+                });
+
+                // Solid fill material (black fill)
+                fillMaterial = new THREE.MeshBasicMaterial({
+                  color: 0x000000, // Black color for the fill
+                  transparent: true,    
+                  opacity: 1, 
+                  alphaHash: true,
+                  side: THREE.DoubleSide, //
+                  wireframe: false,
+                });
+
+            break;
+
+              case `1`:
+
+                // Wireframe material
+                wireframeMaterial = new THREE.MeshBasicMaterial({
+                  color: 0x00ff00,
+                  transparent: true,
+                  alphaHash: true,
+                  opacity: 0.6,
+                  wireframe: true,
+                  side: THREE.DoubleSide,
+                });
+
+                // Solid fill material (black fill)
+                fillMaterial = new THREE.MeshBasicMaterial({
+                  color: 0x000000, // Black color for the fill
+                  transparent: true,    
+                  opacity: 1, 
+                  alphaHash: true,
+                  side: THREE.DoubleSide, //
+                  wireframe: false,
+                });
+
+            break;
+
+              default:
+
+                // Solid fill material (black fill)
+                fillMaterial = new THREE.MeshBasicMaterial({
+                  color: 0x000000, // Black color for the fill
+                  transparent: true,    
+                  opacity: 1, 
+                  alphaHash: true,
+                  side: THREE.DoubleSide, //
+                  wireframe: false,
+                });
+
+
+            // default:
+            //   // Solid fill material (black fill)
+            //   fillMaterial = new THREE.MeshBasicMaterial({
+            //     color: 0x000000, // Black color for the fill
+            //     transparent: true,
+            //     opacity: 0.9, 
+            //     alphaHash: true,
+            //     side: THREE.DoubleSide, //
+            //     wireframe: false,
+            //   });
+
+            //   // Wireframe material
+            //   wireframeMaterial = new THREE.MeshBasicMaterial({
+            //     color: colorScheme.cellColor, // Use your existing color scheme
+            //     transparent: true,
+            //     alphaHash: true,
+            //     opacity: 0.6,
+            //     wireframe: true,
+            //     side: THREE.DoubleSide,
+            //   });
+
+            }
+
 
           // Create mesh with the fill material
           var fillMesh = new THREE.Mesh(geom, fillMaterial);
-          fillMesh.name = 'fillMesh-' + groupId;
+          fillMesh.name = 'fillMesh-' + gridCode;
 
           // Create mesh with the wireframe material
           var wireframeMesh = new THREE.Mesh(geom, wireframeMaterial);
-          wireframeMesh.name = 'wireframeMesh-' + groupId;
+          wireframeMesh.name = 'wireframeMesh-' + gridCode;
 
           // Group to hold both meshes
           var group = new THREE.Group();
-          group.add(fillMesh);
           group.add(wireframeMesh);
+          group.add(fillMesh);
 
           // Add the group to the cellServiceMesh group
           cellServiceMesh.add(group);
@@ -1143,7 +1213,7 @@ export function gfx() {
         scene.add(cellServiceMesh);
 
         // Set the initial visibility of the cell service mesh layer to false
-        cellServiceMesh.visible = false;
+        cellServiceMesh.visible = true;
 
         resolve(cellServiceMesh); // Optionally return the group for further manipulation
       } catch (error) {
@@ -2251,10 +2321,10 @@ async function addFMTowerPts(geojson, channelFilter) {
         // addFMpropagation3D(data); don't need this here i guess?
         break;
 
-      case 'src/assets/data/FmTowers_FeaturesToJSON_AOI_20231204.geojson':
-        fmTransmitterGeojsonData = data;
-        addFMTowerPts(data);
-        break;
+      // case 'src/assets/data/FmTowers_FeaturesToJSON_AOI_20231204.geojson':
+      //   fmTransmitterGeojsonData = data;
+      //   addFMTowerPts(data);
+      //   break;
 
       // updated points using fm contour origins
       case 'src/assets/data/FM_transmitter_sites.geojson':
@@ -2264,7 +2334,7 @@ async function addFMTowerPts(geojson, channelFilter) {
 
       case 'src/assets/data/compositeSurface_polygon_surface.geojson':
         accessibilityPolyGeojsonData = data;
-        drawAccessibilityPoly(data);
+        // drawAccessibilityPoly(data);
         break;
   
       case 'src/assets/data/ne_50m_coastline_aoiClip.geojson':
