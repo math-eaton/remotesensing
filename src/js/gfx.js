@@ -294,20 +294,29 @@ export function gfx() {
   function onWindowResize() {
     // Get the dimensions of the container
     const container = document.getElementById('three-container');
-    const width = container.offsetWidth;
-    const height = container.offsetHeight;
+    const width = 720;
+    const height = 360;
 
     // Update camera aspect ratio and renderer size
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    renderer.setSize(width, height);
+    renderer.setSize(width, height, false);
 
     // update this value to alter pixel ratio scaled with the screen
-    pixelationFactor = 1;
+    pixelationFactor = 0.5;
 
     // Calculate new dimensions based on the value
     var newWidth = Math.max(1, window.innerWidth * pixelationFactor);
     var newHeight = Math.max(1, window.innerHeight * pixelationFactor);
+
+    const scaleX = width / newWidth; 
+    const scaleY = height / newHeight;
+    // document.getElementById('canvas').style.transform = `scale(${scaleX}, ${scaleY})`;
+
+    const canvas = document.getElementById('canvas');
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.imageRendering = 'pixelated';
 
 
     if (renderer && camera) {
@@ -408,13 +417,12 @@ export function gfx() {
 
   // Create a geometry for the ray line
   const rayGeometry = new THREE.BufferGeometry();
-  let cellServiceRaycaster = new THREE.Raycaster();
   let currentGridCode = null; // Keep track of the last gridCode encountered
 
   // Registry for storing raycasters
   const raycasterDict = {
     cellServiceMesh: { group: cellServiceMesh, enabled: true, onIntersect: raycastCellServiceMesh },
-    // fmMSTLines: { group: fmMSTLines, enabled: false, onIntersect: handleFMMSTLinesIntersect },
+    accessibilityPoly: { group: accessibilityPoly, enabled: true, onIntersect: raycastAccessPoly },
     // cellTransmitterPoints: { group: cellTransmitterPoints, enabled: false, onIntersect: handleCellTransmitterPointsIntersect },
     // Add other groups as necessary, each with an 'enabled' flag and an 'onIntersect' function
 };
@@ -435,16 +443,39 @@ export function gfx() {
         applyPreset(preset);
   
         // Stop any currently playing notes
-        // synth.triggerRelease(); // This stops all currently playing notes. Adjust if your synth setup is different.
+        synth.triggerRelease([Tone.now()]); // This stops all currently playing notes. Adjust if your synth setup is different.
   
         // Start a new note or drone. Adjust the note and duration as needed.
-        synth.triggerAttack([Tone.immediate()]); // Use triggerAttack for a continuous sound
+        synth.triggerAttack([Tone.now() + 0.1]); // Use triggerAttack for a continuous sound
       } else {
         console.log(`Intersected unspecified gridCode ${gridCode}`, intersection);
       }
     }
   }
   
+  function raycastAccessPoly(intersection, gridCode) {
+    // Check if the gridCode has changed
+    if (gridCode !== currentGridCode) {
+      // Update the currentGridCode
+      currentGridCode = gridCode;
+  
+      // Access the preset for the new gridCode
+      const preset = synthPresets.presets["cellService"][gridCode];
+      if (preset) {
+        // Apply the new preset
+        applyPreset(preset);
+  
+        // Stop any currently playing notes
+        synth.triggerRelease([Tone.now()]); // This stops all currently playing notes. Adjust if your synth setup is different.
+  
+        // Start a new note or drone. Adjust the note and duration as needed.
+        synth.triggerAttack([Tone.now() + 0.1]); // Use triggerAttack for a continuous sound
+      } else {
+        console.log(`Intersected unspecified gridCode ${gridCode}`, intersection);
+      }
+    }
+  }
+
       
 //   function raycastCellServiceMesh(intersection, gridCode) {
 //     // Based on the gridCode, trigger different events or actions
@@ -642,14 +673,13 @@ export function gfx() {
     initThreeJS(); // Initialize Three.js
 
     // Initialize pixelationFactor
-    pixelationFactor = 0.4;
+    pixelationFactor = null;
 
     onWindowResize(); // Update the resolution
 
     // Load GeoJSON data and then enable interaction
     loadGeoJSONData(() => {
       postLoadOperations(); // Setup the scene after critical datasets are loaded
-
 
       // // Ensure the sliderValue is up-to-date
       // sliderValue = (parseFloat(document.getElementById('fm-channel-slider').value) / sliderLength);

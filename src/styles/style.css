@@ -520,6 +520,7 @@ p, ul{
 
 #three-container canvas {
   position: relative;
+  transform-origin: center;
   width: 100% !important;
   height: 100% !important;
   image-rendering: pixelated !important;
