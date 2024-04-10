@@ -34,7 +34,7 @@ export function gfx() {
   let accessibilityPoly = new THREE.Group();
   let analysisArea = new THREE.Group();
   let coastline = new THREE.Group();
-  let cameraReticule = new THREE.Group();
+  // let raycasterReticule = new THREE.Group();
   cellServiceMesh.visible = true;
   accessibilityMesh.visible = true;
 
@@ -55,15 +55,14 @@ export function gfx() {
   let globalSwitch2 = 0;
   let globalSwitch3 = 0;
 
+  let audioContext;
 
-  // temp geometry for raycast testing
-  const squareSize = 0.0075; // Adjust based on your scale
-  const squareGeometry = new THREE.PlaneGeometry(squareSize, squareSize);
-  const wireframeGeometry = new THREE.EdgesGeometry(squareGeometry); // Get the edges for a wireframe
-  const squareMaterial = new THREE.LineBasicMaterial({ 
-    color: 0x00ff00,
-    }); 
-  const squareWireframe = new THREE.LineSegments(wireframeGeometry, squareMaterial);
+    // temp geometry for raycast testing
+    const squareSize = 0.025;
+    const squareGeometry = new THREE.PlaneGeometry(squareSize, squareSize);
+    const wireframeGeometry = new THREE.EdgesGeometry(squareGeometry); // Get the edges for a wireframe
+    const squareMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 2 });
+    const raycasterReticule = new THREE.LineSegments(wireframeGeometry, squareMaterial);
   
   
 
@@ -88,7 +87,7 @@ export function gfx() {
     matchingPyramidColor: '#FFFF00',
     nonMatchingPyramidColor: '#FF1493',
     waterColor: '#303030',
-    // accessibilityPolyColor: '#ff0000'
+    accessibilityPolyColor: '#310057'
   };
 
 
@@ -183,16 +182,17 @@ export function gfx() {
     renderer.setSize(window.innerWidth, window.innerHeight, false);
     renderer.setPixelRatio(1);
 
-
-    stats = new Stats();
-
-    document.getElementById('gfx').appendChild(stats.domElement);
-
-
-
     document.getElementById('gfx').appendChild(renderer.domElement);
 
-    
+
+
+    stats = new Stats();
+    stats.showPanel(2); 
+    stats.domElement.style.cssText = 'position:absolute;bottom:0px;left:0px;';
+    document.getElementById('stats').appendChild(stats.domElement);
+
+
+
 
     // Set initial positions - We'll update these later
     rayGeometry.setAttribute(
@@ -422,7 +422,7 @@ export function gfx() {
   // Registry for storing raycasters
   const raycasterDict = {
     cellServiceMesh: { group: cellServiceMesh, enabled: true, onIntersect: raycastCellServiceMesh },
-    accessibilityPoly: { group: accessibilityPoly, enabled: true, onIntersect: raycastAccessPoly },
+    // accessibilityPoly: { group: accessibilityPoly, enabled: true, onIntersect: raycastAccessPoly },
     // cellTransmitterPoints: { group: cellTransmitterPoints, enabled: false, onIntersect: handleCellTransmitterPointsIntersect },
     // Add other groups as necessary, each with an 'enabled' flag and an 'onIntersect' function
 };
@@ -557,8 +557,6 @@ export function gfx() {
           camera.lookAt(controls.target);
 
 
-
-
           // RAYCASTERS!!!!!!!!!!!!!!!!!!!! //
           ////////////////////////////////////
           // cell service mesh caster
@@ -571,10 +569,31 @@ export function gfx() {
                   const intersections = raycaster.intersectObjects(group.children, true);
           
                   intersections.forEach(intersection => {
+
+        
+                      var intersectPoint = intersections[0].point;
+          
+
+                      // Adjust square position
+                      raycasterReticule.position.x = intersectPoint.x;
+                      raycasterReticule.position.y = intersectPoint.y;
+                      raycasterReticule.position.z = intersectPoint.z;
+                  
+                      if (!raycasterReticule.parent) scene.add(raycasterReticule);
+              
+
                       if (intersection.object.userData.gridCode) {
                           const gridCode = intersection.object.userData.gridCode;
                           onIntersect(intersection, gridCode);
+
+                    } else {
+                      // If there are no intersections, remove the square from the scene
+                      if (raycasterReticule.parent) scene.remove(raycasterReticule);
+    
+      
                       }
+
+          
                   });
               }
           });
@@ -603,16 +622,37 @@ export function gfx() {
     requestAnimationFrame(animate);
   }
 
+  // unlock AudioContext with websocket interaction
+  function unlockAudioContext() {
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioContext.state === 'suspended') {
+      audioContext.resume().then(() => {
+        console.log('AudioContext unlocked!');
+      });
+    }
+    else if (audioContext.state !== 'suspended') {
+      console.log('idk?')
+    }
+console.log("idk????")
+console.log(audioContext.state)
+  }
+
+
+
   function initWebSocketConnection() {
     const ws = new WebSocket('ws://localhost:8080');
   
     ws.onopen = function() {
       console.log('Connected to WebSocket server');
+      unlockAudioContext(); // Attempt to unlock AudioContext on WebSocket connection
     };
   
     ws.onmessage = function(event) {
       // hide mouse cursor if/when data is received
       document.body.style.cursor = 'none';
+      setTimeout(() => threeContainer.classList.remove('background'), 1000);
 
       const data = JSON.parse(event.data);
   
@@ -885,6 +925,33 @@ export function gfx() {
     );
   }
 
+
+  // Function to draw a wireframe hexagon at a given point and add it to a global group
+function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
+  const vertices = [];
+  const material = new THREE.LineBasicMaterial({ color: 0xff00ff }); 
+  
+  // Calculate the vertices of the hexagon
+  for (let i = 0; i <= 6; i++) { // <= 6 to loop back to the start for the line
+    const angle = (Math.PI / 3) * i; // 60 degrees in radians
+    const x = centerPoint.x + hexagonSize * Math.cos(angle);
+    const y = centerPoint.y + hexagonSize * Math.sin(angle);
+    vertices.push(new THREE.Vector3(x, y, centerPoint.z));
+  }
+
+  // Create a geometry from the vertices
+  const points = new THREE.BufferGeometry().setFromPoints(vertices);
+  const hexagonLine = new THREE.Line(points, material);
+
+  // Add the hexagon line to the global group for scoping
+  raycasterReticule.add(hexagonLine);
+
+  // Optionally, if you need to adjust visibility or other properties collectively later
+  raycasterReticule.visible = true; // Or false, as needed
+
+  return hexagonLine; // In case you want to keep track of it or remove it later
+}
+
   /////////////////////////////////////////////////////
   // GEOGRAPHIC DATA VIS /////////////////////////////
 
@@ -985,7 +1052,7 @@ export function gfx() {
   
         // Calculate logarithmic opacity scaling
         let minOpacity = 0.2;
-        let maxOpacity = 0.95;
+        let maxOpacity = 0.75;
         let scaleExponent = 0.75; // Adjust this to control the rate of change
 
         // Normalize contour value between 0 and 1 based on elevation range
@@ -1176,7 +1243,7 @@ export function gfx() {
             pointsForDelaunay.map((p) => [p.x, p.y]),
           );
           var meshIndex = [];
-          const thresholdDistance = 0.11; // Set your distance threshold here
+          const thresholdDistance = 0.075; // Set your distance threshold here
 
           for (let i = 0; i < delaunay.triangles.length; i += 3) {
             const p1 = pointsForDelaunay[delaunay.triangles[i]];
@@ -1238,10 +1305,11 @@ export function gfx() {
                 wireframeMaterial = new THREE.MeshBasicMaterial({
                   color: '#494949',
                   transparent: true,
-                  alphaHash: true,
-                  opacity: 0.3,
+                  alphaHash: false,
+                  opacity: 0.1,
                   wireframe: true,
                   side: THREE.DoubleSide,
+                  visible: false,
                 });
 
                 // Solid fill material (black fill)
@@ -1265,6 +1333,7 @@ export function gfx() {
                   opacity: 0.3,
                   wireframe: true,
                   side: THREE.DoubleSide,
+                  visible: false,
                 });
 
 
@@ -1703,6 +1772,7 @@ async function addFMTowerPts(geojson, channelFilter) {
   document.addEventListener('mouseup', function() {
     isDragging = false;
   });
+
   
   let channelFrequencies = {}; // Ensure this is accessible globally
   
@@ -1850,11 +1920,13 @@ async function addFMTowerPts(geojson, channelFilter) {
         geojson.features.forEach((feature) => {
           const color = getColorFromContour(feature.properties.ContourMax);
           const material = new THREE.MeshBasicMaterial({
-            color: color,
+            color: colorScheme.accessibilityPolyColor,
             side: THREE.FrontSide,
+            transparent: true,
             wireframe: true,
-            opacity: 1,
-            visible: false,
+            opacity: 0.3,
+            alphaHash: true,
+            visible: true,
           });
   
           const processPolygon = (polygon) => {
@@ -2136,7 +2208,8 @@ async function addFMTowerPts(geojson, channelFilter) {
       'src/assets/data/NYS_fullElevDEM_boundingBox.geojson',
       'src/assets/data/cellService_contours_5KM_pts_20240407.geojson',
       'src/assets/data/cellService_contours_5KM_explode_mini.geojson',
-      'src/assets/sounds/presets.json'
+      'src/assets/sounds/presets.json',
+      'src/assets/data/AccessHexTesselation_lvl5_nodata.geojson'
     ];
 
     let criticalDatasetsLoaded = 0;
@@ -2217,7 +2290,7 @@ async function addFMTowerPts(geojson, channelFilter) {
   
       ////////////////////// polygons
 
-      case 'src/assets/data/compositeSurface_polygon_surface.geojson':
+      case 'src/assets/data/AccessHexTesselation_lvl5_nodata.geojson':
         accessibilityPolyGeojsonData = data;
         drawAccessibilityPoly(data);
         break;

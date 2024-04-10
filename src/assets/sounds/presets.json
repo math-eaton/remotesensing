@@ -26,23 +26,23 @@
         },
     "cellService": {
         "0": {
-            "noise": {"type": "white"},
+            "noise": {"type": "pink"},
             "envelope": {
-              "attack": 0.5,
+              "attack": 0.1,
               "decay": 0.1,
               "sustain": 0.5,
               "release": 1
             },
             "filter": {
-              "type": "highpass",
-              "frequency": 2000,
+              "type": "lowpass",
+              "frequency": 800,
               "rolloff": -12
             }
           },
           "1": {
             "noise": {"type": "pink"},
             "envelope": {
-              "attack": 2,
+              "attack": 0.1,
               "decay": 1,
               "sustain": 0.3,
               "release": 2
@@ -53,7 +53,7 @@
               "rolloff": -24
             }
           },
-          "2": {
+          "default": {
             "noise": {"type": "brown"},
             "envelope": {
               "attack": 1,
@@ -67,7 +67,52 @@
               "rolloff": -12
             }
           }
+        },
+    "accessibility": {
+        "0": {
+            "noise": {"type": "pink"},
+            "envelope": {
+                "attack": 0.1,
+                "decay": 0.1,
+                "sustain": 0.5,
+                "release": 1
+            },
+            "filter": {
+                "type": "lowpass",
+                "frequency": 800,
+                "rolloff": -12
+            }
+            },
+            "1": {
+            "noise": {"type": "pink"},
+            "envelope": {
+                "attack": 0.1,
+                "decay": 1,
+                "sustain": 0.3,
+                "release": 2
+            },
+            "filter": {
+                "type": "lowpass",
+                "frequency": 1,
+                "rolloff": -24
+            }
+            },
+            "default": {
+            "noise": {"type": "brown"},
+            "envelope": {
+                "attack": 1,
+                "decay": 0.5,
+                "sustain": 0.2,
+                "release": 1.5
+            },
+            "filter": {
+                "type": "bandpass",
+                "frequency": 1000,
+                "rolloff": -12
+            }
+            }
         }
+    
       }
     
     }

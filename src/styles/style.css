@@ -440,6 +440,8 @@ p, ul{
   /* margin: 2%; */
 }
 
+
+
 #gfx {
   position: fixed;
   top: 0;
@@ -455,6 +457,11 @@ p, ul{
   /* filter: invert(1); */
   /* z-index: 1; Lower than #intro */
 }
+
+#stats{  
+  /* filter: grayscale(); */
+}
+
 
 /* Slider container */
 #fm-channel-controls {
@@ -531,9 +538,9 @@ p, ul{
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: -1; /* Puts the background behind your content */
+  z-index: 100; /* Puts the background behind your content */
   opacity: 50%;
-  filter: grayscale(100%);
+  filter: grayscale() contrast(0.75) brightness(0.9);
   transition: filter 0.5s linear; /* Transition for the filter effect over 2 seconds */
   /* margin: 20%; */
 }

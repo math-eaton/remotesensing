@@ -13,9 +13,7 @@
 //   'CSS Reset',
 // ];
 
-// import "src/css/style.css";
 import { gfx } from './gfx.js';
-// import { serialReader } from './serial_reader.js';
 
 // window.onload = () => {
 //   setTimeout(() => {}, 500);
@@ -26,12 +24,10 @@ import { gfx } from './gfx.js';
 // websocket();
 setTimeout(gfx(), 500);
 
-document.getElementById('fullscreenButton');
 const threeContainer = document.getElementById('gfx');
 
-if (threeContainer) {
-  console.log('idk');
-  threeContainer.classList.remove('background'); // Remove 'background' class from 'app'
-} else {
-  console.log('lol');
+function removeBackground() {
+  threeContainer.classList.remove('background');
 }
+
+threeContainer.addEventListener('click', removeBackground);
