@@ -30,20 +30,29 @@ export function gfx() {
   let propagationPolygons = new THREE.Group();
   let waterPolys = new THREE.Group();
   let cellServiceMesh = new THREE.Group();
-  let accessibilityMesh = new THREE.Group();
   let accessibilityHex = new THREE.Group();
   let analysisArea = new THREE.Group();
   let coastline = new THREE.Group();
   // let raycasterReticule = new THREE.Group();
 
+  // init visibility 
+  // fmTransmitterPoints.visible = false;
+  // propagationPolygons.visible = false;
+  // cellServiceMesh.visible = true;
+  // cellTransmitterPoints.visible = false;
+  // cellMSTLines.visible = false;
+  // elevContourLines.visible = true;
+  // accessibilityHex.visible = true;
+
+  // group the geometry subgroups
+  let analogGroup = new THREE.Group();
+  let accessGroup = new THREE.Group();
+  let digitalGroup = new THREE.Group();
+
   /// establish visibility
-  fmTransmitterPoints.visible = false;
-  propagationPolygons.visible = false;
-  cellServiceMesh.visible = false;
-  accessibilityMesh.visible = false;
-  cellTransmitterPoints.visible = false;
-  cellMSTLines.visible = false;
-  elevContourLines.visible = false;
+  analogGroup.visible = false;
+  accessGroup.visible = false;
+  digitalGroup.visible = false;
 
 
   // downsample framerate for performance
@@ -65,37 +74,38 @@ export function gfx() {
 
   let audioContext;
 
-    // temp geometry for raycast testing
-    const squareSize = 0.025;
-    const squareGeometry = new THREE.PlaneGeometry(squareSize, squareSize);
-    const wireframeGeometry = new THREE.EdgesGeometry(squareGeometry); // Get the edges for a wireframe
-    const squareMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 2 });
-    const raycasterReticule = new THREE.LineSegments(wireframeGeometry, squareMaterial);
-  
+  // temp geometry for raycast testing
+  const squareSize = 0.025;
+  const squareGeometry = new THREE.PlaneGeometry(squareSize, squareSize);
+  const wireframeGeometry = new THREE.EdgesGeometry(squareGeometry); // Get the edges for a wireframe
+  const squareMaterial = new THREE.LineBasicMaterial({ color: '#0000ff', linewidth: 2 });
+  const raycasterReticule = new THREE.LineSegments(wireframeGeometry, squareMaterial);
   
 
   // Define color scheme variables
   const colorScheme = {
-    graticuleColor: '#2f2f2f0b', // Bright green
-    // ambientLightColor: '#404040', // Dark gray
-    directionalLightColor: '#ffffff', // White
-    backgroundColor: '#000000', // Black
-    polygonColor: '#FF1493', // magenta
-    pyramidColorFM: '#FFFF00', // magenta
-    pyramidColorCellular: '#FFFF00', // neon orange
+    graticuleColor: '#2f2f2f0b', 
+    // ambientLightColor: '#404040', 
+    directionalLightColor: '#ffffff', 
+    backgroundColor: '#000000', 
+    polygonColor: '#FF1493',
+    pyramidColorFM: '#FFFF00', 
+    pyramidColorCellular: '#FFFF00', 
     // lowestElevationColor: "#0000ff", // Blue
     // middleElevationColor: "#00ff00", // Green
     // highestElevationColor: "#ff0000", // Red
-    mstFmColor: '#FF5F1F', // yellow
-    mstCellColor: '#FFFF00', // neon orange
+    mstFmColor: '#FF5F1F', 
+    mstCellColor: '#FFFF00', 
     boundingBoxColor: '#3d3d3d',
     coastlineColor: '#303030',
     contoursLabelColor: '#00ff00',
-    cellColor: '#FFFF00', // magenta
+    cellColor: '#FFFF00',
     matchingPyramidColor: '#FFFF00',
     nonMatchingPyramidColor: '#FF1493',
     waterColor: '#303030',
-    accessibilityHexColor: '#310057'
+    accessibilityHexColor: '#310057',
+    cellServiceNo: '#00E661',
+    cellServiceYes: '#2d2d2d'
   };
 
 
@@ -311,7 +321,7 @@ export function gfx() {
     renderer.setSize(width, height, false);
 
     // update this value to alter pixel ratio scaled with the screen
-    pixelationFactor = 0.45;
+    pixelationFactor = 0.35;
 
     // Calculate new dimensions based on the value
     var newWidth = Math.max(1, window.innerWidth * pixelationFactor);
@@ -461,11 +471,13 @@ export function gfx() {
     }
   }
 
+  // calculate the nearest vertex distance
+  // todo: add scaling factor of sound related to distance
+  // + change effect only if gridcode changes
   function raycastAccessHexVertex(intersection) {
     const intersectPoint = intersection.point;
     const vertices = intersection.object.userData.vertices;
     
-    // Calculate and log the distance to the nearest vertex
     if (vertices) {
         const nearestVertex = vertices.reduce((nearest, vertex) => {
             const distance = Math.hypot(vertex.x - intersectPoint.x, vertex.y - intersectPoint.y);
@@ -677,8 +689,13 @@ console.log(audioContext.state)
 
       // Check for switchState in the data and toggle group visibility accordingly
       if (data.switchState !== undefined) {
-          toggleGroupVisibility(data.switchState);
+          toggleMapScene(data.switchState);
       }
+
+      if (data.switchState === undefined) {
+        toggleMapScene(3);
+    }
+
     };
   
     ws.onerror = function(event) {
@@ -687,26 +704,27 @@ console.log(audioContext.state)
   
 }
   
-  function toggleGroupVisibility(switchState) {
-    groupLayer1.visible = false;
-    groupLayer2.visible = false;
-    groupLayer3.visible = false;
+function toggleMapScene(switchState) {
+  // Hide all groups initially
+  analogGroup.visible = false;
+  accessGroup.visible = false;
+  digitalGroup.visible = false;
 
-    // Then, based on the switchState, make the corresponding group visible
-    switch (switchState) {
-        case 1:
-            groupLayer1.visible = true;
-            break;
-        case 2:
-            groupLayer2.visible = true;
-            break;
-        case 3:
-            groupLayer3.visible = true;
-            break;
-        default:
-            console.log("Invalid switchState value:", switchState);
-            break;
-    }
+  // Show the relevant group based on switchState
+  switch (switchState) {
+      case 1:
+          analogGroup.visible = true;
+          break;
+      case 2:
+          accessGroup.visible = true;
+          break;
+      case 3:
+          digitalGroup.visible = true;
+          break;
+      default:
+          console.log("Invalid switchState value:", switchState);
+          break;
+  }
 }
 
   // Function to initialize the scene and other components
@@ -1076,15 +1094,6 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
           alphaHash: false,
           opacity: opacity,
         });
-
-
-        // let material = new THREE.LineBasicMaterial({ 
-        //   color: color,
-        //   transparent: true,
-        //   opacity: opacity,
-        //   dashSize: .5,
-        //   gapSize: .25,
-        // });
   
         // Function to process a single line
         const processLine = (lineCoords, contourValue) => {
@@ -1219,7 +1228,7 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
     return new Promise((resolve, reject) => {
       try {
         // Reset/clear the group to avoid adding duplicate meshes
-        accessibilityMesh.clear();
+        cellServiceMesh.clear();
 
         // Downsample and group points by 'group_ID'
         const groups = {};
@@ -1281,7 +1290,7 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
 
                 // Wireframe material
                 wireframeMaterial = new THREE.MeshBasicMaterial({
-                  color: '#ff0000',
+                  color: colorScheme.cellServiceNo,
                   transparent: true,
                   alphaHash: true,
                   opacity: 0.5,
@@ -1305,10 +1314,10 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
 
                 // Wireframe material
                 wireframeMaterial = new THREE.MeshBasicMaterial({
-                  color: '#494949',
+                  color: colorScheme.cellServiceYes,
                   transparent: true,
                   alphaHash: true,
-                  opacity: 0.1,
+                  opacity: 0.4,
                   wireframe: true,
                   side: THREE.DoubleSide,
                   // visible: false,
@@ -2300,7 +2309,10 @@ function addCellTowerPts(geojson) {
   function handleGeoJSONData(url, data) {
     switch (url) {
 
-
+      // analogGroup.add(fmTransmitterPoints, propagationPolygons, elevContourLines);
+      // digitalGroup.add(cellServiceMesh, cellTransmitterPoints, cellMSTLines, elevContourLines);
+    
+    
       ////////////////// lines
 
       case 'src/assets/data/elevation_contours_shaved.geojson':
@@ -2308,6 +2320,8 @@ function addCellTowerPts(geojson) {
         const meanElevation = calculateMeanContourElevation(data);
         // console.log(`mean elevation: ${meanElevation}`)
         addElevContourLines(data);
+        analogGroup.add(elevContourLines);
+        digitalGroup.add(elevContourLines);
         break;
 
       case 'src/assets/data/fm_contours_shaved.geojson':
@@ -2335,6 +2349,7 @@ function addCellTowerPts(geojson) {
       case 'src/assets/data/AccessHexTesselation_lvl5_nodata.geojson':
         accessibilityHexGeojsonData = data;
         drawAccessibilityHex(data);
+        accessGroup.add(accessibilityHex);
         break;
 
       //////////////////////// points
@@ -2342,6 +2357,7 @@ function addCellTowerPts(geojson) {
       case 'src/assets/data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson':
         cellTowerGeojsonData = data;
         addCellTowerPts(data);
+        digitalGroup.add(cellTransmitterPoints);
         break;
 
 
@@ -2349,6 +2365,7 @@ function addCellTowerPts(geojson) {
       case 'src/assets/data/FM_transmitter_sites.geojson':
         fmTransmitterGeojsonData = data;
         addFMTowerPts(data);
+        analogGroup.add(fmTransmitterPoints);
         break;
 
   
@@ -2420,6 +2437,9 @@ function addCellTowerPts(geojson) {
     constrainCamera(controls, boundingBox);
 
     initFMsliderAndContours(fmFreqDictionaryJson); // Setup slider and initial visualization
+
+    // add grouped sub-groups
+    scene.add(analogGroup, accessGroup, digitalGroup);
 
     controls.update();
 }
