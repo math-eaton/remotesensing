@@ -36,13 +36,13 @@ export function gfx() {
   // let raycasterReticule = new THREE.Group();
 
   // init visibility 
-  // fmTransmitterPoints.visible = false;
-  // propagationPolygons.visible = false;
-  // cellServiceMesh.visible = true;
-  // cellTransmitterPoints.visible = false;
-  // cellMSTLines.visible = false;
-  // elevContourLines.visible = true;
-  // accessibilityHex.visible = true;
+  fmTransmitterPoints.visible = true;
+  propagationPolygons.visible = true;
+  cellServiceMesh.visible = true;
+  cellTransmitterPoints.visible = true;
+  cellMSTLines.visible = true;
+  elevContourLines.visible = true;
+  accessibilityHex.visible = true;
 
   // group the geometry subgroups
   let analogGroup = new THREE.Group();
@@ -50,10 +50,11 @@ export function gfx() {
   let digitalGroup = new THREE.Group();
 
   /// establish visibility
-  analogGroup.visible = false;
+  analogGroup.visible = true;
   accessGroup.visible = false;
   digitalGroup.visible = false;
 
+  analogGroup.add(propagationPolygons, fmTransmitterPoints);
 
   // downsample framerate for performance
   let clock = new THREE.Clock();
@@ -179,7 +180,7 @@ export function gfx() {
       75,
       window.innerWidth / window.innerHeight,
       0.1,
-      1000,
+      100,
     );
 
 
@@ -1423,8 +1424,8 @@ function updatefmContourGroups() {
 }
 
 // Function to add FM propagation 3D line loops
-function addFMpropagation3D(geojson, channelFilter, stride = 1) {
-    return new Promise((resolve, reject) => {
+async function addFMpropagation3D(geojson, channelFilter, group, stride = 1) {
+  return new Promise((resolve, reject) => {
       propagationPolygons.children.forEach(child => {
         propagationPolygons.remove(child);
         if (child.geometry) child.geometry.dispose();
@@ -1551,7 +1552,7 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
   });
 }
 
-async function addFMTowerPts(geojson, channelFilter) {
+async function addFMTowerPts(geojson, channelFilter, group) {
   try {
     // Define the base size, height, and characteristics for the pyramids
     const baseSizeMatching = 0.008;
@@ -1743,8 +1744,8 @@ function addCellTowerPts(geojson) {
           cellMstEdges,
           '#FFFFFF',
           colorScheme.mstCellColor,
-          0.00025,
-          0.00075,
+          0.0003,
+          0.0015,
           cellMSTLines,
         );
       }
@@ -1851,17 +1852,20 @@ function addCellTowerPts(geojson) {
   }
   
   function updateVisualizationWithChannelFilter(fmContoursGeojsonData, towerGeojsonData, channelFilter) {
+    // Ensure data availability
     if (!fmContoursGeojsonData || !towerGeojsonData) {
       console.warn("GeoJSON data not available.");
       return;
     }
-  
-    addFMpropagation3D(fmContoursGeojsonData, channelFilter)
+
+    addFMpropagation3D(fmContoursGeojsonData, channelFilter, propagationPolygons)
+      .then(() => console.log("FM propagation updated"))
       .catch(error => console.error("Failed to update contour channel:", error));
-  
-    addFMTowerPts(towerGeojsonData, channelFilter)
+
+    addFMTowerPts(towerGeojsonData, channelFilter, fmTransmitterPoints)
+      .then(() => console.log("FM towers updated"))
       .catch(error => console.error("Failed to update tower channel:", error));
-  }
+}
 
   //////////////////////
 
@@ -2326,6 +2330,9 @@ function addCellTowerPts(geojson) {
 
       case 'src/assets/data/fm_contours_shaved.geojson':
         fmContoursGeojsonData = data;
+        // run on pageload with default channel 201 as filter
+        addFMpropagation3D(data, 201, propagationPolygons)
+        analogGroup.add(propagationPolygons)
         break;
   
 
@@ -2342,6 +2349,7 @@ function addCellTowerPts(geojson) {
       case 'src/assets/data/cellService_contours_5KM_pts_20240407.geojson':
         cellServiceGeojsonData = data;
         addCellServiceMesh(data);
+        digitalGroup.add(cellServiceMesh);
         break;
   
       ////////////////////// polygons
@@ -2358,13 +2366,14 @@ function addCellTowerPts(geojson) {
         cellTowerGeojsonData = data;
         addCellTowerPts(data);
         digitalGroup.add(cellTransmitterPoints);
+        digitalGroup.add(cellMSTLines);
         break;
 
 
       // updated points using fm contour origins
       case 'src/assets/data/FM_transmitter_sites.geojson':
         fmTransmitterGeojsonData = data;
-        addFMTowerPts(data);
+        addFMTowerPts(data, 201, fmTransmitterPoints)
         analogGroup.add(fmTransmitterPoints);
         break;
 
