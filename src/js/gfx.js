@@ -35,8 +35,16 @@ export function gfx() {
   let analysisArea = new THREE.Group();
   let coastline = new THREE.Group();
   // let raycasterReticule = new THREE.Group();
+
+  /// establish visibility
+  fmTransmitterPoints.visible = false;
+  propagationPolygons.visible = false;
   cellServiceMesh.visible = true;
   accessibilityMesh.visible = true;
+  cellTransmitterPoints.visible = false;
+  cellMSTLines.visible = false;
+  elevContourLines.visible = false;
+
 
   // downsample framerate for performance
   let clock = new THREE.Clock();
@@ -220,9 +228,9 @@ export function gfx() {
 
     // Set the minimum and maximum polar angles (in radians) to prevent the camera from going over the vertical
     controls.minPolarAngle = 0 * (Math.PI / 180); // 0 radians (0 degrees) - directly above the target
-    controls.maxPolarAngle = 30 * (Math.PI / 180); // π/n radians (z degrees) - on the horizon
+    controls.maxPolarAngle = 90 * (Math.PI / 180); // π/n radians (z degrees) - on the horizon
     // Set the maximum distance the camera can dolly out
-    controls.maxDistance = 2; // max camera zoom out (perspective cam)
+    controls.maxDistance = 1.5; // max camera zoom out (perspective cam)
     controls.minDistance = 0.5; // min camera zoom in (perspective cam)
     controls.maxZoom = 1.7; // max camera zoom out (ortho cam)
     controls.minZoom = 0.3; // min camera zoom in (ortho cam)
@@ -303,7 +311,7 @@ export function gfx() {
     renderer.setSize(width, height, false);
 
     // update this value to alter pixel ratio scaled with the screen
-    pixelationFactor = 0.5;
+    pixelationFactor = 0.45;
 
     // Calculate new dimensions based on the value
     var newWidth = Math.max(1, window.innerWidth * pixelationFactor);
@@ -1243,7 +1251,8 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
             pointsForDelaunay.map((p) => [p.x, p.y]),
           );
           var meshIndex = [];
-          const thresholdDistance = 0.075; // Set your distance threshold here
+          // set triangulation distance threshold to avoid connecting distant pts
+          const thresholdDistance = 0.11; 
 
           for (let i = 0; i < delaunay.triangles.length; i += 3) {
             const p1 = pointsForDelaunay[delaunay.triangles[i]];
@@ -1305,11 +1314,11 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
                 wireframeMaterial = new THREE.MeshBasicMaterial({
                   color: '#494949',
                   transparent: true,
-                  alphaHash: false,
+                  alphaHash: true,
                   opacity: 0.1,
                   wireframe: true,
                   side: THREE.DoubleSide,
-                  visible: false,
+                  // visible: false,
                 });
 
                 // Solid fill material (black fill)
@@ -1471,38 +1480,62 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
             }
 
             const material = new THREE.LineBasicMaterial({
-                color: colorScheme.polygonColor,
-                transparent: true,
-                alphaHash: true,
-                opacity: opacity,
-                // dashSize: zoomLevels[1].dashSize,
-                // gapSize: zoomLevels[1].gapSize,          
-            });
+              color: colorScheme.polygonColor,
+              transparent: true,
+              alphaHash: true,
+              opacity: opacity,     
+          });
+      
+          const vertices = feature.geometry.coordinates[0].map(coord => {
+              const [x, y] = toStatePlane(coord[0], coord[1]);
+              const z = elevationData[Math.abs(featureIndex)] * zScale;
+              return new THREE.Vector3(x, y, z);
+          });
+      
+          const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
+          const lineLoop = new THREE.Line(geometry, material);
+          lineLoop.computeLineDistances();
+      
+          // Triangulate for filled mesh
+          const flatVertices = [];
+          vertices.forEach(vertex => {
+              flatVertices.push(vertex.x, vertex.y); // Flatten for earcut
+          });
+          const triangles = Earcut.triangulate(flatVertices, null, 2); // Second argument for holes, third for dimensions
 
-            const vertices = feature.geometry.coordinates[0].map(coord => {
-                const [x, y] = toStatePlane(coord[0], coord[1]);
-                // const z = elevationData[featureIndex] * zScale
-                const z = elevationData[Math.abs(featureIndex)] * zScale;
-                return new THREE.Vector3(x, y, z);
-            });
-
-            const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
-            const lineLoop = new THREE.Line(geometry, material);
-            lineLoop.computeLineDistances();
-
-            // Determine the group ID from the key
-            const groupId = feature.properties.key.split('_')[0];
-            if (!fmContourGroups[groupId]) {
-                fmContourGroups[groupId] = {
-                    meshes: [],
-                    opacity: 1.0, // Initial opacity
-                    isDecaying: false, // No decay initially
-                    decayRate: 0.2 // Decay rate when applicable
-                };
-            }
-            fmContourGroups[groupId].meshes.push(lineLoop);
-            scene.add(lineLoop);
-        });
+      
+          const meshGeometry = new THREE.BufferGeometry();
+          const positionArray = new Float32Array(triangles.length * 3); // 3 vertices per triangle
+          triangles.forEach((index, i) => {
+              positionArray[i * 3] = vertices[index].x;
+              positionArray[i * 3 + 1] = vertices[index].y;
+              positionArray[i * 3 + 2] = vertices[index].z; // Apply elevation
+          });
+          meshGeometry.setAttribute('position', new THREE.BufferAttribute(positionArray, 3));
+      
+          const meshMaterial = new THREE.MeshBasicMaterial({
+              color: colorScheme.polygonColor,
+              side: THREE.DoubleSide,
+              wireframe: true,
+              transparent: true,
+              opacity: opacity,
+          });
+          const mesh = new THREE.Mesh(meshGeometry, meshMaterial);
+      
+          // Add to group and scene
+          const groupId = feature.properties.key.split('_')[0];
+          if (!fmContourGroups[groupId]) {
+              fmContourGroups[groupId] = {
+                  meshes: [],
+                  opacity: 1.0,
+                  isDecaying: false,
+                  decayRate: 0.2
+              };
+          }
+          fmContourGroups[groupId].meshes.push(lineLoop, mesh);
+          scene.add(lineLoop);
+          scene.add(mesh);
+      });
 
         resolve();
     });
@@ -1648,7 +1681,6 @@ async function addFMTowerPts(geojson, channelFilter) {
 
               // Add the pyramid to the cellTransmitterPoints group
               cellTransmitterPoints.add(pyramid);
-              cellTransmitterPoints.visible = false;
 
               // Check for coincident points and get a z-offset
               const label = `cell`;
@@ -1710,7 +1742,6 @@ async function addFMTowerPts(geojson, channelFilter) {
         // add groups to scene
         scene.add(cellTransmitterPoints);
         scene.add(cellMSTLines);
-        cellMSTLines.visible = false;
 
         resolve(); // Resolve the promise when done
       } catch (error) {
@@ -1816,8 +1847,8 @@ async function addFMTowerPts(geojson, channelFilter) {
       return;
     }
   
-    // addFMpropagation3D(fmContoursGeojsonData, channelFilter)
-    //   .catch(error => console.error("Failed to update contour channel:", error));
+    addFMpropagation3D(fmContoursGeojsonData, channelFilter)
+      .catch(error => console.error("Failed to update contour channel:", error));
   
     addFMTowerPts(towerGeojsonData, channelFilter)
       .catch(error => console.error("Failed to update tower channel:", error));
@@ -2269,7 +2300,6 @@ async function addFMTowerPts(geojson, channelFilter) {
 
       case 'src/assets/data/fm_contours_shaved.geojson':
         fmContoursGeojsonData = data;
-        // addFMpropagation3D(data); don't need this here i guess?
         break;
   
 

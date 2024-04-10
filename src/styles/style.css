@@ -452,10 +452,10 @@ p, ul{
   text-align: center;
   overflow: hidden;
   /* cursor: url("/src/cursor/whiteCrosshair.cur"), auto; */
-  transition: filter 0.25s linear; /* Transition applies to the filter property */
+  transition: filter 0.25s linear;
   image-rendering: pixelated;
-  /* filter: invert(1); */
-  /* z-index: 1; Lower than #intro */
+  /* filter: hue-rotate(90deg) */
+  /* z-index: 1;  */
 }
 
 #stats{  
