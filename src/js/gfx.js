@@ -31,7 +31,7 @@ export function gfx() {
   let waterPolys = new THREE.Group();
   let cellServiceMesh = new THREE.Group();
   let accessibilityMesh = new THREE.Group();
-  let accessibilityPoly = new THREE.Group();
+  let accessibilityHex = new THREE.Group();
   let analysisArea = new THREE.Group();
   let coastline = new THREE.Group();
   // let raycasterReticule = new THREE.Group();
@@ -39,8 +39,8 @@ export function gfx() {
   /// establish visibility
   fmTransmitterPoints.visible = false;
   propagationPolygons.visible = false;
-  cellServiceMesh.visible = true;
-  accessibilityMesh.visible = true;
+  cellServiceMesh.visible = false;
+  accessibilityMesh.visible = false;
   cellTransmitterPoints.visible = false;
   cellMSTLines.visible = false;
   elevContourLines.visible = false;
@@ -95,7 +95,7 @@ export function gfx() {
     matchingPyramidColor: '#FFFF00',
     nonMatchingPyramidColor: '#FF1493',
     waterColor: '#303030',
-    accessibilityPolyColor: '#310057'
+    accessibilityHexColor: '#310057'
   };
 
 
@@ -228,7 +228,7 @@ export function gfx() {
 
     // Set the minimum and maximum polar angles (in radians) to prevent the camera from going over the vertical
     controls.minPolarAngle = 0 * (Math.PI / 180); // 0 radians (0 degrees) - directly above the target
-    controls.maxPolarAngle = 90 * (Math.PI / 180); // π/n radians (z degrees) - on the horizon
+    controls.maxPolarAngle = 30 * (Math.PI / 180); // π/n radians (z degrees) - on the horizon
     // Set the maximum distance the camera can dolly out
     controls.maxDistance = 1.5; // max camera zoom out (perspective cam)
     controls.minDistance = 0.5; // min camera zoom in (perspective cam)
@@ -430,7 +430,7 @@ export function gfx() {
   // Registry for storing raycasters
   const raycasterDict = {
     cellServiceMesh: { group: cellServiceMesh, enabled: true, onIntersect: raycastCellServiceMesh },
-    // accessibilityPoly: { group: accessibilityPoly, enabled: true, onIntersect: raycastAccessPoly },
+    accessibilityHex: { group: accessibilityHex, enabled: true, onIntersect: raycastAccessHexVertex },
     // cellTransmitterPoints: { group: cellTransmitterPoints, enabled: false, onIntersect: handleCellTransmitterPointsIntersect },
     // Add other groups as necessary, each with an 'enabled' flag and an 'onIntersect' function
 };
@@ -460,29 +460,23 @@ export function gfx() {
       }
     }
   }
-  
-  function raycastAccessPoly(intersection, gridCode) {
-    // Check if the gridCode has changed
-    if (gridCode !== currentGridCode) {
-      // Update the currentGridCode
-      currentGridCode = gridCode;
-  
-      // Access the preset for the new gridCode
-      const preset = synthPresets.presets["cellService"][gridCode];
-      if (preset) {
-        // Apply the new preset
-        applyPreset(preset);
-  
-        // Stop any currently playing notes
-        synth.triggerRelease([Tone.now()]); // This stops all currently playing notes. Adjust if your synth setup is different.
-  
-        // Start a new note or drone. Adjust the note and duration as needed.
-        synth.triggerAttack([Tone.now() + 0.1]); // Use triggerAttack for a continuous sound
-      } else {
-        console.log(`Intersected unspecified gridCode ${gridCode}`, intersection);
-      }
+
+  function raycastAccessHexVertex(intersection) {
+    const intersectPoint = intersection.point;
+    const vertices = intersection.object.userData.vertices;
+    
+    // Calculate and log the distance to the nearest vertex
+    if (vertices) {
+        const nearestVertex = vertices.reduce((nearest, vertex) => {
+            const distance = Math.hypot(vertex.x - intersectPoint.x, vertex.y - intersectPoint.y);
+            return distance < nearest.distance ? { vertex, distance } : nearest;
+        }, {vertex: null, distance: Infinity});
+        
+        console.log(`Nearest vertex distance: ${nearestVertex.distance}`);
+    } else {
+        console.log('No vertices data found in userData');
     }
-  }
+}
 
       
 //   function raycastCellServiceMesh(intersection, gridCode) {
@@ -503,7 +497,47 @@ export function gfx() {
 //     }
 // }
 
+function updateReticulePosition(intersectPoint = null) {
+  if (intersectPoint) {
+      // Adjust reticule position to the intersection point
+      raycasterReticule.position.x = intersectPoint.x;
+      raycasterReticule.position.y = intersectPoint.y;
+      raycasterReticule.position.z = intersectPoint.z;
+
+      // Ensure the reticule is added to the scene if not already present
+      if (!raycasterReticule.parent) scene.add(raycasterReticule);
+  } else {
+      // If there are no intersections, remove the reticule from the scene
+      if (raycasterReticule.parent) scene.remove(raycasterReticule);
+  }
+}
+
   
+// overall raycaster handler for animation loop
+function handleRaycasters(camera, scene) {
+  Object.entries(raycasterDict).forEach(([key, { group, enabled, onIntersect }]) => {
+      if (enabled) {
+          const raycaster = new THREE.Raycaster();
+          raycaster.setFromCamera({ x: 0, y: 0 }, camera); // Assuming center of camera view
+          const intersections = raycaster.intersectObjects(group.children, true);
+          
+          if (intersections.length > 0) {
+              const firstIntersection = intersections[0]; // Only consider the first intersection
+              const gridCode = firstIntersection.object.userData.gridCode;
+              onIntersect(firstIntersection, gridCode); // Call the specific onIntersect function
+              
+              // Handling raycaster reticule, assuming it's a general action
+              const intersectPoint = firstIntersection.point;
+              raycasterReticule.position.set(intersectPoint.x, intersectPoint.y, intersectPoint.z);
+              if (!raycasterReticule.parent) scene.add(raycasterReticule);
+          } else {
+              // No intersections
+              if (raycasterReticule.parent) scene.remove(raycasterReticule);
+          }
+      }
+  });
+}
+
   ////////////
   /////////// 
   ////////////////////////////////
@@ -564,48 +598,7 @@ export function gfx() {
           // Ensure the camera keeps looking at the target
           camera.lookAt(controls.target);
 
-
-          // RAYCASTERS!!!!!!!!!!!!!!!!!!!! //
-          ////////////////////////////////////
-          // cell service mesh caster
-
-            // Perform raycaster intersection checks for enabled groups
-            Object.entries(raycasterDict).forEach(([key, { group, enabled, onIntersect }]) => {
-              if (enabled) {
-                  const raycaster = new THREE.Raycaster();
-                  raycaster.setFromCamera({ x: 0, y: 0 }, camera); // Use the center of the camera view
-                  const intersections = raycaster.intersectObjects(group.children, true);
-          
-                  intersections.forEach(intersection => {
-
-        
-                      var intersectPoint = intersections[0].point;
-          
-
-                      // Adjust square position
-                      raycasterReticule.position.x = intersectPoint.x;
-                      raycasterReticule.position.y = intersectPoint.y;
-                      raycasterReticule.position.z = intersectPoint.z;
-                  
-                      if (!raycasterReticule.parent) scene.add(raycasterReticule);
-              
-
-                      if (intersection.object.userData.gridCode) {
-                          const gridCode = intersection.object.userData.gridCode;
-                          onIntersect(intersection, gridCode);
-
-                    } else {
-                      // If there are no intersections, remove the square from the scene
-                      if (raycasterReticule.parent) scene.remove(raycasterReticule);
-    
-      
-                      }
-
-          
-                  });
-              }
-          });
-
+          handleRaycasters(camera, scene);
 
 
         }}
@@ -613,7 +606,7 @@ export function gfx() {
       // updateDashSizeForZoom(); 
       updatefmContourGroups();
 
-      adjustMeshVisibilityBasedOnCameraDistance();
+      // adjustMeshVisibilityBasedOnCameraDistance();
 
 
       // console.log(`Camera X: ${camera.position.x}, Camera Y: ${camera.position.y}, Camera Z: ${camera.position.z}`);
@@ -1384,9 +1377,6 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
         // Add the cellServiceMesh group to the scene
         scene.add(cellServiceMesh);
 
-        // Set the initial visibility of the cell service mesh layer to false
-        cellServiceMesh.visible = true;
-
         resolve(cellServiceMesh); // Optionally return the group for further manipulation
       } catch (error) {
         reject(`Error in addCellServiceMesh: ${error.message}`);
@@ -1426,6 +1416,13 @@ function updatefmContourGroups() {
 // Function to add FM propagation 3D line loops
 function addFMpropagation3D(geojson, channelFilter, stride = 1) {
     return new Promise((resolve, reject) => {
+      propagationPolygons.children.forEach(child => {
+        propagationPolygons.remove(child);
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) child.material.dispose();
+    });
+
+
         // Existing groups not matching the current channelFilter are marked for decay
         Object.keys(fmContourGroups).forEach(groupId => {
             if (groupId !== channelFilter.toString()) {
@@ -1519,6 +1516,7 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
               wireframe: true,
               transparent: true,
               opacity: opacity,
+              visible: false,
           });
           const mesh = new THREE.Mesh(meshGeometry, meshMaterial);
       
@@ -1533,12 +1531,15 @@ function addFMpropagation3D(geojson, channelFilter, stride = 1) {
               };
           }
           fmContourGroups[groupId].meshes.push(lineLoop, mesh);
-          scene.add(lineLoop);
-          scene.add(mesh);
+          propagationPolygons.add(lineLoop);
+          propagationPolygons.add(mesh);
       });
 
-        resolve();
-    });
+
+      scene.add(propagationPolygons)
+
+      resolve();
+  });
 }
 
 async function addFMTowerPts(geojson, channelFilter) {
@@ -1626,7 +1627,6 @@ async function addFMTowerPts(geojson, channelFilter) {
     fmTransmitterPoints.add(window.instancedPyramidMatching);
     fmTransmitterPoints.add(window.instancedPyramidNonMatching);
     scene.add(fmTransmitterPoints);
-    fmTransmitterPoints.visible = true;
   } catch (error) {
     console.error('Error in addFMTowerPts:', error);
     throw error; // Rethrow or handle as needed
@@ -1634,121 +1634,121 @@ async function addFMTowerPts(geojson, channelFilter) {
 }
 
   
-  // Function to add wireframe pyramids and text labels for POINT data from GeoJSON
-  function addCellTowerPts(geojson) {
-    return new Promise((resolve, reject) => {
-      try {
-        // Define the base size and height for the pyramids
-        const baseSize = 0.003;
-        const pyramidHeight = 0.015;
+// Function to add wireframe pyramids and text labels for POINT data from GeoJSON
+function addCellTowerPts(geojson) {
+  return new Promise((resolve, reject) => {
+    try {
+      // Define the base size and height for the pyramids
+      const baseSize = 0.003;
+      const pyramidHeight = 0.015;
 
-        // Material for the wireframe pyramids
-        let pyramidMaterialCellular = new THREE.MeshBasicMaterial({
-          color: colorScheme.pyramidColorCellular,
-          wireframe: true,
-          transparent: true,
-          alphaHash: true,
-          opacity: 0.25,
-        });
+      // Material for the wireframe pyramids
+      let pyramidMaterialCellular = new THREE.MeshBasicMaterial({
+        color: colorScheme.pyramidColorCellular,
+        wireframe: true,
+        transparent: true,
+        alphaHash: true,
+        opacity: 0.25,
+      });
 
-        const points = []; // Array to store points for the convex hull
+      const points = []; // Array to store points for the convex hull
 
-        // Parse the POINT data from the GeoJSON
-        geojson.features.forEach((feature, index) => {
-          if (feature.geometry.type === 'Point') {
-            // Directly use the coordinates array
-            const [lon, lat] = feature.geometry.coordinates;
-            const elevation = feature.properties.Z;
+      // Parse the POINT data from the GeoJSON
+      geojson.features.forEach((feature, index) => {
+        if (feature.geometry.type === 'Point') {
+          // Directly use the coordinates array
+          const [lon, lat] = feature.geometry.coordinates;
+          const elevation = feature.properties.Z;
 
-            try {
-              // Convert the lon/lat to State Plane coordinates
-              const [x, y] = toStatePlane(lon, lat);
-              const z = elevation * zScale; // Apply the scaling factor to the elevation
+          try {
+            // Convert the lon/lat to State Plane coordinates
+            const [x, y] = toStatePlane(lon, lat);
+            const z = elevation * zScale; // Apply the scaling factor to the elevation
 
-              // Create a cone geometry for the pyramid with the defined base size and height
-              const pyramidGeometry = new THREE.ConeGeometry(
-                baseSize,
-                pyramidHeight,
-                4,
-              );
-              pyramidGeometry.rotateX(Math.PI / 2); // Rotate the pyramid to point up along the Z-axis
-
-              const pyramid = new THREE.Mesh(
-                pyramidGeometry,
-                pyramidMaterialCellular,
-              );
-              pyramid.position.set(x, y, z);
-
-              // Add the pyramid to the cellTransmitterPoints group
-              cellTransmitterPoints.add(pyramid);
-
-              // Check for coincident points and get a z-offset
-              const label = `cell`;
-              //   const zOffset = getCoincidentPointOffset(lon, lat, 8, 0.00001);
-
-              // Ensure Callsign or another property is correctly referenced
-              // const label = feature.properties.Callsign || `Tower ${index}`;
-
-              // const textSprite = makeTextSprite(` ${label} `, {
-              //   fontsize: 24,
-              //   strokeColor: 'rgba(255, 255, 255, 0.9)',
-              //   strokeWidth: 1,
-
-                // borderColor: { r: 255, g: 0, b: 0, a: 1.0 },
-                // backgroundColor: { r: 255, g: 100, b: 100, a: 0.8 }
-              // });
-
-              // Position the sprite above the pyramid
-              const pyramidHeightScaled = pyramidHeight * zScale;
-
-              // Position the sprite above the pyramid, applying the offset for coincident points
-              // textSprite.position.set(
-              //   x,
-              //   y,
-              //   z + pyramidHeightScaled + zOffset + 0.009,
-              // );
-              // textSprite.scale.set(0.05, 0.025, 1.0);
-
-              // cellTransmitterPoints.add(textSprite); // Add the label to the cellTransmitterPoints group
-              // console.log(`creating label for ${label}`);
-
-              // Add the position to the points array for convex hull calculation
-              points.push(new THREE.Vector3(x, y, z));
-            } catch (error) {
-              console.error(`Error projecting point:`, error.message);
-            }
-          } else {
-            console.error(
-              `Unsupported geometry type for points: ${feature.geometry.type}`,
+            // Create a cone geometry for the pyramid with the defined base size and height
+            const pyramidGeometry = new THREE.ConeGeometry(
+              baseSize,
+              pyramidHeight,
+              4,
             );
+            pyramidGeometry.rotateX(Math.PI / 2); // Rotate the pyramid to point up along the Z-axis
+
+            const pyramid = new THREE.Mesh(
+              pyramidGeometry,
+              pyramidMaterialCellular,
+            );
+            pyramid.position.set(x, y, z);
+
+            // Add the pyramid to the cellTransmitterPoints group
+            cellTransmitterPoints.add(pyramid);
+
+            // Check for coincident points and get a z-offset
+            const label = `cell`;
+            //   const zOffset = getCoincidentPointOffset(lon, lat, 8, 0.00001);
+
+            // Ensure Callsign or another property is correctly referenced
+            // const label = feature.properties.Callsign || `Tower ${index}`;
+
+            // const textSprite = makeTextSprite(` ${label} `, {
+            //   fontsize: 24,
+            //   strokeColor: 'rgba(255, 255, 255, 0.9)',
+            //   strokeWidth: 1,
+
+              // borderColor: { r: 255, g: 0, b: 0, a: 1.0 },
+              // backgroundColor: { r: 255, g: 100, b: 100, a: 0.8 }
+            // });
+
+            // Position the sprite above the pyramid
+            const pyramidHeightScaled = pyramidHeight * zScale;
+
+            // Position the sprite above the pyramid, applying the offset for coincident points
+            // textSprite.position.set(
+            //   x,
+            //   y,
+            //   z + pyramidHeightScaled + zOffset + 0.009,
+            // );
+            // textSprite.scale.set(0.05, 0.025, 1.0);
+
+            // cellTransmitterPoints.add(textSprite); // Add the label to the cellTransmitterPoints group
+            // console.log(`creating label for ${label}`);
+
+            // Add the position to the points array for convex hull calculation
+            points.push(new THREE.Vector3(x, y, z));
+          } catch (error) {
+            console.error(`Error projecting point:`, error.message);
           }
-        });
-
-        // Create and add the convex hull to the scene
-        if (points.length > 0) {
-          // createConvexHullLines(points);
-          // console.log("creating convex hull with " + points)
-
-          const cellMstEdges = primsAlgorithm(points);
-          drawMSTEdges(
-            cellMstEdges,
-            '#FFFFFF',
-            colorScheme.mstCellColor,
-            0.00025,
-            0.00075,
-            cellMSTLines,
+        } else {
+          console.error(
+            `Unsupported geometry type for points: ${feature.geometry.type}`,
           );
         }
-        // add groups to scene
-        scene.add(cellTransmitterPoints);
-        scene.add(cellMSTLines);
+      });
 
-        resolve(); // Resolve the promise when done
-      } catch (error) {
-        reject(`Error in addCellTowerPts: ${error.message}`);
+      // Create and add the convex hull to the scene
+      if (points.length > 0) {
+        // createConvexHullLines(points);
+        // console.log("creating convex hull with " + points)
+
+        const cellMstEdges = primsAlgorithm(points);
+        drawMSTEdges(
+          cellMstEdges,
+          '#FFFFFF',
+          colorScheme.mstCellColor,
+          0.00025,
+          0.00075,
+          cellMSTLines,
+        );
       }
-    });
-  }
+      // add groups to scene
+      scene.add(cellTransmitterPoints);
+      scene.add(cellMSTLines);
+
+      resolve(); // Resolve the promise when done
+    } catch (error) {
+      reject(`Error in addCellTowerPts: ${error.message}`);
+    }
+  });
+}
 
 
   //////////////////////
@@ -1945,13 +1945,13 @@ async function addFMTowerPts(geojson, channelFilter) {
   }
 
   // ACCESSIBILITY POLYGONS
-  function drawAccessibilityPoly(geojson) {
+  function drawAccessibilityHex(geojson) {
     return new Promise((resolve, reject) => {
       try {
         geojson.features.forEach((feature) => {
           const color = getColorFromContour(feature.properties.ContourMax);
           const material = new THREE.MeshBasicMaterial({
-            color: colorScheme.accessibilityPolyColor,
+            color: colorScheme.accessibilityHexColor,
             side: THREE.FrontSide,
             transparent: true,
             wireframe: true,
@@ -1987,8 +1987,18 @@ async function addFMTowerPts(geojson, channelFilter) {
   
                 geometry.setAttribute('position', new THREE.BufferAttribute(positionArray, 3));
                 const mesh = new THREE.Mesh(geometry, material);
-                scene.add(mesh);
-                accessibilityPoly.add(mesh);
+
+                vertices.forEach((value, index) => {
+                  // Assuming vertices are stored as x0, y0, x1, y1, ..., xn, yn
+                  // Save every vertex's position in userData for easy access later
+                  if(index % 2 === 0) { // Even indices are x coordinates
+                    mesh.userData.vertices = mesh.userData.vertices || [];
+                    mesh.userData.vertices.push({x: value, y: vertices[index + 1]});
+                  }
+                  // console.log(mesh.userData.vertices)
+                });        
+        
+                accessibilityHex.add(mesh);
               }
             });
           };
@@ -1998,9 +2008,11 @@ async function addFMTowerPts(geojson, channelFilter) {
           } else if (feature.geometry.type === 'MultiPolygon') {
             feature.geometry.coordinates.forEach(processPolygon);
           }
+          
         });
+
   
-        scene.add(accessibilityPoly);
+        scene.add(accessibilityHex);
         resolve();
       } catch (error) {
         reject(`Error in drawAccessibility: ${error.message}`);
@@ -2279,7 +2291,7 @@ async function addFMTowerPts(geojson, channelFilter) {
     coastlineGeojsonData,
     waterPolyGeojsonData,
     cellServiceGeojsonData,
-    accessibilityPolyGeojsonData,
+    accessibilityHexGeojsonData,
     fmFreqDictionaryJson;
 
   let synthPresets = {};
@@ -2321,8 +2333,8 @@ async function addFMTowerPts(geojson, channelFilter) {
       ////////////////////// polygons
 
       case 'src/assets/data/AccessHexTesselation_lvl5_nodata.geojson':
-        accessibilityPolyGeojsonData = data;
-        drawAccessibilityPoly(data);
+        accessibilityHexGeojsonData = data;
+        drawAccessibilityHex(data);
         break;
 
       //////////////////////// points
