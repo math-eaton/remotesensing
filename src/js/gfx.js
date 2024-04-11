@@ -77,13 +77,8 @@ export function gfx() {
   let globalDeltaRightPressed = 0;
   let globalDeltaLeft = 0;
   let globalDeltaRight = 0;
-  let globalSwitch1 = 0;
-  let globalSwitch2 = 0;
-  let globalSwitch3 = 0;
-  let globalSwitch4 = 0;
-  let globalSwitch5 = 0;
-  let globalSwitch6 = 0;
-
+  let switchState1 = 0;
+  let switchState2 = 0;
 
   let audioContext;
 
@@ -118,7 +113,7 @@ export function gfx() {
     waterColor: '#303030',
     accessibilityHexColor: '#310057',
     // cellServiceNo: '#00E661',
-    cellServiceNo: '#ff0000',
+    cellServiceNo: '#FF1493',
     cellServiceYes: '#2d2d2d'
   };
 
@@ -686,40 +681,52 @@ console.log(audioContext.state)
     };
   
     ws.onmessage = function(event) {
+
+
       let threeContainer = document.getElementById('gfx');
       // hide mouse cursor if/when data is received
       document.body.style.cursor = 'none';
       setTimeout(() => threeContainer.classList.remove('background'), 1000);
 
-      const data = JSON.parse(event.data);
+      let serialData = JSON.parse(event.data);
+
+      console.log('ws data:', serialData); // This will correctly log the object structure
+
   
-      if (data.potValue !== undefined && !isDragging) {
-        const scaledValue = Math.round(remapValues(data.potValue, 201, 300, 300, 201));
+      if (serialData.LEDpotValue !== undefined && !isDragging) {
+        const scaledValue = Math.round(remapValues(serialData.LEDpotValue, 201, 300, 300, 201));
         const slider = document.getElementById('fm-channel-slider');
         slider.value = scaledValue; // Programmatically update slider value
         updateLabelPosition(scaledValue); 
         updateDisplays(scaledValue);
       }
 
-      if (data.deltaLeft !== undefined && data.deltaRight !== undefined) {
-        globalDeltaLeft = data.deltaLeft;
-        globalDeltaRight = data.deltaRight;
+      // if (serialData.zoomPotValue !== undefined && !isDragging) {
+      //   const scaledValue = Math.round(remapValues(serialData.zoomPotValue, 201, 300, 300, 201));
+      //   // todo zooming ctrls;
+      // }
+
+
+      if (serialData.deltaLeft !== undefined && serialData.deltaRight !== undefined) {
+        globalDeltaLeft = serialData.deltaLeft;
+        globalDeltaRight = serialData.deltaRight;
       }
 
-      if (data.deltaLeftPressed !== undefined && data.deltaRightPressed !== undefined) {
-        globalDeltaLeftPressed = data.deltaLeftPressed;
-        globalDeltaRightPressed = data.deltaRightPressed;
+      if (serialData.deltaLeftPressed !== undefined && serialData.deltaRightPressed !== undefined) {
+        globalDeltaLeftPressed = serialData.deltaLeftPressed;
+        globalDeltaRightPressed = serialData.deltaRightPressed;
       }
 
       // Check for switchState1 in the data and toggle group visibility accordingly
-      if (data.switchState1 !== undefined) {
-        toggleMapScene(data.switchState1, 'switch1');
+      if (serialData.switchState1 !== undefined) {
+        toggleMapScene(serialData.switchState1, 'switch1');
       }
     
-      if (data.switchState2 !== undefined) {
-        toggleMapScene(data.switchState2, 'switch2');
+      if (serialData.switchState2 !== undefined) {
+        toggleMapScene(serialData.switchState2, 'switch2');
       }
     }
+
   
     ws.onerror = function(event) {
       console.error('WebSocket error:', event);
@@ -749,6 +756,7 @@ function onDocumentKeyDown(event) {
 
 // scene layer toggles
   function toggleMapScene(switchState, source) {
+    console.log(`switch stuff: ${switchState}, ${source}`);
     if (source === 'switch1') {
       // Handle visibility for SPDTswitch1
       analogGroup.visible = false;

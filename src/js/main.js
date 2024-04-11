@@ -20,8 +20,6 @@ import { gfx } from './gfx.js';
 // };
 
 // init external js
-// serialReader();
-// websocket();
 setTimeout(gfx(), 500);
 
 const threeContainer = document.getElementById('gfx');

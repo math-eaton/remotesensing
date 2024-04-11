@@ -3,11 +3,15 @@
 // #include "TM1637Display.h"
 
 // Define the pins connected to the SPDT switch
-const int pin1 = 6; 
-const int pin2 = 7; 
+const int SPDTpin1 = 6; 
+const int SPDTpin2 = 7; 
+const int SPDTpin3 = 4; 
+const int SPDTpin4 = 5;
+
 
 // Slide potentiometer pin
-const int potPin = A7;
+const int LEDpotPin = A7;
+const int zoomPotPin = A6; 
 
 // LED pin (PWM-capable)
 const int ledPin = A8;
@@ -63,15 +67,18 @@ void setup() {
   Serial.begin(9600);
   Serial.println("System Initialization:");
 
-  // Configure the switch pins as inputs with internal pull-up resistors
-  pinMode(pin1, INPUT_PULLUP);
-  pinMode(pin2, INPUT_PULLUP);
+  // Configure the SPDT switch pins as inputs with internal pull-up resistors
+  pinMode(SPDTpin1, INPUT_PULLUP);
+  pinMode(SPDTpin2, INPUT_PULLUP);
+  pinMode(SPDTpin3, INPUT_PULLUP);
+  pinMode(SPDTpin4, INPUT_PULLUP);
 
   pinMode(buttonPinLeft, INPUT_PULLUP);
   pinMode(buttonPinRight, INPUT_PULLUP);
 
-  // Initialize the analog pin for the potentiometer
-  pinMode(potPin, INPUT);
+  // pot pin modes
+  pinMode(LEDpotPin, INPUT);
+  pinMode(zoomPotPin, INPUT);
 
   // slide pot LED
   pinMode(ledPin, OUTPUT);
@@ -88,15 +95,26 @@ void setup() {
 }
 
 void loop() {
-  // Read the state of the switch
-  bool statePin1 = digitalRead(pin1);
-  bool statePin2 = digitalRead(pin2);
-  int switchState = 0; // Default to center position
+  // Read the state of SPDT switch 1 (radio vs cell)
+  bool statePin1 = digitalRead(SPDTpin1);
+  bool statePin2 = digitalRead(SPDTpin2);
+  int switchState1 = 0; // Default to center position
   if (!statePin1 && statePin2) {
-    switchState = 1; // Position 1
+    switchState1 = 1; // Position 1
   } else if (statePin1 && !statePin2) {
-    switchState = 2; // Position 2
+    switchState1 = 2; // Position 2
   }
+
+  // Read the state of SPDT switch 2 (terrain vs accessibility)
+  bool statePin3 = digitalRead(SPDTpin3);
+  bool statePin4 = digitalRead(SPDTpin4);
+  int switchState2 = 0; // Default to center position
+  if (!statePin3 && statePin4) {
+    switchState2 = 1; // Position 1
+  } else if (statePin3 && !statePin4) {
+    switchState2 = 2; // Position 2
+  }
+
 
   // Read and handle encoder positions
   long newLeft = knobLeft.read();
@@ -163,11 +181,11 @@ void loop() {
 
   // // read pot value
   // // and debounce on em
-  // int potValue = analogRead(potPin);
-  // if (abs(potValue - lastPotValue) <= potStabilityThreshold || lastPotValue == -1) {
+  // int LEDpotValue = analogRead(LEDpotPin);
+  // if (abs(LEDpotValue - lastPotValue) <= potStabilityThreshold || lastPotValue == -1) {
   //   if ((millis() - lastPotReadTime) > potDebounceDelay) {
   //     // Value has stabilized; update the last stable value
-  //     lastPotValue = potValue;
+  //     lastPotValue = LEDpotValue;
   //     lastPotReadTime = millis();
   //   }
   // } else {
@@ -177,44 +195,45 @@ void loop() {
 
   // // use the last stable pot value and
   // // map the value to a different range
-  // int mappedPotValue = map(potValue, 0, 1023, 1023, 0); 
+  // int mappedPotValue = map(LEDpotValue, 0, 1023, 1023, 0); 
 
-    // Take a new potentiometer reading
-  int potValue = analogRead(potPin);
+  // Take a new potentiometer reading
+  int LEDpotValue = analogRead(LEDpotPin);
+  int zoomPotValue = analogRead(zoomPotPin);
+
+  // POTDEBOUNCE
   // Subtract the last reading
   totalPotValue -= potSamples[sampleIndex];
   // Read from the sensor and store it into the array
-  potSamples[sampleIndex] = potValue;
+  potSamples[sampleIndex] = LEDpotValue;
   // Add the reading to the total
   totalPotValue += potSamples[sampleIndex];
   // Advance to the next position in the array
   sampleIndex = (sampleIndex + 1) % numSamples;
-  
   // Calculate the average
   averagePotValue = totalPotValue / numSamples;
 
-  // Now use averagePotValue instead of potValue for mapping and further logic
-  int mappedPotValue = map(averagePotValue, 0, 1023, 201, 300); 
+  // Now use averagePotValue instead of LEDpotValue for mapping and further logic
+  int mappedLEDpotValue = map(averagePotValue, 0, 1023, 201, 300); 
+  int mappedZoomPotValue = map(zoomPotValue, 0, 1023, 0, 99); 
 
   // calculate pot LED brightness based on slider value
-  float phase = (float(potValue) * 2 * PI * ledCycles) / 1023.0; // Calculate phase for sine wave
+  float phase = (float(LEDpotValue) * 2 * PI * ledCycles) / 1023.0; // Calculate phase for sine wave
   int ledBrightness = (sin(phase) + 1) * 127.5; // Convert sine wave (-1 to 1) to (0 to 255) scale
-
-  // Assuming you want to display the raw pot value or any mapped value directly
-  // int displayValue = map(potValue, 0, 1023, 0, 9999);
-  // display.showNumberDec(displayValue, true); // Display the value
 
   analogWrite(ledPin, ledBrightness);
 
-  // Prepare and send the serial message
-  Serial.print(switchState); Serial.print(",");
+  // Prepare and send the serial message with comma separated values
+  Serial.print(switchState1); Serial.print(",");
+  Serial.print(switchState2); Serial.print(",");
   Serial.print(deltaLeft); Serial.print(",");
   Serial.print(deltaRight); Serial.print(",");
   Serial.print(deltaLeftPressed); Serial.print(",");
   Serial.print(deltaRightPressed); Serial.print(",");
   Serial.print(buttonPressedLeft ? "1" : "0"); Serial.print(",");
   Serial.print(buttonPressedRight ? "1" : "0"); Serial.print(",");
-  Serial.println(mappedPotValue);
+  Serial.print(mappedLEDpotValue); Serial.print(",");
+  Serial.println(mappedZoomPotValue);
 
   // Reset button states after sending to avoid repeating messages
   lastButtonStateLeft = readingLeft;
