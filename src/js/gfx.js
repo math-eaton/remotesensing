@@ -1017,7 +1017,7 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
 
   // Define a scaling factor for the Z values (elevation)
   // const zScale = 0.00025; // smaller value better for perspective cam
-  const zScale = 0.0005; // larger value better for ortho cam
+  const zScale = 0.000555; // larger value better for ortho cam
 
   // Function to get color based on elevation
   function getColorForElevation(elevation, minElevation, maxElevation) {
@@ -1426,6 +1426,8 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
 
         // Add the cellServiceMesh group to the scene
         scene.add(cellServiceMesh);
+        console.log(`access mesh length: ${geojson.features.length}`)
+
 
         resolve(cellServiceMesh); // Optionally return the group for further manipulation
       } catch (error) {
@@ -1454,13 +1456,32 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
     return (r << 16) | (g << 8) | b;
   }
   
-  // 
+  // calculate color ramp for accessibility mesh
   function accessibilityColorRamp(gridCode) {
-    const startColor = hexToRgb(0x0000ff); 
-    const endColor = hexToRgb(0xff0000); 
+    // '#230075'
+    const startColor = hexToRgb(0x230075); 
+    const endColor = hexToRgb(0x00ff00); 
+    // const startColor = hexToRgb(0x4b2c92); 
+    // const endColor = hexToRgb(0x00b545); 
     const factor = gridCode / 8;
     const interpolatedColor = interpolateColor(startColor, endColor, factor);
     return rgbToHex(...interpolatedColor);
+  }
+
+  // calculate opacity ramp for accessibility mesh
+  function accessibilityOpacityRamp(gridCode) {
+    const minOpacity = 0.1;
+    const maxOpacity = 0.9;
+    const scaleExponent = 0.75; // Adjust this to control the rate of change
+    
+    // Normalize gridCode value between 0 and 1
+    const normalizedGridCode = 1 - (gridCode / 8); // Assuming grid codes range from 0 to 8
+
+    
+    // Apply exponential scaling to opacity
+    const opacity = minOpacity + (maxOpacity - minOpacity) * Math.pow(normalizedGridCode, scaleExponent);
+    
+    return 0.1 + (0.8 * gridCode / 8); // Evenly spread from 0.1 to 0.9
   }
   
 
@@ -1523,16 +1544,21 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
           
           // Use the accessibilityColorRamp to get the color based on grid code
           const gridCodeColor = accessibilityColorRamp(parseInt(gridCode));
-          let fillMaterial;
+          const accessibilityOpacity = accessibilityOpacityRamp(parseInt(gridCode));
+
+          let fillMaterial; // placeholder for now
 
           // Wireframe material with dynamic color
           const wireframeMaterial = new THREE.MeshBasicMaterial({
             color: gridCodeColor,
-            transparent: true,
-            opacity: 0.5, // Adjust opacity as needed
-            wireframe: true,
+            opacity: accessibilityOpacity,
+            // wireframe: true,
+            alphaHash: true,
             side: THREE.DoubleSide,
           });
+
+          console.log(accessibilityOpacity)
+
 
           // Create mesh with the fill material
           var fillMesh = new THREE.Mesh(geom, fillMaterial);
@@ -1557,6 +1583,7 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
 
         // Add the cellServiceMesh group to the scene
         scene.add(accessibilityMesh);
+        console.log(`access mesh length: ${geojson.features.length}`)
 
         resolve(accessibilityMesh);
       } catch (error) {
