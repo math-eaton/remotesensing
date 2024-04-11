@@ -30,10 +30,14 @@ export function gfx() {
   let propagationPolygons = new THREE.Group();
   let waterPolys = new THREE.Group();
   let cellServiceMesh = new THREE.Group();
+  let accessibilityMesh = new THREE.Group();
   let accessibilityHex = new THREE.Group();
   let analysisArea = new THREE.Group();
   let coastline = new THREE.Group();
   // let raycasterReticule = new THREE.Group();
+
+  // intermediate layer for cloning elevation lines
+
 
   // init visibility 
   fmTransmitterPoints.visible = true;
@@ -43,6 +47,7 @@ export function gfx() {
   cellMSTLines.visible = true;
   elevContourLines.visible = true;
   accessibilityHex.visible = true;
+  accessibilityMesh.visible = true;
 
   // group the geometry subgroups
   let analogGroup = new THREE.Group();
@@ -50,11 +55,10 @@ export function gfx() {
   let digitalGroup = new THREE.Group();
 
   /// establish visibility
-  analogGroup.visible = true;
+  analogGroup.visible = false;
   accessGroup.visible = false;
   digitalGroup.visible = false;
 
-  analogGroup.add(propagationPolygons, fmTransmitterPoints);
 
   // downsample framerate for performance
   let clock = new THREE.Clock();
@@ -65,6 +69,8 @@ export function gfx() {
   let sliderValue = 1;  //  default value
   const sliderLength = 100;
   let lastSliderValue = null;
+
+  const ws = null;
   let globalDeltaLeftPressed = 0;
   let globalDeltaRightPressed = 0;
   let globalDeltaLeft = 0;
@@ -105,7 +111,8 @@ export function gfx() {
     nonMatchingPyramidColor: '#FF1493',
     waterColor: '#303030',
     accessibilityHexColor: '#310057',
-    cellServiceNo: '#00E661',
+    // cellServiceNo: '#00E661',
+    cellServiceNo: '#ff0000',
     cellServiceYes: '#2d2d2d'
   };
 
@@ -131,7 +138,14 @@ export function gfx() {
     }
     return result;
   }
-  
+
+  // set clipping extent
+  const latMin = -5, latMax = 5; // Example bounds
+  const lonMin = -5, lonMax = 5; // Example bounds
+  const bottomLeft = toStatePlane(lonMin, latMin);
+  const topRight = toStatePlane(lonMax, latMax);
+
+
   // Function to calculate distance between two points in State Plane coordinates
   function distanceBetweenPoints(point1, point2) {
     const dx = point1.x - point2.x;
@@ -176,16 +190,16 @@ export function gfx() {
   // wireframe: true, });
 
 
-    camera = new THREE.PerspectiveCamera(
-      75,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      100,
-    );
-
-
-    // camera = new THREE.OrthographicCamera(
+    // camera = new THREE.PerspectiveCamera(
+    //   75,
+    //   window.innerWidth / window.innerHeight,
+    //   0.1,
+    //   100,
     // );
+
+
+    camera = new THREE.OrthographicCamera(
+    );
 
 
 
@@ -238,20 +252,19 @@ export function gfx() {
 
 
     // Set the minimum and maximum polar angles (in radians) to prevent the camera from going over the vertical
-    controls.minPolarAngle = 0 * (Math.PI / 180); // 0 radians (0 degrees) - directly above the target
-    controls.maxPolarAngle = 30 * (Math.PI / 180); // π/n radians (z degrees) - on the horizon
+    controls.minPolarAngle = (53.1301024/2) * (Math.PI / 180); // π/n radians (z degrees) - on the horizon
+    controls.maxPolarAngle = 35.264 * (Math.PI / 180); // π/n radians (z degrees) - on the horizon
     // Set the maximum distance the camera can dolly out
     controls.maxDistance = 1.5; // max camera zoom out (perspective cam)
     controls.minDistance = 0.5; // min camera zoom in (perspective cam)
-    controls.maxZoom = 1.7; // max camera zoom out (ortho cam)
-    controls.minZoom = 0.3; // min camera zoom in (ortho cam)
+    controls.minZoom = 0.5; // min camera zoom out (ortho cam)
+    controls.maxZoom = 5; // max camera zoom in (ortho cam)
+
 
     // console.log(controls.angle)
 
     // const audioListener = new THREE.AudioListener();
     // camera.add(audioListener);
-
-    // const distanceToTarget = camera.position.distanceTo(controls.target);
 
     const fogNear = 2; // The starting distance of the fog (where it begins to appear)
     const fogFar = 3.5; // The ending distance of the fog (where it becomes fully opaque)
@@ -363,8 +376,8 @@ export function gfx() {
       const maxWidth = 1200;
       const minFov = 90; // perspective only
       const maxFov = 60;
-      const minZoom = 0.3; // ortho only
-      const maxZoom = 1.7;
+      const minZoom = 0.5; // ortho only
+      const maxZoom = 1.5;
 
       // Map the window width to the FOV range
       const scale = (window.innerWidth - minWidth) / (maxWidth - minWidth);
@@ -485,7 +498,7 @@ export function gfx() {
             return distance < nearest.distance ? { vertex, distance } : nearest;
         }, {vertex: null, distance: Infinity});
         
-        console.log(`Nearest vertex distance: ${nearestVertex.distance}`);
+        // console.log(`Nearest vertex distance: ${nearestVertex.distance}`);
     } else {
         console.log('No vertices data found in userData');
     }
@@ -613,6 +626,9 @@ function handleRaycasters(camera, scene) {
 
           handleRaycasters(camera, scene);
 
+          // console.log(`zoom is: ${distanceToTarget}`)
+      
+
 
         }}
 
@@ -656,7 +672,7 @@ console.log(audioContext.state)
 
 
   function initWebSocketConnection() {
-    const ws = new WebSocket('ws://localhost:8080');
+    var ws = new WebSocket('ws://localhost:8080');
   
     ws.onopen = function() {
       console.log('Connected to WebSocket server');
@@ -690,22 +706,46 @@ console.log(audioContext.state)
 
       // Check for switchState in the data and toggle group visibility accordingly
       if (data.switchState !== undefined) {
-          toggleMapScene(data.switchState);
+          toggleMapSceneWS(data.switchState);
       }
-
-      if (data.switchState === undefined) {
-        toggleMapScene(3);
     }
-
-    };
   
     ws.onerror = function(event) {
       console.error('WebSocket error:', event);
     };
   
 }
+
+// if no websocket server, use this function to trigger instead
+if (ws === null) {
+  toggleMapSceneManual(2)
+}
+
+function toggleMapSceneManual(switchState) {
+  // Hide all groups initially
+  analogGroup.visible = false;
+  accessGroup.visible = false;
+  digitalGroup.visible = false;
+
+  // Show the relevant group based on switchState
+  switch (switchState) {
+      case 1:
+          analogGroup.visible = true;
+          break;
+      case 2:
+          accessGroup.visible = true;
+          break;
+      case 3:
+          digitalGroup.visible = true;
+          break;
+      default:
+          console.log("Invalid switchState value:", switchState);
+          break;
+  }
+}
+
   
-function toggleMapScene(switchState) {
+function toggleMapSceneWS(switchState) {
   // Hide all groups initially
   analogGroup.visible = false;
   accessGroup.visible = false;
@@ -976,8 +1016,8 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
   // GEOGRAPHIC DATA VIS /////////////////////////////
 
   // Define a scaling factor for the Z values (elevation)
-  const zScale = 0.00025; // Change this value to scale the elevation up or down
-  // const zScale = 0.0005;
+  // const zScale = 0.00025; // smaller value better for perspective cam
+  const zScale = 0.0005; // larger value better for ortho cam
 
   // Function to get color based on elevation
   function getColorForElevation(elevation, minElevation, maxElevation) {
@@ -1134,7 +1174,7 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
       });
   
       try {
-        scene.add(elevContourLines); // Add the group to the scene
+        scene.add(elevContourLines); 
         resolve(); // Resolve the promise when done
       } catch (error) {
         reject(`Error in addElevContourLines: ${error.message}`);
@@ -1393,6 +1433,138 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
       }
     });
   }
+
+  // function to create color ramps programatically
+  function interpolateColor(color1, color2, factor) {
+    const result = color1.slice();
+    for (let i = 0; i < 3; i++) {
+      result[i] = Math.round(result[i] + factor * (color2[i] - color1[i]));
+    }
+    return result;
+  }
+  
+  function hexToRgb(hex) {
+    var r = (hex >> 16) & 255;
+    var g = (hex >> 8) & 255;
+    var b = hex & 255;
+    return [r, g, b];
+  }
+  
+  function rgbToHex(r, g, b) {
+    return (r << 16) | (g << 8) | b;
+  }
+  
+  // 
+  function accessibilityColorRamp(gridCode) {
+    const startColor = hexToRgb(0x0000ff); 
+    const endColor = hexToRgb(0xff0000); 
+    const factor = gridCode / 8;
+    const interpolatedColor = interpolateColor(startColor, endColor, factor);
+    return rgbToHex(...interpolatedColor);
+  }
+  
+
+  function addAccessibilityMesh(geojson, stride = 1) {
+    return new Promise((resolve, reject) => {
+      try {
+        // Reset/clear the group to avoid adding duplicate meshes
+        accessibilityMesh.clear();
+
+        // Downsample and group points by 'group_ID'
+        const groups = {};
+        for (let i = 0; i < geojson.features.length; i += stride) {
+          const feature = geojson.features[i];
+          const gridCode = feature.properties.grid_code;
+          const [lon, lat] = feature.geometry.coordinates;
+          const [x, y] = toStatePlane(lon, lat);
+          const z = feature.properties.Z * zScale; 
+  
+          if (!groups[gridCode]) {
+            groups[gridCode] = [];
+          }
+          groups[gridCode].push(new THREE.Vector3(x, y, z));
+        }
+  
+        // Process each grid_code group separately
+        Object.keys(groups).forEach((gridCode) => {
+          const pointsForDelaunay = groups[gridCode];
+  
+          var delaunay = Delaunator.from(
+            pointsForDelaunay.map((p) => [p.x, p.y]),
+          );
+          var meshIndex = [];
+          // set triangulation distance threshold to avoid connecting distant pts
+          const thresholdDistance = 0.125; 
+
+          for (let i = 0; i < delaunay.triangles.length; i += 3) {
+            const p1 = pointsForDelaunay[delaunay.triangles[i]];
+            const p2 = pointsForDelaunay[delaunay.triangles[i + 1]];
+            const p3 = pointsForDelaunay[delaunay.triangles[i + 2]];
+
+            // Check distances between each pair of points in a triangle
+            if (
+              distanceBetweenPoints(p1, p2) <= thresholdDistance &&
+              distanceBetweenPoints(p2, p3) <= thresholdDistance &&
+              distanceBetweenPoints(p3, p1) <= thresholdDistance
+            ) {
+              meshIndex.push(
+                delaunay.triangles[i],
+                delaunay.triangles[i + 1],
+                delaunay.triangles[i + 2],
+              );
+            }
+          }
+
+          var geom = new THREE.BufferGeometry().setFromPoints(
+            pointsForDelaunay,
+          );
+          geom.setIndex(meshIndex);
+          geom.computeVertexNormals();
+          
+          // Use the accessibilityColorRamp to get the color based on grid code
+          const gridCodeColor = accessibilityColorRamp(parseInt(gridCode));
+          let fillMaterial;
+
+          // Wireframe material with dynamic color
+          const wireframeMaterial = new THREE.MeshBasicMaterial({
+            color: gridCodeColor,
+            transparent: true,
+            opacity: 0.5, // Adjust opacity as needed
+            wireframe: true,
+            side: THREE.DoubleSide,
+          });
+
+          // Create mesh with the fill material
+          var fillMesh = new THREE.Mesh(geom, fillMaterial);
+          fillMesh.name = 'fillMesh-' + gridCode;
+
+          // Create mesh with the wireframe material
+          var wireframeMesh = new THREE.Mesh(geom, wireframeMaterial);
+          wireframeMesh.name = 'wireframeMesh-' + gridCode;
+
+          // add metadata to the meshes for raycaster triggers
+          fillMesh.userData.gridCode = gridCode;
+          wireframeMesh.userData.gridCode = gridCode;
+
+          // Group to hold both meshes
+          var group = new THREE.Group();
+          group.add(wireframeMesh);
+          // group.add(fillMesh);
+
+          // Add the group to the cellServiceMesh group
+          accessibilityMesh.add(group);
+        });
+
+        // Add the cellServiceMesh group to the scene
+        scene.add(accessibilityMesh);
+
+        resolve(accessibilityMesh);
+      } catch (error) {
+        reject(`Error in accessibilityMesh: ${error.message}`);
+      }
+    });
+  }
+
 
 
 // Define an array to track all line loops and their decay status
@@ -2264,6 +2436,7 @@ function addCellTowerPts(geojson) {
       'src/assets/data/NYS_fullElevDEM_boundingBox.geojson',
       'src/assets/data/cellService_contours_5KM_pts_20240407.geojson',
       'src/assets/data/cellService_contours_5KM_explode_mini.geojson',
+      'src/assets/data/accessService_contours_5KM_pts_20240407.geojson',
       'src/assets/sounds/presets.json',
       'src/assets/data/AccessHexTesselation_lvl5_nodata.geojson'
     ];
@@ -2305,6 +2478,7 @@ function addCellTowerPts(geojson) {
     waterPolyGeojsonData,
     cellServiceGeojsonData,
     accessibilityHexGeojsonData,
+    accessibilityMeshGeojsonData,
     fmFreqDictionaryJson;
 
   let synthPresets = {};
@@ -2313,9 +2487,7 @@ function addCellTowerPts(geojson) {
   function handleGeoJSONData(url, data) {
     switch (url) {
 
-      // analogGroup.add(fmTransmitterPoints, propagationPolygons, elevContourLines);
-      // digitalGroup.add(cellServiceMesh, cellTransmitterPoints, cellMSTLines, elevContourLines);
-    
+      
     
       ////////////////// lines
 
@@ -2324,7 +2496,6 @@ function addCellTowerPts(geojson) {
         const meanElevation = calculateMeanContourElevation(data);
         // console.log(`mean elevation: ${meanElevation}`)
         addElevContourLines(data);
-        analogGroup.add(elevContourLines);
         digitalGroup.add(elevContourLines);
         break;
 
@@ -2351,10 +2522,17 @@ function addCellTowerPts(geojson) {
         addCellServiceMesh(data);
         digitalGroup.add(cellServiceMesh);
         break;
-  
+
+      case 'src/assets/data/accessService_contours_5KM_pts_20240407.geojson':
+        accessibilityMeshGeojsonData = data;
+        addAccessibilityMesh(data);
+        accessGroup.add(accessibilityMesh);
+        break;
+
+
       ////////////////////// polygons
 
-      case 'src/assets/data/AccessHexTesselation_lvl5_nodata.geojson':
+      case 'src/assets/data/cellService_contours_5KM_explode_mini.geojson':
         accessibilityHexGeojsonData = data;
         drawAccessibilityHex(data);
         accessGroup.add(accessibilityHex);
@@ -2449,6 +2627,8 @@ function addCellTowerPts(geojson) {
 
     // add grouped sub-groups
     scene.add(analogGroup, accessGroup, digitalGroup);
+
+    console.log(`analog group: ${analogGroup}`)
 
     controls.update();
 }
