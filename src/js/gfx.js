@@ -45,7 +45,7 @@ export function gfx() {
   cellServiceMesh.visible = true;
   cellTransmitterPoints.visible = true;
   cellMSTLines.visible = true;
-  elevContourLines.visible = true;
+  elevContourLines.visible = false;
   accessibilityHex.visible = true;
   accessibilityMesh.visible = true;
 
@@ -53,11 +53,13 @@ export function gfx() {
   let analogGroup = new THREE.Group();
   let accessGroup = new THREE.Group();
   let digitalGroup = new THREE.Group();
+  let terrainGroup = new THREE.Group();
 
   /// establish visibility
   analogGroup.visible = false;
   accessGroup.visible = false;
   digitalGroup.visible = false;
+  terrainGroup.visible = false;
 
 
   // downsample framerate for performance
@@ -78,6 +80,10 @@ export function gfx() {
   let globalSwitch1 = 0;
   let globalSwitch2 = 0;
   let globalSwitch3 = 0;
+  let globalSwitch4 = 0;
+  let globalSwitch5 = 0;
+  let globalSwitch6 = 0;
+
 
   let audioContext;
 
@@ -680,6 +686,7 @@ console.log(audioContext.state)
     };
   
     ws.onmessage = function(event) {
+      let threeContainer = document.getElementById('gfx');
       // hide mouse cursor if/when data is received
       document.body.style.cursor = 'none';
       setTimeout(() => threeContainer.classList.remove('background'), 1000);
@@ -704,9 +711,13 @@ console.log(audioContext.state)
         globalDeltaRightPressed = data.deltaRightPressed;
       }
 
-      // Check for switchState in the data and toggle group visibility accordingly
-      if (data.switchState !== undefined) {
-          toggleMapSceneWS(data.switchState);
+      // Check for switchState1 in the data and toggle group visibility accordingly
+      if (data.switchState1 !== undefined) {
+        toggleMapScene(data.switchState1, 'switch1');
+      }
+    
+      if (data.switchState2 !== undefined) {
+        toggleMapScene(data.switchState2, 'switch2');
       }
     }
   
@@ -716,58 +727,56 @@ console.log(audioContext.state)
   
 }
 
-// if no websocket server, use this function to trigger instead
-if (ws === null) {
-  toggleMapSceneManual(2)
-}
-
-function toggleMapSceneManual(switchState) {
-  // Hide all groups initially
-  analogGroup.visible = false;
-  accessGroup.visible = false;
-  digitalGroup.visible = false;
-
-  // Show the relevant group based on switchState
-  switch (switchState) {
-      case 1:
-          analogGroup.visible = true;
-          break;
-      case 2:
-          accessGroup.visible = true;
-          break;
-      case 3:
-          digitalGroup.visible = true;
-          break;
-      default:
-          console.log("Invalid switchState value:", switchState);
-          break;
+// keyboard commands, mirror spdt switch functionality
+function onDocumentKeyDown(event) {
+  switch (event.key) {
+    case '1':
+      toggleMapScene(1, 'switch1');
+      break;
+    case '2':
+      toggleMapScene(2, 'switch1');
+      break;
+    case '3':
+      toggleMapScene(1, 'switch2');
+      break;
+    case '4':
+      toggleMapScene(2, 'switch2');
+      break;
+    default:
+      break;
   }
 }
+
+// scene layer toggles
+  function toggleMapScene(switchState, source) {
+    if (source === 'switch1') {
+      // Handle visibility for SPDTswitch1
+      analogGroup.visible = false;
+      digitalGroup.visible = false;
+      switch (switchState) {
+        case 1:
+          analogGroup.visible = true;
+          break;
+        case 2:
+          digitalGroup.visible = true;
+          break;
+      }
+    } else if (source === 'switch2') {
+      // Handle visibility for SPDTswitch2
+      elevContourLines.visible = false;
+      accessGroup.visible = false;
+      switch (switchState) {
+        case 1:
+          elevContourLines.visible = true;
+          break;
+        case 2:
+          accessGroup.visible = true;
+          break;
+      }
+    }
+  }
 
   
-function toggleMapSceneWS(switchState) {
-  // Hide all groups initially
-  analogGroup.visible = false;
-  accessGroup.visible = false;
-  digitalGroup.visible = false;
-
-  // Show the relevant group based on switchState
-  switch (switchState) {
-      case 1:
-          analogGroup.visible = true;
-          break;
-      case 2:
-          accessGroup.visible = true;
-          break;
-      case 3:
-          digitalGroup.visible = true;
-          break;
-      default:
-          console.log("Invalid switchState value:", switchState);
-          break;
-  }
-}
-
   // Function to initialize the scene and other components
   async function initialize() {
     initThreeJS(); // Initialize Three.js
@@ -818,6 +827,8 @@ function toggleMapSceneWS(switchState) {
 
       // Start the animation loop
       animate();
+      document.addEventListener('keydown', onDocumentKeyDown, false); // Attach the keydown event handler
+
     });
 
     visualizationReady = true;
@@ -1636,7 +1647,7 @@ async function addFMpropagation3D(geojson, channelFilter, group, stride = 1) {
         Object.keys(fmContourGroups).forEach(groupId => {
             if (groupId !== channelFilter.toString()) {
                 fmContourGroups[groupId].isDecaying = true;
-                fmContourGroups[groupId].decayRate = 0.2; // Adjust decay rate as needed
+                fmContourGroups[groupId].decayRate = 0.1; // Adjust decay rate as needed
             }
         });
 
@@ -1736,7 +1747,7 @@ async function addFMpropagation3D(geojson, channelFilter, group, stride = 1) {
                   meshes: [],
                   opacity: 1.0,
                   isDecaying: false,
-                  decayRate: 0.2
+                  decayRate: 0.1
               };
           }
           fmContourGroups[groupId].meshes.push(lineLoop, mesh);
@@ -2514,8 +2525,6 @@ function addCellTowerPts(geojson) {
   function handleGeoJSONData(url, data) {
     switch (url) {
 
-      
-    
       ////////////////// lines
 
       case 'src/assets/data/elevation_contours_shaved.geojson':
@@ -2523,13 +2532,12 @@ function addCellTowerPts(geojson) {
         const meanElevation = calculateMeanContourElevation(data);
         // console.log(`mean elevation: ${meanElevation}`)
         addElevContourLines(data);
-        digitalGroup.add(elevContourLines);
         break;
 
       case 'src/assets/data/fm_contours_shaved.geojson':
         fmContoursGeojsonData = data;
         // run on pageload with default channel 201 as filter
-        addFMpropagation3D(data, 201, propagationPolygons)
+        addFMpropagation3D(data, 249, propagationPolygons)
         analogGroup.add(propagationPolygons)
         break;
   
@@ -2578,7 +2586,7 @@ function addCellTowerPts(geojson) {
       // updated points using fm contour origins
       case 'src/assets/data/FM_transmitter_sites.geojson':
         fmTransmitterGeojsonData = data;
-        addFMTowerPts(data, 201, fmTransmitterPoints)
+        addFMTowerPts(data, 249, fmTransmitterPoints)
         analogGroup.add(fmTransmitterPoints);
         break;
 
@@ -2653,7 +2661,7 @@ function addCellTowerPts(geojson) {
     initFMsliderAndContours(fmFreqDictionaryJson); // Setup slider and initial visualization
 
     // add grouped sub-groups
-    scene.add(analogGroup, accessGroup, digitalGroup);
+    scene.add(analogGroup, digitalGroup, accessGroup, terrainGroup);
 
     console.log(`analog group: ${analogGroup}`)
 
