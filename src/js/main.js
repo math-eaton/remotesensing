@@ -15,10 +15,6 @@
 
 import { gfx } from './gfx.js';
 
-// window.onload = () => {
-//   setTimeout(() => {}, 500);
-// };
-
 // init external js
 setTimeout(gfx(), 500);
 
@@ -28,4 +24,9 @@ function removeBackground() {
   threeContainer.classList.remove('background');
 }
 
-threeContainer.addEventListener('click', removeBackground);
+window.onload = () => {
+  // setTimeout(() => {}, 500);
+  removeBackground();
+};
+
+// threeContainer.addEventListener('click', removeBackground);

@@ -36,9 +36,6 @@ export function gfx() {
   let coastline = new THREE.Group();
   // let raycasterReticule = new THREE.Group();
 
-  // intermediate layer for cloning elevation lines
-
-
   // init visibility 
   fmTransmitterPoints.visible = true;
   propagationPolygons.visible = true;
@@ -53,14 +50,14 @@ export function gfx() {
   let analogGroup = new THREE.Group();
   let accessGroup = new THREE.Group();
   let digitalGroup = new THREE.Group();
-  let terrainGroup = new THREE.Group();
 
   /// establish visibility
   analogGroup.visible = false;
   accessGroup.visible = false;
   digitalGroup.visible = false;
-  terrainGroup.visible = false;
 
+  // analog = fmtransmitter, propagationPolygons, 
+  // digital = cellServiceMesh, cellTransmitterPoints, cellMSTLines
 
   // downsample framerate for performance
   let clock = new THREE.Clock();
@@ -71,7 +68,10 @@ export function gfx() {
   let sliderValue = 1;  //  default value
   const sliderLength = 100;
   let lastSliderValue = null;
+  
 
+
+  
   const ws = null;
   let globalDeltaLeftPressed = 0;
   let globalDeltaRightPressed = 0;
@@ -114,9 +114,8 @@ export function gfx() {
     accessibilityHexColor: '#310057',
     // cellServiceNo: '#00E661',
     cellServiceNo: '#FF1493',
-    cellServiceYes: '#2d2d2d'
+    cellServiceYes: '#161616'
   };
-
 
 
 ///////////////////////// MAP /////////////////////////////
@@ -454,14 +453,20 @@ export function gfx() {
 
   // Registry for storing raycasters
   const raycasterDict = {
-    cellServiceMesh: { group: cellServiceMesh, enabled: true, onIntersect: raycastCellServiceMesh },
-    accessibilityHex: { group: accessibilityHex, enabled: true, onIntersect: raycastAccessHexVertex },
-    // cellTransmitterPoints: { group: cellTransmitterPoints, enabled: false, onIntersect: handleCellTransmitterPointsIntersect },
-    // Add other groups as necessary, each with an 'enabled' flag and an 'onIntersect' function
+    cellServiceMesh: { group: cellServiceMesh, enabled: false, onIntersect: raycastCellServiceMesh },
+    accessibilityHex: { group: accessibilityHex, enabled: false, onIntersect: raycastAccessHexVertex },
+    accessibilityMesh: { group: accessibilityMesh, enabled: false, onIntersect: createEtchLine },
+    cellTransmitterPoints: { group: cellTransmitterPoints, enabled: false, onIntersect: raycastCellTowers },
+    fmTransmitterPoints: { group: fmTransmitterPoints, enabled: false, onIntersect: raycastFMtowers },
+
 };
 
 
   // document.addEventListener('pointermove', onPointerMove);
+
+  function raycastCellTowers(){}
+  function raycastFMtowers(){}
+
 
   function raycastCellServiceMesh(intersection, gridCode) {
     // Check if the gridCode has changed
@@ -496,48 +501,72 @@ export function gfx() {
     if (vertices) {
         const nearestVertex = vertices.reduce((nearest, vertex) => {
             const distance = Math.hypot(vertex.x - intersectPoint.x, vertex.y - intersectPoint.y);
+            const gridCode = intersection.object.userData.gridCode;
             return distance < nearest.distance ? { vertex, distance } : nearest;
+            // return gridCode; 
         }, {vertex: null, distance: Infinity});
         
-        // console.log(`Nearest vertex distance: ${nearestVertex.distance}`);
+        console.log(`Nearest vertex distance: ${nearestVertex.distance} with gridCode ${nearestVertex.gridCode}`);
     } else {
         console.log('No vertices data found in userData');
     }
 }
 
       
-//   function raycastCellServiceMesh(intersection, gridCode) {
-//     // Based on the gridCode, trigger different events or actions
-//     switch (gridCode) {
-//         case '0':
-//             // Trigger event or action for gridCode 0
-//             console.log("Intersected gridCode 0", intersection);
-//             break;
-//         case '1':
-//             // Trigger event or action for gridCode 1
-//             console.log("Intersected gridCode 1", intersection);
-//             break;
-//         // Handle other cases as needed
-//         default:
-//             // Default action if gridCode doesn't match specific cases
-//             console.log(`Intersected unspecified gridCode ${gridCode}`, intersection);
-//     }
-// }
-
-function updateReticulePosition(intersectPoint = null) {
-  if (intersectPoint) {
-      // Adjust reticule position to the intersection point
-      raycasterReticule.position.x = intersectPoint.x;
-      raycasterReticule.position.y = intersectPoint.y;
-      raycasterReticule.position.z = intersectPoint.z;
-
-      // Ensure the reticule is added to the scene if not already present
-      if (!raycasterReticule.parent) scene.add(raycasterReticule);
-  } else {
-      // If there are no intersections, remove the reticule from the scene
-      if (raycasterReticule.parent) scene.remove(raycasterReticule);
-  }
+  function raycastCellServiceMesh(intersection, gridCode) {
+    // Based on the gridCode, trigger different events or actions
+    switch (gridCode) {
+        case '0':
+            // Trigger event or action for gridCode 0
+            console.log("Intersected gridCode 0", intersection);
+            break;
+        case '1':
+            // Trigger event or action for gridCode 1
+            console.log("Intersected gridCode 1", intersection);
+            break;
+        // Handle other cases as needed
+        default:
+            // Default action if gridCode doesn't match specific cases
+            console.log(`Intersected unspecified gridCode ${gridCode}`, intersection);
+    }
 }
+
+function createEtchLine() {
+  // Material and geometry for the etch line
+  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+  const lineGeometry = new THREE.BufferGeometry();
+  lineGeometry.setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+  const etchLine = new THREE.Line(lineGeometry, lineMaterial);
+
+  // Initially add to scene but make invisible
+  scene.add(etchLine);
+  etchLine.visible = false;
+
+  return {
+    group: null,  // No specific group associated
+    enabled: true,
+    onIntersect: function(intersection, raycaster, group) {
+      // Calculate intersection with the plane of the group
+      const planeNormal = new THREE.Vector3(0, 0, 1);  // Assuming z-up, adjust normal if different
+      const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(planeNormal, group.position);
+      const targetPoint = new THREE.Vector3();
+      raycaster.ray.intersectPlane(plane, targetPoint);
+
+      // Update line position
+      etchLine.visible = true;
+      const points = [
+        new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld),  // Start from camera
+        targetPoint  // Intersection with the plane
+      ];
+      etchLine.geometry.setFromPoints(points);
+      etchLine.geometry.verticesNeedUpdate = true;
+
+      // Optionally, draw or update content at the intersection point
+      drawAtIntersection(targetPoint);
+    }
+  };
+}
+
 
   
 // overall raycaster handler for animation loop
@@ -553,13 +582,14 @@ function handleRaycasters(camera, scene) {
               const gridCode = firstIntersection.object.userData.gridCode;
               onIntersect(firstIntersection, gridCode); // Call the specific onIntersect function
               
-              // Handling raycaster reticule, assuming it's a general action
+              // reticule
               const intersectPoint = firstIntersection.point;
               raycasterReticule.position.set(intersectPoint.x, intersectPoint.y, intersectPoint.z);
               if (!raycasterReticule.parent) scene.add(raycasterReticule);
           } else {
               // No intersections
-              if (raycasterReticule.parent) scene.remove(raycasterReticule);
+              // if (raycasterReticule.parent) scene.remove(raycasterReticule);
+              console.log("NO INTERSECTIONS!!!!!!!!!!!!!!!!!!")
           }
       }
   });
@@ -634,7 +664,13 @@ function handleRaycasters(camera, scene) {
         }}
 
       // updateDashSizeForZoom(); 
-      updatefmContourGroups();
+      if (analogGroup.visible !== false) {
+        updatefmContourGroups();
+
+      }
+
+
+      console.log(`analog group state is ${analogGroup.visible}`)
 
       // adjustMeshVisibilityBasedOnCameraDistance();
 
@@ -755,34 +791,54 @@ function onDocumentKeyDown(event) {
 }
 
 // scene layer toggles
-  function toggleMapScene(switchState, source) {
-    console.log(`switch stuff: ${switchState}, ${source}`);
-    if (source === 'switch1') {
-      // Handle visibility for SPDTswitch1
-      analogGroup.visible = false;
-      digitalGroup.visible = false;
-      switch (switchState) {
-        case 1:
-          analogGroup.visible = true;
-          break;
-        case 2:
-          digitalGroup.visible = true;
-          break;
-      }
-    } else if (source === 'switch2') {
-      // Handle visibility for SPDTswitch2
-      elevContourLines.visible = false;
-      accessGroup.visible = false;
-      switch (switchState) {
-        case 1:
-          elevContourLines.visible = true;
-          break;
-        case 2:
-          accessGroup.visible = true;
-          break;
-      }
+function toggleMapScene(switchState, source) {
+  console.log(`switch stuff: ${switchState}, ${source}`);
+
+  if (source === 'switch1') {
+    analogGroup.visible = false;
+    digitalGroup.visible = false;
+
+    raycasterDict.cellServiceMesh.enabled = false;
+    raycasterDict.accessibilityHex.enabled = false;
+
+    switch (switchState) {
+      case 1:
+        analogGroup.visible = true;
+        digitalGroup.visible = false;
+        raycasterDict.cellServiceMesh.enabled = true;
+        break;
+      case 2:
+        digitalGroup.visible = true;
+        analogGroup.visible = false;
+        raycasterDict.accessibilityMesh.enabled = true;
+
+        // Set all FM propagation groups to decay immediately or hide them
+        Object.keys(fmContourGroups).forEach(groupId => {
+          fmContourGroups[groupId].isDecaying = true;
+          fmContourGroups[groupId].decayRate = 1.0; // Set decay rate for immediate effect
+          updatefmContourGroups(); // Call update function to process changes
+        });
+        break;
+    }
+  } else if (source === 'switch2') {
+    elevContourLines.visible = false;
+    accessGroup.visible = false;
+
+    raycasterDict.cellServiceMesh.enabled = false;
+    raycasterDict.accessibilityMesh.enabled = false;
+
+    switch (switchState) {
+      case 1:
+        elevContourLines.visible = true;
+        raycasterDict.accessibilityHex.enabled = true;
+        break;
+      case 2:
+        accessGroup.visible = true;
+        raycasterDict.accessibilityMesh.enabled = true;
+        break;
     }
   }
+}
 
   
   // Function to initialize the scene and other components
@@ -1366,6 +1422,7 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
                   alphaHash: true,
                   side: THREE.DoubleSide, //
                   wireframe: false,
+                  visible: false,
                 });
 
             break;
@@ -1380,7 +1437,7 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
                   opacity: 0.4,
                   wireframe: true,
                   side: THREE.DoubleSide,
-                  // visible: false,
+                  visible: false,
                 });
 
                 // Solid fill material (black fill)
@@ -1571,7 +1628,7 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
           const wireframeMaterial = new THREE.MeshBasicMaterial({
             color: gridCodeColor,
             opacity: accessibilityOpacity,
-            // wireframe: true,
+            wireframe: true,
             alphaHash: true,
             side: THREE.DoubleSide,
           });
@@ -1618,31 +1675,35 @@ let fmContourGroups = {}; // Object to store line loop groups
 let lineLoops = {};
 
 function updatefmContourGroups() {
-    Object.keys(fmContourGroups).forEach(groupId => {
-        const group = fmContourGroups[groupId];
-        if (group.isDecaying) {
-            group.opacity -= group.decayRate;
-            group.opacity = Math.max(group.opacity, 0); // Ensure opacity doesn't drop below 0
-            group.meshes.forEach(mesh => {
-                mesh.material.opacity = group.opacity;
-                mesh.visible = group.opacity > 0; // Only visible if opacity is above 0
-            });
+  Object.keys(fmContourGroups).forEach(groupId => {
+    const group = fmContourGroups[groupId];
+    if (group.isDecaying) {
+      group.opacity -= group.decayRate;
+      group.opacity = Math.max(group.opacity, 0);
 
-            if (group.opacity <= 0) {
-                group.meshes.forEach(mesh => scene.remove(mesh));
-                delete fmContourGroups[groupId]; // Fully remove the group once it's invisible
-            }
-          } else {
-            group.meshes.forEach(mesh => {
-                mesh.visible = true; // Make sure the mesh is visible if not decaying
-                // mesh.material.opacity = 1; // Reset opacity for visibility
-            });
-        }
-    });
+      group.meshes.forEach(mesh => {
+        mesh.material.opacity = group.opacity;
+        mesh.visible = group.opacity > 0;
+      });
+
+      if (group.opacity <= 0) {
+        group.meshes.forEach(mesh => {
+          scene.remove(mesh);
+          if (mesh.geometry) mesh.geometry.dispose();
+          if (mesh.material) mesh.material.dispose();
+        });
+        delete fmContourGroups[groupId];
+      }
+    } else {
+      group.meshes.forEach(mesh => {
+        mesh.visible = analogGroup.visible && !group.isDecaying;
+      });
+    }
+  });
 }
 
 // Function to add FM propagation 3D line loops
-async function addFMpropagation3D(geojson, channelFilter, group, stride = 1) {
+function addFMpropagation3D(geojson, channelFilter, propagationPolygons, stride = 1) {
   return new Promise((resolve, reject) => {
       propagationPolygons.children.forEach(child => {
         propagationPolygons.remove(child);
@@ -1653,7 +1714,7 @@ async function addFMpropagation3D(geojson, channelFilter, group, stride = 1) {
 
         // Existing groups not matching the current channelFilter are marked for decay
         Object.keys(fmContourGroups).forEach(groupId => {
-            if (groupId !== channelFilter.toString()) {
+            if (groupId !== channelFilter.toString() || analogGroup.visible === false) {
                 fmContourGroups[groupId].isDecaying = true;
                 fmContourGroups[groupId].decayRate = 0.1; // Adjust decay rate as needed
             }
@@ -1708,7 +1769,8 @@ async function addFMpropagation3D(geojson, channelFilter, group, stride = 1) {
               color: colorScheme.polygonColor,
               transparent: true,
               alphaHash: true,
-              opacity: opacity,     
+              opacity: opacity,   
+              visible: analogGroup.visible // Set visibility based on analogGroup  
           });
       
           const vertices = feature.geometry.coordinates[0].map(coord => {
@@ -1750,7 +1812,7 @@ async function addFMpropagation3D(geojson, channelFilter, group, stride = 1) {
       
           // Add to group and scene
           const groupId = feature.properties.key.split('_')[0];
-          if (!fmContourGroups[groupId]) {
+          if (!fmContourGroups[groupId] || analogGroup.visible === false) {
               fmContourGroups[groupId] = {
                   meshes: [],
                   opacity: 1.0,
@@ -2046,7 +2108,8 @@ function addCellTowerPts(geojson) {
   
         display.textContent = `FM channel: ${Math.round(channelValue)}`;
         frequencyLabel.textContent = frequencyText;
-        if (fmContoursGeojsonData && fmTransmitterGeojsonData) {
+
+        if ( fmContoursGeojsonData && fmTransmitterGeojsonData) {
           updateVisualizationWithChannelFilter(fmContoursGeojsonData, fmTransmitterGeojsonData, channelValue);
           lastChannelValue = channelValue; // Update lastChannelValue
         }
@@ -2058,7 +2121,6 @@ function addCellTowerPts(geojson) {
     channelFrequencies = frequencyData;
   
     const slider = document.getElementById('fm-channel-slider');
-    // No need to setup another debouncing here as `updateDisplays` is already debounced
     slider.addEventListener('input', function() {
       const channelValue = Math.round(parseInt(this.value, 10));
       updateDisplays(channelValue);
@@ -2069,12 +2131,14 @@ function addCellTowerPts(geojson) {
     updateDisplays(initialChannelValue);
   }
   
+
   function updateVisualizationWithChannelFilter(fmContoursGeojsonData, towerGeojsonData, channelFilter) {
     // Ensure data availability
     if (!fmContoursGeojsonData || !towerGeojsonData) {
       console.warn("GeoJSON data not available.");
       return;
     }
+
 
     addFMpropagation3D(fmContoursGeojsonData, channelFilter, propagationPolygons)
       .then(() => console.log("FM propagation updated"))
@@ -2083,8 +2147,10 @@ function addCellTowerPts(geojson) {
     addFMTowerPts(towerGeojsonData, channelFilter, fmTransmitterPoints)
       .then(() => console.log("FM towers updated"))
       .catch(error => console.error("Failed to update tower channel:", error));
-}
 
+
+
+  }
   //////////////////////
 
   // graticule and convex hull functions here
@@ -2483,8 +2549,8 @@ function addCellTowerPts(geojson) {
       'src/assets/data/cellService_contours_5KM_pts_20240407.geojson',
       'src/assets/data/cellService_contours_5KM_explode_mini.geojson',
       'src/assets/data/accessService_contours_5KM_pts_20240407.geojson',
+      'src/assets/data/AccessHexTesselation_lvl5_nodata.geojson',
       'src/assets/sounds/presets.json',
-      'src/assets/data/AccessHexTesselation_lvl5_nodata.geojson'
     ];
 
     let criticalDatasetsLoaded = 0;
@@ -2545,7 +2611,7 @@ function addCellTowerPts(geojson) {
       case 'src/assets/data/fm_contours_shaved.geojson':
         fmContoursGeojsonData = data;
         // run on pageload with default channel 201 as filter
-        addFMpropagation3D(data, 249, propagationPolygons)
+        addFMpropagation3D(data, 201, propagationPolygons)
         analogGroup.add(propagationPolygons)
         break;
   
@@ -2575,7 +2641,7 @@ function addCellTowerPts(geojson) {
 
       ////////////////////// polygons
 
-      case 'src/assets/data/cellService_contours_5KM_explode_mini.geojson':
+      case 'src/assets/data/AccessHexTesselation_lvl5_nodata.geojson':
         accessibilityHexGeojsonData = data;
         drawAccessibilityHex(data);
         accessGroup.add(accessibilityHex);
@@ -2594,7 +2660,7 @@ function addCellTowerPts(geojson) {
       // updated points using fm contour origins
       case 'src/assets/data/FM_transmitter_sites.geojson':
         fmTransmitterGeojsonData = data;
-        addFMTowerPts(data, 249, fmTransmitterPoints)
+        addFMTowerPts(data, 201, fmTransmitterPoints)
         analogGroup.add(fmTransmitterPoints);
         break;
 
@@ -2669,9 +2735,9 @@ function addCellTowerPts(geojson) {
     initFMsliderAndContours(fmFreqDictionaryJson); // Setup slider and initial visualization
 
     // add grouped sub-groups
-    scene.add(analogGroup, digitalGroup, accessGroup, terrainGroup);
+    scene.add(analogGroup, digitalGroup, accessGroup, elevContourLines);
 
-    console.log(`analog group: ${analogGroup}`)
+    // console.log(`analog group: ${analogGroup}`)
 
     controls.update();
 }
