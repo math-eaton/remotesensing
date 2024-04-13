@@ -215,7 +215,7 @@ void loop() {
 
   // Now use averagePotValue instead of LEDpotValue for mapping and further logic
   int mappedLEDpotValue = map(averagePotValue, 0, 1023, 201, 300); 
-  int mappedZoomPotValue = map(zoomPotValue, 0, 1023, 0, 99); 
+  int mappedZoomPotValue = map(zoomPotValue, 0, 1023, 0, 1023); 
 
   // calculate pot LED brightness based on slider value
   float phase = (float(LEDpotValue) * 2 * PI * ledCycles) / 1023.0; // Calculate phase for sine wave

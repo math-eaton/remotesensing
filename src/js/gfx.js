@@ -67,10 +67,6 @@ export function gfx() {
 
   let sliderValue = 1;  //  default value
   const sliderLength = 100;
-  let lastSliderValue = null;
-  
-
-
   
   const ws = null;
   let globalDeltaLeftPressed = 0;
@@ -288,6 +284,25 @@ export function gfx() {
   // CAMERA CONTROLS /////////////////////////////
   // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+  function adjustCameraZoomSlidePot(value) {
+    if (camera.isOrthographicCamera) {
+      // controls.minZoom = 0.5; // min camera zoom out (ortho cam)
+      // controls.maxZoom = 5; // max camera zoom in (ortho cam)  
+      // Map the potentiometer value to the orthographic camera zoom range.
+      // const zoomRange = (controls.maxZoom - controls.minZoom);
+      let zoomValue = value / 100;
+      camera.zoom = zoomValue;
+      console.log(zoomValue)
+    } else if (camera.isPerspectiveCamera) {
+      // Map the potentiometer value to the perspective camera FOV range.
+      const fovRange = controls.maxDistance - controls.minDistance; 
+      const fovValue = controls.minDistance + (fovRange * ((value - 0) / (1023 - 0)));
+      camera.fov = fovValue;
+    }
+    camera.updateProjectionMatrix();
+  }
+  
+
   // rotation logic on load //////////////////////
   function flipCamera() {
     // Calculate the distance to the target
@@ -449,7 +464,6 @@ export function gfx() {
 
   // Create a geometry for the ray line
   const rayGeometry = new THREE.BufferGeometry();
-  let currentGridCode = null; // Keep track of the last gridCode encountered
 
   // Registry for storing raycasters
   const raycasterDict = {
@@ -467,6 +481,7 @@ export function gfx() {
   function raycastCellTowers(){}
   function raycastFMtowers(){}
 
+  let currentGridCode = null; // Keep track of the last gridCode encountered
 
   function raycastCellServiceMesh(intersection, gridCode) {
     // Check if the gridCode has changed
@@ -486,7 +501,7 @@ export function gfx() {
         // Start a new note or drone. Adjust the note and duration as needed.
         synth.triggerAttack([Tone.now() + 0.1]); // Use triggerAttack for a continuous sound
       } else {
-        console.log(`Intersected unspecified gridCode ${gridCode}`, intersection);
+        // console.log(`Intersected unspecified gridCode ${gridCode}`, intersection);
       }
     }
   }
@@ -506,9 +521,9 @@ export function gfx() {
             // return gridCode; 
         }, {vertex: null, distance: Infinity});
         
-        console.log(`Nearest vertex distance: ${nearestVertex.distance} with gridCode ${nearestVertex.gridCode}`);
+        // console.log(`Nearest vertex distance: ${nearestVertex.distance} with gridCode ${nearestVertex.gridCode}`);
     } else {
-        console.log('No vertices data found in userData');
+        // console.log('No vertices data found in userData');
     }
 }
 
@@ -670,7 +685,7 @@ function handleRaycasters(camera, scene) {
       }
 
 
-      console.log(`analog group state is ${analogGroup.visible}`)
+      // console.log(`analog group state is ${analogGroup.visible}`)
 
       // adjustMeshVisibilityBasedOnCameraDistance();
 
@@ -706,68 +721,74 @@ console.log("idk????")
 console.log(audioContext.state)
   }
 
-
-
-  function initWebSocketConnection() {
-    var ws = new WebSocket('ws://localhost:8080');
   
-    ws.onopen = function() {
-      console.log('Connected to WebSocket server');
-      unlockAudioContext(); // Attempt to unlock AudioContext on WebSocket connection
-    };
-  
-    ws.onmessage = function(event) {
+
+function initWebSocketConnection() {
+  var ws = new WebSocket('ws://localhost:8080');
+
+  ws.onopen = function() {
+    console.log('Connected to WebSocket server');
+    unlockAudioContext(); // Attempt to unlock AudioContext on WebSocket connection
+  };
+
+  ws.onmessage = function(event) {
 
 
-      let threeContainer = document.getElementById('gfx');
-      // hide mouse cursor if/when data is received
-      document.body.style.cursor = 'none';
-      setTimeout(() => threeContainer.classList.remove('background'), 1000);
+    let threeContainer = document.getElementById('gfx');
+    // hide mouse cursor if/when data is received
+    document.body.style.cursor = 'none';
+    setTimeout(() => threeContainer.classList.remove('background'), 1000);
 
-      let serialData = JSON.parse(event.data);
+    let serialData = JSON.parse(event.data);
 
-      console.log('ws data:', serialData); // This will correctly log the object structure
-
-  
-      if (serialData.LEDpotValue !== undefined && !isDragging) {
-        const scaledValue = Math.round(remapValues(serialData.LEDpotValue, 201, 300, 300, 201));
-        const slider = document.getElementById('fm-channel-slider');
-        slider.value = scaledValue; // Programmatically update slider value
-        updateLabelPosition(scaledValue); 
-        updateDisplays(scaledValue);
-      }
-
-      // if (serialData.zoomPotValue !== undefined && !isDragging) {
-      //   const scaledValue = Math.round(remapValues(serialData.zoomPotValue, 201, 300, 300, 201));
-      //   // todo zooming ctrls;
-      // }
+    // console.log('ws data:', serialData); // This will correctly log the object structure
 
 
-      if (serialData.deltaLeft !== undefined && serialData.deltaRight !== undefined) {
-        globalDeltaLeft = serialData.deltaLeft;
-        globalDeltaRight = serialData.deltaRight;
-      }
-
-      if (serialData.deltaLeftPressed !== undefined && serialData.deltaRightPressed !== undefined) {
-        globalDeltaLeftPressed = serialData.deltaLeftPressed;
-        globalDeltaRightPressed = serialData.deltaRightPressed;
-      }
-
-      // Check for switchState1 in the data and toggle group visibility accordingly
-      if (serialData.switchState1 !== undefined) {
-        toggleMapScene(serialData.switchState1, 'switch1');
-      }
-    
-      if (serialData.switchState2 !== undefined) {
-        toggleMapScene(serialData.switchState2, 'switch2');
-      }
+    if (serialData.LEDpotValue !== undefined && !isDragging) {
+      const scaledValue = Math.round(remapValues(serialData.LEDpotValue, 201, 300, 300, 201));
+      const slider = document.getElementById('fm-channel-slider');
+      slider.value = scaledValue; // Programmatically update slider value
+      updateLabelPosition(scaledValue); 
+      updateDisplays(scaledValue);
     }
 
+    if (serialData.zoomPotValue !== undefined && !isDragging) {
+      const scaledValue = Math.round(remapValues(serialData.zoomPotValue, 201, 300, 300, 201));
+      // todo zooming ctrls;
+    }
+
+    if (serialData.zoomPotValue !== undefined && !isDragging) {
+      // scale between min zoom and max zoom values for ortho cam
+      const scaledValue = Math.round(remapValues(serialData.zoomPotValue, 0, 1023, 50, 150));
+      adjustCameraZoomSlidePot(scaledValue);
+    }
   
-    ws.onerror = function(event) {
-      console.error('WebSocket error:', event);
-    };
+
+    if (serialData.deltaLeft !== undefined && serialData.deltaRight !== undefined) {
+      globalDeltaLeft = serialData.deltaLeft;
+      globalDeltaRight = serialData.deltaRight;
+    }
+
+    if (serialData.deltaLeftPressed !== undefined && serialData.deltaRightPressed !== undefined) {
+      globalDeltaLeftPressed = serialData.deltaLeftPressed;
+      globalDeltaRightPressed = serialData.deltaRightPressed;
+    }
+
+    // Check for switchState1 in the data and toggle group visibility accordingly
+    if (serialData.switchState1 !== undefined) {
+      toggleMapScene(serialData.switchState1, 'switch1');
+    }
   
+    if (serialData.switchState2 !== undefined) {
+      toggleMapScene(serialData.switchState2, 'switch2');
+    }
+  }
+
+
+  ws.onerror = function(event) {
+    console.error('WebSocket error:', event);
+  };
+
 }
 
 // keyboard commands, mirror spdt switch functionality
@@ -792,7 +813,7 @@ function onDocumentKeyDown(event) {
 
 // scene layer toggles
 function toggleMapScene(switchState, source) {
-  console.log(`switch stuff: ${switchState}, ${source}`);
+  // console.log(`switch stuff: ${switchState}, ${source}`);
 
   if (source === 'switch1') {
     analogGroup.visible = false;
@@ -805,12 +826,27 @@ function toggleMapScene(switchState, source) {
       case 1:
         analogGroup.visible = true;
         digitalGroup.visible = false;
+
+        // enable relevant raycaster(s)
         raycasterDict.cellServiceMesh.enabled = true;
+
+        // show FM towers when analog is selected
+        fmTransmitterPoints.visible = true;
+
+        // Redraw FM contours using the last used channel filter when switching back to analog
+        if (lastChannelFilter !== null) {
+          addFMpropagation3D(fmContoursGeojsonData, lastChannelFilter, propagationPolygons);
+        }
         break;
       case 2:
+        lastChannelFilter = channelFilter;
+
         digitalGroup.visible = true;
         analogGroup.visible = false;
         raycasterDict.accessibilityMesh.enabled = true;
+
+        // Hide FM towers when digital is selected
+        fmTransmitterPoints.visible = false;
 
         // Set all FM propagation groups to decay immediately or hide them
         Object.keys(fmContourGroups).forEach(groupId => {
@@ -2040,14 +2076,15 @@ function addCellTowerPts(geojson) {
   });
 }
 
-
   //////////////////////
   ///////// slider stuff
 
 
   let lastChannelValue = null; // For tracking significant channel value changes
+  let lastChannelFilter = null; // For reinitializing after switching map scenes
   let debounceTimer = null; // For debouncing updates to the display
-  
+  let channelFilter = null;
+
   function updateSliderDisplay(value, resolutionSlider) {
     let sliderDisplay = '[';
     for (let i = 0; i < sliderLength; i++) {
@@ -2102,6 +2139,7 @@ function addCellTowerPts(geojson) {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       if (lastChannelValue === null || Math.abs(lastChannelValue - channelValue) >= 2) {
+        channelFilter = channelValue; // for global channelFilter vals
         const display = document.getElementById('fm-channel-display');
         const frequencyLabel = document.getElementById('fm-frequency-display');
         const frequencyText = channelFrequencies[Math.round(channelValue).toString()] || "Frequency not found";
@@ -2141,11 +2179,11 @@ function addCellTowerPts(geojson) {
 
 
     addFMpropagation3D(fmContoursGeojsonData, channelFilter, propagationPolygons)
-      .then(() => console.log("FM propagation updated"))
+      // .then(() => console.log("FM propagation updated"))
       .catch(error => console.error("Failed to update contour channel:", error));
 
     addFMTowerPts(towerGeojsonData, channelFilter, fmTransmitterPoints)
-      .then(() => console.log("FM towers updated"))
+      // .then(() => console.log("FM towers updated"))
       .catch(error => console.error("Failed to update tower channel:", error));
 
 
