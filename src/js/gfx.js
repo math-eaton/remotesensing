@@ -489,7 +489,30 @@ export function gfx() {
 
   let currentGridCode = null; // Keep track of the last gridCode encountered
 
-  function printCameraCenterCoordinates(camera) {
+  function decimalToDMS(coord, isLongitude = false) {
+    const absolute = Math.abs(coord);
+    const degrees = Math.floor(absolute);
+    const minutesNotTruncated = (absolute - degrees) * 60;
+    const minutes = Math.floor(minutesNotTruncated);
+    const seconds = ((minutesNotTruncated - minutes) * 60).toFixed(2);
+
+    // Ensuring two digits
+    const degreesStr = degrees.toString().padStart(2, '0');
+    const minutesStr = minutes.toString().padStart(2, '0');
+    const secondsStr = parseFloat(seconds).toFixed(2).toString().padStart(5, '0'); // '5' because "00.00"
+
+    // Determining cardinal directions
+    let cardinal = '';
+    if (isLongitude) {
+        cardinal = coord >= 0 ? 'E' : 'W';  // East or West for longitude
+    } else {
+        cardinal = coord >= 0 ? 'N' : 'S';  // North or South for latitude
+    }
+
+    return `${degreesStr}° ${minutesStr}' ${secondsStr}" ${cardinal}`;
+}
+
+function printCameraCenterCoordinates(camera) {
     const vector = new THREE.Vector3(0, 0, -1); // Vector pointing out of the camera
     vector.unproject(camera); // Adjust the vector by the camera's projection
     const direction = vector.sub(camera.position).normalize(); // Create the direction vector
@@ -500,15 +523,37 @@ export function gfx() {
     // Convert from State Plane coordinates back to Geographic coordinates
     try {
         const result = proj4('EPSG:2261').inverse([coord.x, coord.y]);
-        const latitude = result[1].toFixed(4);
-        const longitude = result[0].toFixed(4);
-        const displayText = `LAT: ${latitude}<br>LON: ${longitude}`;  // Adding a line break with <br>
+        const latitudeDMS = decimalToDMS(result[1], false);  // Passing false for latitude
+        const longitudeDMS = decimalToDMS(result[0], true);  // Passing true for longitude
+        const displayText = `${latitudeDMS}<br>${longitudeDMS}`;  // Using DMS format with cardinal directions
         document.getElementById('latLonDisplay').innerHTML = displayText;  // Use innerHTML to render the line break
     } catch (error) {
         console.error(`Error converting coordinates: ${error}`);
         document.getElementById('latLonDisplay').textContent = "Error in displaying coordinates.";
     }
 }
+
+
+//   function printCameraCenterCoordinates(camera) {
+//     const vector = new THREE.Vector3(0, 0, -1); // Vector pointing out of the camera
+//     vector.unproject(camera); // Adjust the vector by the camera's projection
+//     const direction = vector.sub(camera.position).normalize(); // Create the direction vector
+
+//     const distance = -camera.position.z / direction.z; // Calculate the distance to the ground plane (assuming z = 0 is ground)
+//     const coord = camera.position.clone().add(direction.multiplyScalar(distance)); // Calculate the intersection with ground plane
+
+//     // Convert from State Plane coordinates back to Geographic coordinates
+//     try {
+//         const result = proj4('EPSG:2261').inverse([coord.x, coord.y]);
+//         const latitude = result[1].toFixed(4);
+//         const longitude = result[0].toFixed(4);
+//         const displayText = `LAT: ${latitude}<br>LON: ${longitude}`;  // Adding a line break with <br>
+//         document.getElementById('latLonDisplay').innerHTML = displayText;  // Use innerHTML to render the line break
+//     } catch (error) {
+//         console.error(`Error converting coordinates: ${error}`);
+//         document.getElementById('latLonDisplay').textContent = "Error in displaying coordinates.";
+//     }
+// }
 
   function raycastCellServiceMesh(intersection, gridCode) {
     // Check if the gridCode has changed
