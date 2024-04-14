@@ -45,8 +45,9 @@ a:hover {
 }
 
 body {
-  font-family: "IBM Plex Sans", "Franklin Gothic Medium", "Arial Narrow", Arial,
-    sans-serif;
+  /* font-family: "IBM Plex Sans", "Franklin Gothic Medium", "Arial Narrow", Arial,
+    sans-serif; */
+  font-family: monospace;
   display: block;
   position: inherit;
   min-width: 320px;
@@ -460,6 +461,20 @@ p, ul{
 
 #stats{  
   /* filter: grayscale(); */
+}
+
+#latLonDisplay {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  padding: 8px 12px;
+  text-align: right;
+  background-color: rgba(0, 0, 0, 0.75); /* Semi-transparent black background */
+  color: white;
+  font-size: 16px;
+  /* font-family: Arial, sans-serif; */
+  border-radius: 5px;
+  z-index: 1000; /* Make sure it's above all canvas layers */
 }
 
 

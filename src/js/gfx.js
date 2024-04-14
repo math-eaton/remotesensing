@@ -472,6 +472,12 @@ export function gfx() {
     accessibilityMesh: { group: accessibilityMesh, enabled: false, onIntersect: raycastAccessVertex },
     cellTransmitterPoints: { group: cellTransmitterPoints, enabled: false, onIntersect: raycastCellTowers },
     fmTransmitterPoints: { group: fmTransmitterPoints, enabled: false, onIntersect: raycastFMtowers },
+    cameraCenter: { 
+      group: null,  // no specific group 
+      enabled: true,  // Always enabled
+      onIntersect: () => printCameraCenterCoordinates(camera)  // Call the function to print coords
+}
+  
 
 };
 
@@ -482,6 +488,27 @@ export function gfx() {
   function raycastFMtowers(){}
 
   let currentGridCode = null; // Keep track of the last gridCode encountered
+
+  function printCameraCenterCoordinates(camera) {
+    const vector = new THREE.Vector3(0, 0, -1); // Vector pointing out of the camera
+    vector.unproject(camera); // Adjust the vector by the camera's projection
+    const direction = vector.sub(camera.position).normalize(); // Create the direction vector
+
+    const distance = -camera.position.z / direction.z; // Calculate the distance to the ground plane (assuming z = 0 is ground)
+    const coord = camera.position.clone().add(direction.multiplyScalar(distance)); // Calculate the intersection with ground plane
+
+    // Convert from State Plane coordinates back to Geographic coordinates
+    try {
+        const result = proj4('EPSG:2261').inverse([coord.x, coord.y]);
+        const latitude = result[1].toFixed(4);
+        const longitude = result[0].toFixed(4);
+        const displayText = `LAT: ${latitude}<br>LON: ${longitude}`;  // Adding a line break with <br>
+        document.getElementById('latLonDisplay').innerHTML = displayText;  // Use innerHTML to render the line break
+    } catch (error) {
+        console.error(`Error converting coordinates: ${error}`);
+        document.getElementById('latLonDisplay').textContent = "Error in displaying coordinates.";
+    }
+}
 
   function raycastCellServiceMesh(intersection, gridCode) {
     // Check if the gridCode has changed
@@ -545,41 +572,41 @@ export function gfx() {
     }
 }
 
-function createEtchLine() {
-  // Material and geometry for the etch line
-  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
-  const lineGeometry = new THREE.BufferGeometry();
-  lineGeometry.setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
-  const etchLine = new THREE.Line(lineGeometry, lineMaterial);
+// function createEtchLine() {
+//   // Material and geometry for the etch line
+//   const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+//   const lineGeometry = new THREE.BufferGeometry();
+//   lineGeometry.setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+//   const etchLine = new THREE.Line(lineGeometry, lineMaterial);
 
-  // Initially add to scene but make invisible
-  scene.add(etchLine);
-  etchLine.visible = false;
+//   // Initially add to scene but make invisible
+//   scene.add(etchLine);
+//   etchLine.visible = false;
 
-  return {
-    group: null,  // No specific group associated
-    enabled: true,
-    onIntersect: function(intersection, raycaster, group) {
-      // Calculate intersection with the plane of the group
-      const planeNormal = new THREE.Vector3(0, 0, 1);  // Assuming z-up, adjust normal if different
-      const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(planeNormal, group.position);
-      const targetPoint = new THREE.Vector3();
-      raycaster.ray.intersectPlane(plane, targetPoint);
+//   return {
+//     group: null,  // No specific group associated
+//     enabled: true,
+//     onIntersect: function(intersection, raycaster, group) {
+//       // Calculate intersection with the plane of the group
+//       const planeNormal = new THREE.Vector3(0, 0, 1);  // Assuming z-up, adjust normal if different
+//       const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(planeNormal, group.position);
+//       const targetPoint = new THREE.Vector3();
+//       raycaster.ray.intersectPlane(plane, targetPoint);
 
-      // Update line position
-      etchLine.visible = true;
-      const points = [
-        new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld),  // Start from camera
-        targetPoint  // Intersection with the plane
-      ];
-      etchLine.geometry.setFromPoints(points);
-      etchLine.geometry.verticesNeedUpdate = true;
+//       // Update line position
+//       etchLine.visible = true;
+//       const points = [
+//         new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld),  // Start from camera
+//         targetPoint  // Intersection with the plane
+//       ];
+//       etchLine.geometry.setFromPoints(points);
+//       etchLine.geometry.verticesNeedUpdate = true;
 
-      // Optionally, draw or update content at the intersection point
-      drawAtIntersection(targetPoint);
-    }
-  };
-}
+//       // Optionally, draw or update content at the intersection point
+//       drawAtIntersection(targetPoint);
+//     }
+//   };
+// }
 
 
   
@@ -587,23 +614,25 @@ function createEtchLine() {
 function handleRaycasters(camera, scene) {
   Object.entries(raycasterDict).forEach(([key, { group, enabled, onIntersect }]) => {
       if (enabled) {
-          const raycaster = new THREE.Raycaster();
-          raycaster.setFromCamera({ x: 0, y: 0 }, camera); // Assuming center of camera view
-          const intersections = raycaster.intersectObjects(group.children, true);
-          
-          if (intersections.length > 0) {
-              const firstIntersection = intersections[0]; // Only consider the first intersection
-              const gridCode = firstIntersection.object.userData.gridCode;
-              onIntersect(firstIntersection, gridCode); // Call the specific onIntersect function
+          if (group) {
+              const raycaster = new THREE.Raycaster();
+              raycaster.setFromCamera({ x: 0, y: 0 }, camera); // Center of camera view
+              const intersections = raycaster.intersectObjects(group.children, true);
               
-              // reticule
-              const intersectPoint = firstIntersection.point;
-              raycasterReticule.position.set(intersectPoint.x, intersectPoint.y, intersectPoint.z);
-              if (!raycasterReticule.parent) scene.add(raycasterReticule);
+              if (intersections.length > 0) {
+                  const firstIntersection = intersections[0];
+                  const gridCode = firstIntersection.object.userData.gridCode;
+                  onIntersect(firstIntersection, gridCode);
+
+                  const intersectPoint = firstIntersection.point;
+                  raycasterReticule.position.set(intersectPoint.x, intersectPoint.y, intersectPoint.z);
+                  if (!raycasterReticule.parent) scene.add(raycasterReticule);
+              } else {
+                  console.log("NO INTERSECTIONS");
+              }
           } else {
-              // No intersections
-              // if (raycasterReticule.parent) scene.remove(raycasterReticule);
-              console.log("NO INTERSECTIONS!!!!!!!!!!!!!!!!!!")
+              // Handle raycasters without a specific group (like camera center)
+              onIntersect();
           }
       }
   });
@@ -1141,7 +1170,7 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
 
   // Define a scaling factor for the Z values (elevation)
   // const zScale = 0.00025; // smaller value better for perspective cam
-  const zScale = 0.000555; // larger value better for ortho cam
+  const zScale = 0.0004; // larger value better for ortho cam
 
   // Function to get color based on elevation
   function getColorForElevation(elevation, minElevation, maxElevation) {
@@ -1409,6 +1438,28 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
           }
           groups[gridCode].push(new THREE.Vector3(x, y, z));
         }
+
+        // create points group for raycasting / sound triggers only
+        Object.keys(groups).forEach(gridCode => {
+          const pointsForDelaunay = groups[gridCode];
+          const pointsMaterial = new THREE.PointsMaterial({
+            // size: 5,
+            // color: accessibilityColorRamp(parseInt(gridCode)),
+            // opacity: accessibilityOpacityRamp(parseInt(gridCode)),
+            transparent: false,
+            visible: false,
+          });
+          const pointsGeometry = new THREE.BufferGeometry().setFromPoints(pointsForDelaunay);
+          const points = new THREE.Points(pointsGeometry, pointsMaterial);
+
+          points.userData = { gridCode, vertices: pointsForDelaunay };
+
+          var group = new THREE.Group();
+          group.add(points);  // Add points directly to the group
+
+          cellServiceMesh.add(group);
+        });
+
   
         // Process each grid_code group separately
         Object.keys(groups).forEach((gridCode) => {
@@ -2790,6 +2841,8 @@ function addCellTowerPts(geojson) {
     scene.add(analogGroup, digitalGroup, accessGroup, elevContourLines);
 
     // console.log(`analog group: ${analogGroup}`)
+
+    toggleMapScene(1, 'switch1');
 
     controls.update();
 }
