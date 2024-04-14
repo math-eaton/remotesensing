@@ -468,8 +468,8 @@ export function gfx() {
   // Registry for storing raycasters
   const raycasterDict = {
     cellServiceMesh: { group: cellServiceMesh, enabled: false, onIntersect: raycastCellServiceMesh },
-    accessibilityHex: { group: accessibilityHex, enabled: false, onIntersect: raycastAccessHexVertex },
-    accessibilityMesh: { group: accessibilityMesh, enabled: false, onIntersect: createEtchLine },
+    accessibilityHex: { group: accessibilityHex, enabled: false, onIntersect: raycastAccessVertex },
+    accessibilityMesh: { group: accessibilityMesh, enabled: false, onIntersect: raycastAccessVertex },
     cellTransmitterPoints: { group: cellTransmitterPoints, enabled: false, onIntersect: raycastCellTowers },
     fmTransmitterPoints: { group: fmTransmitterPoints, enabled: false, onIntersect: raycastFMtowers },
 
@@ -509,21 +509,20 @@ export function gfx() {
   // calculate the nearest vertex distance
   // todo: add scaling factor of sound related to distance
   // + change effect only if gridcode changes
-  function raycastAccessHexVertex(intersection) {
+  function raycastAccessVertex(intersection) {
     const intersectPoint = intersection.point;
     const vertices = intersection.object.userData.vertices;
     
     if (vertices) {
         const nearestVertex = vertices.reduce((nearest, vertex) => {
-            const distance = Math.hypot(vertex.x - intersectPoint.x, vertex.y - intersectPoint.y);
-            const gridCode = intersection.object.userData.gridCode;
+            const distance = Math.hypot(vertex.x - intersectPoint.x, vertex.y - intersectPoint.y, vertex.z - intersectPoint.z);
             return distance < nearest.distance ? { vertex, distance } : nearest;
-            // return gridCode; 
-        }, {vertex: null, distance: Infinity});
-        
-        // console.log(`Nearest vertex distance: ${nearestVertex.distance} with gridCode ${nearestVertex.gridCode}`);
+        }, { vertex: null, distance: Infinity });
+
+        const gridCode = intersection.object.userData.gridCode;
+        console.log(`Nearest vertex distance: ${nearestVertex.distance}, Vertex: ${JSON.stringify(nearestVertex.vertex)}, Grid Code: ${gridCode}`);
     } else {
-        // console.log('No vertices data found in userData');
+        console.log('No vertices data found in userData');
     }
 }
 
@@ -813,6 +812,9 @@ function onDocumentKeyDown(event) {
 
 // scene layer toggles
 function toggleMapScene(switchState, source) {
+
+  const canvas = document.getElementById('gfx'); // Get the canvas element by its ID
+
   // console.log(`switch stuff: ${switchState}, ${source}`);
 
   if (source === 'switch1') {
@@ -828,7 +830,7 @@ function toggleMapScene(switchState, source) {
         digitalGroup.visible = false;
 
         // enable relevant raycaster(s)
-        raycasterDict.cellServiceMesh.enabled = true;
+        // raycasterDict.cellServiceMesh.enabled = true;
 
         // show FM towers when analog is selected
         fmTransmitterPoints.visible = true;
@@ -837,13 +839,17 @@ function toggleMapScene(switchState, source) {
         if (lastChannelFilter !== null) {
           addFMpropagation3D(fmContoursGeojsonData, lastChannelFilter, propagationPolygons);
         }
+
+        // reset css filter
+        canvas.style.filter = '';
+
         break;
       case 2:
         lastChannelFilter = channelFilter;
 
         digitalGroup.visible = true;
         analogGroup.visible = false;
-        raycasterDict.accessibilityMesh.enabled = true;
+        // raycasterDict.accessibilityMesh.enabled = true;
 
         // Hide FM towers when digital is selected
         fmTransmitterPoints.visible = false;
@@ -854,6 +860,13 @@ function toggleMapScene(switchState, source) {
           fmContourGroups[groupId].decayRate = 1.0; // Set decay rate for immediate effect
           updatefmContourGroups(); // Call update function to process changes
         });
+
+        // apply css filter
+        // canvas.style.filter = 'hue-rotate(270deg) grayscale(1) contrast(1.5)';
+        // canvas.style.filter = 'hue-rotate(200deg)';
+
+
+
         break;
     }
   } else if (source === 'switch2') {
@@ -866,7 +879,7 @@ function toggleMapScene(switchState, source) {
     switch (switchState) {
       case 1:
         elevContourLines.visible = true;
-        raycasterDict.accessibilityHex.enabled = true;
+        // raycasterDict.accessibilityHex.enabled = true;
         break;
       case 2:
         accessGroup.visible = true;
@@ -1389,7 +1402,7 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
           const gridCode = feature.properties.grid_code;
           const [lon, lat] = feature.geometry.coordinates;
           const [x, y] = toStatePlane(lon, lat);
-          const z = feature.properties.Z * zScale; 
+          const z = feature.properties.Z * (zScale*1.025); // slightly higher z-scale bc z-fighting w other meshes
   
           if (!groups[gridCode]) {
             groups[gridCode] = [];
@@ -1584,7 +1597,7 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
   function accessibilityOpacityRamp(gridCode) {
     const minOpacity = 0.1;
     const maxOpacity = 0.9;
-    const scaleExponent = 0.75; // Adjust this to control the rate of change
+    const scaleExponent = 0.15; // Adjust this to control the rate of change
     
     // Normalize gridCode value between 0 and 1
     const normalizedGridCode = 1 - (gridCode / 8); // Assuming grid codes range from 0 to 8
@@ -1600,111 +1613,112 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
   function addAccessibilityMesh(geojson, stride = 1) {
     return new Promise((resolve, reject) => {
       try {
-        // Reset/clear the group to avoid adding duplicate meshes
-        accessibilityMesh.clear();
-
-        // Downsample and group points by 'group_ID'
+        accessibilityMesh.clear(); // Clear existing meshes to avoid duplicates.
+  
         const groups = {};
         for (let i = 0; i < geojson.features.length; i += stride) {
           const feature = geojson.features[i];
           const gridCode = feature.properties.grid_code;
           const [lon, lat] = feature.geometry.coordinates;
           const [x, y] = toStatePlane(lon, lat);
-          const z = feature.properties.Z * zScale; 
+          const z = feature.properties.Z * zScale;
   
           if (!groups[gridCode]) {
             groups[gridCode] = [];
           }
           groups[gridCode].push(new THREE.Vector3(x, y, z));
         }
-  
-        // Process each grid_code group separately
-        Object.keys(groups).forEach((gridCode) => {
-          const pointsForDelaunay = groups[gridCode];
-  
-          var delaunay = Delaunator.from(
-            pointsForDelaunay.map((p) => [p.x, p.y]),
-          );
-          var meshIndex = [];
-          // set triangulation distance threshold to avoid connecting distant pts
-          const thresholdDistance = 0.125; 
 
+      // create points group for raycasting / sound triggers only
+      Object.keys(groups).forEach(gridCode => {
+        const pointsForDelaunay = groups[gridCode];
+        const pointsMaterial = new THREE.PointsMaterial({
+          // size: 5,
+          // color: accessibilityColorRamp(parseInt(gridCode)),
+          // opacity: accessibilityOpacityRamp(parseInt(gridCode)),
+          transparent: false,
+          visible: false,
+        });
+        const pointsGeometry = new THREE.BufferGeometry().setFromPoints(pointsForDelaunay);
+        const points = new THREE.Points(pointsGeometry, pointsMaterial);
+
+        points.userData = { gridCode, vertices: pointsForDelaunay };
+
+        var group = new THREE.Group();
+        group.add(points);  // Add points directly to the group
+
+        accessibilityMesh.add(group);
+      });
+  
+  
+        Object.keys(groups).forEach(gridCode => {
+          const pointsForDelaunay = groups[gridCode];
+          var delaunay = Delaunator.from(pointsForDelaunay.map(p => [p.x, p.y]));
+          var meshIndex = [];
+          const thresholdDistance = 0.15; // Threshold distance for triangulation.
+  
           for (let i = 0; i < delaunay.triangles.length; i += 3) {
             const p1 = pointsForDelaunay[delaunay.triangles[i]];
             const p2 = pointsForDelaunay[delaunay.triangles[i + 1]];
             const p3 = pointsForDelaunay[delaunay.triangles[i + 2]];
-
-            // Check distances between each pair of points in a triangle
-            if (
-              distanceBetweenPoints(p1, p2) <= thresholdDistance &&
-              distanceBetweenPoints(p2, p3) <= thresholdDistance &&
-              distanceBetweenPoints(p3, p1) <= thresholdDistance
-            ) {
-              meshIndex.push(
-                delaunay.triangles[i],
-                delaunay.triangles[i + 1],
-                delaunay.triangles[i + 2],
-              );
+  
+            if (distanceBetweenPoints(p1, p2) <= thresholdDistance &&
+                distanceBetweenPoints(p2, p3) <= thresholdDistance &&
+                distanceBetweenPoints(p3, p1) <= thresholdDistance) {
+              meshIndex.push(delaunay.triangles[i], delaunay.triangles[i + 1], delaunay.triangles[i + 2]);
             }
           }
-
-          var geom = new THREE.BufferGeometry().setFromPoints(
-            pointsForDelaunay,
-          );
+  
+          var geom = new THREE.BufferGeometry().setFromPoints(pointsForDelaunay);
           geom.setIndex(meshIndex);
           geom.computeVertexNormals();
-          
-          // Use the accessibilityColorRamp to get the color based on grid code
+  
           const gridCodeColor = accessibilityColorRamp(parseInt(gridCode));
           const accessibilityOpacity = accessibilityOpacityRamp(parseInt(gridCode));
-
-          let fillMaterial; // placeholder for now
-
-          // Wireframe material with dynamic color
+  
+          let fillMaterial = new THREE.MeshBasicMaterial({
+            color: gridCodeColor,
+            opacity: accessibilityOpacity / 2,
+            transparent: true,
+            alphaHash: true,
+            side: THREE.DoubleSide,
+            visible: true
+          });
+  
           const wireframeMaterial = new THREE.MeshBasicMaterial({
             color: gridCodeColor,
             opacity: accessibilityOpacity,
             wireframe: true,
+            transparent: true,
             alphaHash: true,
             side: THREE.DoubleSide,
+            visible: true
           });
-
-          console.log(accessibilityOpacity)
-
-
-          // Create mesh with the fill material
+  
           var fillMesh = new THREE.Mesh(geom, fillMaterial);
-          fillMesh.name = 'fillMesh-' + gridCode;
-
-          // Create mesh with the wireframe material
           var wireframeMesh = new THREE.Mesh(geom, wireframeMaterial);
-          wireframeMesh.name = 'wireframeMesh-' + gridCode;
-
-          // add metadata to the meshes for raycaster triggers
-          fillMesh.userData.gridCode = gridCode;
-          wireframeMesh.userData.gridCode = gridCode;
-
-          // Group to hold both meshes
+  
+          fillMesh.userData = { gridCode, vertices: pointsForDelaunay };
+          wireframeMesh.userData = { gridCode, vertices: pointsForDelaunay };
+  
           var group = new THREE.Group();
+          group.add(fillMesh);
           group.add(wireframeMesh);
-          // group.add(fillMesh);
-
-          // Add the group to the cellServiceMesh group
+  
           accessibilityMesh.add(group);
         });
-
-        // Add the cellServiceMesh group to the scene
+  
         scene.add(accessibilityMesh);
-        console.log(`access mesh length: ${geojson.features.length}`)
-
+        console.log(`Accessibility mesh added with ${geojson.features.length / stride} features`);
+  
         resolve(accessibilityMesh);
       } catch (error) {
-        reject(`Error in accessibilityMesh: ${error.message}`);
+        console.error(`Error in adding accessibility mesh: ${error.message}`);
+        reject(error);
       }
     });
   }
-
-
+  
 
 // Define an array to track all line loops and their decay status
 let fmContourGroups = {}; // Object to store line loop groups
@@ -1965,8 +1979,8 @@ function addCellTowerPts(geojson) {
   return new Promise((resolve, reject) => {
     try {
       // Define the base size and height for the pyramids
-      const baseSize = 0.003;
-      const pyramidHeight = 0.015;
+      const baseSize = 0.005;
+      const pyramidHeight = 0.02;
 
       // Material for the wireframe pyramids
       let pyramidMaterialCellular = new THREE.MeshBasicMaterial({
@@ -2060,8 +2074,8 @@ function addCellTowerPts(geojson) {
           cellMstEdges,
           '#FFFFFF',
           colorScheme.mstCellColor,
-          0.0003,
-          0.0015,
+          0.0006,
+          0.002,
           cellMSTLines,
         );
       }
@@ -2679,11 +2693,11 @@ function addCellTowerPts(geojson) {
 
       ////////////////////// polygons
 
-      case 'src/assets/data/AccessHexTesselation_lvl5_nodata.geojson':
-        accessibilityHexGeojsonData = data;
-        drawAccessibilityHex(data);
-        accessGroup.add(accessibilityHex);
-        break;
+      // case 'src/assets/data/AccessHexTesselation_lvl5_nodata.geojson':
+      //   accessibilityHexGeojsonData = data;
+      //   drawAccessibilityHex(data);
+      //   accessGroup.add(accessibilityHex);
+      //   break;
 
       //////////////////////// points
 
