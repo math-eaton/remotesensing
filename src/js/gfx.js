@@ -42,7 +42,7 @@ export function gfx() {
   cellServiceMesh.visible = true;
   cellTransmitterPoints.visible = true;
   cellMSTLines.visible = true;
-  elevContourLines.visible = false;
+  elevContourLines.visible = true;
   accessibilityHex.visible = true;
   accessibilityMesh.visible = true;
 
@@ -56,6 +56,7 @@ export function gfx() {
   accessGroup.visible = false;
   digitalGroup.visible = false;
 
+  let scaleBar;
   // analog = fmtransmitter, propagationPolygons, 
   // digital = cellServiceMesh, cellTransmitterPoints, cellMSTLines
 
@@ -79,13 +80,11 @@ export function gfx() {
   let audioContext;
 
   // temp geometry for raycast testing
-  const squareSize = 0.025;
-  const squareGeometry = new THREE.PlaneGeometry(squareSize, squareSize);
-  const wireframeGeometry = new THREE.EdgesGeometry(squareGeometry); // Get the edges for a wireframe
-  const squareMaterial = new THREE.LineBasicMaterial({ color: '#0000ff', linewidth: 2 });
-  const raycasterReticule = new THREE.LineSegments(wireframeGeometry, squareMaterial);
+  const reticuleSize = 0.015;
+  const reticuleGeometry = new THREE.RingGeometry( reticuleSize,reticuleSize, 8)
+  const reticuleMaterial = new THREE.MeshBasicMaterial({ color: '#0000ff', wireframe: false, });
+  const raycasterReticule = new THREE.LineSegments(reticuleGeometry, reticuleMaterial);
   
-
   // Define color scheme variables
   const colorScheme = {
     graticuleColor: '#2f2f2f0b', 
@@ -99,17 +98,17 @@ export function gfx() {
     // middleElevationColor: "#00ff00", // Green
     // highestElevationColor: "#ff0000", // Red
     mstFmColor: '#FF5F1F', 
-    mstCellColor: '#FFFF00', 
     boundingBoxColor: '#3d3d3d',
     coastlineColor: '#303030',
-    contoursLabelColor: '#00ff00',
-    cellColor: '#FFFF00',
+    // contoursLabelColor: '#00ff00',
+    // cellColor: '#ffffff',
+    mstCellColor: '#FFFF00', 
     matchingPyramidColor: '#FFFF00',
     nonMatchingPyramidColor: '#FF1493',
     waterColor: '#303030',
     accessibilityHexColor: '#310057',
     // cellServiceNo: '#00E661',
-    cellServiceNo: '#FF1493',
+    cellServiceNo: '#ff0059',
     cellServiceYes: '#161616'
   };
 
@@ -192,14 +191,22 @@ export function gfx() {
     //   0.1,
     //   100,
     // );
+    let size = 1;
+    let near = 0.25;
+    let far = 2.5;
 
 
     camera = new THREE.OrthographicCamera(
+      -size, size, size, -size, near, far
     );
 
-
-
     camera.up.set(0, 0, 1); // Set Z as up-direction
+
+    const fogNear = 2; // The starting distance of the fog (where it begins to appear)
+    const fogFar = camera.far; // The ending distance of the fog (where it becomes fully opaque)
+
+    // Adding fog to the scene
+    scene.fog = new THREE.Fog(colorScheme.backgroundColor, fogNear, fogFar);
 
     renderer = new THREE.WebGLRenderer({ 
       canvas: document.querySelector('#canvas'),
@@ -220,6 +227,7 @@ export function gfx() {
     stats.domElement.style.cssText = 'position:absolute;bottom:0px;left:0px;';
     document.getElementById('stats').appendChild(stats.domElement);
 
+    // scaleBar = createScaleBar(scene);  // Ensure this is called after scene is defined
 
 
 
@@ -262,14 +270,6 @@ export function gfx() {
     // const audioListener = new THREE.AudioListener();
     // camera.add(audioListener);
 
-    const fogNear = 2; // The starting distance of the fog (where it begins to appear)
-    const fogFar = 3.5; // The ending distance of the fog (where it becomes fully opaque)
-
-    // Adding fog to the scene
-    scene.fog = new THREE.Fog(colorScheme.backgroundColor, fogNear, fogFar);
-
-    // Adjust the camera's far plane
-    camera.far = fogFar;
             
     camera.updateProjectionMatrix();
 
@@ -341,8 +341,8 @@ export function gfx() {
   function onWindowResize() {
     // Get the dimensions of the container
     const container = document.getElementById('three-container');
-    const width = 720;
-    const height = 360;
+    const width = 800;
+    const height = 480;
 
     // Update camera aspect ratio and renderer size
     camera.aspect = width / height;
@@ -422,13 +422,6 @@ export function gfx() {
   adjustCameraZoom();
 
 
-  // function onPointerMove(event) {
-  //   // Convert mouse position to normalized device coordinates (-1 to +1) for both axes
-  //   pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
-  //   pointer.y = - (event.clientY / window.innerHeight) * 2 + 1;
-  // }
-
-
   // hardware xy panning - manual camera controls
   function applyPan(deltaX, deltaY) {
     // pan sensitivity
@@ -467,15 +460,23 @@ export function gfx() {
 
   // Registry for storing raycasters
   const raycasterDict = {
+    // 1: determine presence or absence of cell signal
+    // method: nearest CELL SERVICE MESH vertex
     cellServiceMesh: { group: cellServiceMesh, enabled: false, onIntersect: raycastCellServiceMesh },
-    accessibilityHex: { group: accessibilityHex, enabled: false, onIntersect: raycastAccessVertex },
+    // 2: reflect the degree of remoteness of a place
+    // method: nearest ACCESSIBILITY MESH vertex
+    // accessibilityHex: { group: accessibilityHex, enabled: false, onIntersect: raycastAccessVertex },
     accessibilityMesh: { group: accessibilityMesh, enabled: false, onIntersect: raycastAccessVertex },
-    cellTransmitterPoints: { group: cellTransmitterPoints, enabled: false, onIntersect: raycastCellTowers },
+    // 3: draw a line to the nearest cell tower at all times
+    // method: nearest CELL TRANSMITTER vertex
+    // cellTransmitterPoints: { group: cellTransmitterPoints, enabled: false, onIntersect: raycastCellTowers },
+    // 4: play a 'radio station' signal
+    // method: distance from PROPAGATION POLYGON edge to centroid
     fmTransmitterPoints: { group: fmTransmitterPoints, enabled: false, onIntersect: raycastFMtowers },
     cameraCenter: { 
       group: null,  // no specific group 
-      enabled: true,  // Always enabled
-      onIntersect: () => printCameraCenterCoordinates(camera)  // Call the function to print coords
+      enabled: true,  // always enabled
+      onIntersect: () => printCameraCenterCoordinates(camera)  // this function prints coords to a text div
 }
   
 
@@ -484,76 +485,67 @@ export function gfx() {
 
   // document.addEventListener('pointermove', onPointerMove);
 
-  function raycastCellTowers(){}
+  // function raycastCellTowers() {
+  //   const frustum = new THREE.Frustum();
+  //   const cameraViewProjectionMatrix = new THREE.Matrix4();
+  
+  //   // Combine the camera matrix and projection matrix into a single matrix
+  //   cameraViewProjectionMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+  //   frustum.setFromProjectionMatrix(cameraViewProjectionMatrix);
+  
+  //   const cellTowers = cellTransmitterPoints.children;
+  //   let nearestTower = { tower: null, distance: Infinity };
+  
+  //   // Iterate through each tower and check if it is within the frustum
+  //   cellTowers.forEach(tower => {
+  //     if (frustum.containsPoint(tower.position)) {
+  //       const distance = tower.position.distanceTo(camera.position);
+  //       if (distance < nearestTower.distance) {
+  //         nearestTower = { tower, distance };
+  //       }
+  //     }
+  //   });
+  
+  //   if (nearestTower.tower) {
+  //     console.log(`Nearest visible cell tower distance: ${nearestTower.distance}, Tower: ${JSON.stringify(nearestTower.tower.position)}`);
+  //   } else {
+  //     console.log('No visible cell towers found in current view');
+  //   }
+  // }
+      
+
+  function findNearestVisibleTower() {
+    const frustum = new THREE.Frustum();
+    const cameraViewProjectionMatrix = new THREE.Matrix4();
+  
+    // Combine the camera matrix with the camera projection matrix to create the view projection matrix
+    cameraViewProjectionMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    frustum.setFromProjectionMatrix(cameraViewProjectionMatrix);
+  
+    const cellTowers = cellTransmitterPoints.children;
+    let nearestTower = { tower: null, distance: Infinity };
+  
+    // Iterate over each tower, check if it is within the camera's frustum
+    cellTowers.forEach(tower => {
+      if (frustum.containsPoint(tower.position)) {
+        const distance = tower.position.distanceTo(camera.position);
+        if (distance < nearestTower.distance) {
+          nearestTower = { tower, distance };
+        }
+      }
+    });
+  
+    if (nearestTower.tower) {
+      console.log(`Nearest visible cell tower is at a distance of: ${nearestTower.distance} units, Tower position: ${JSON.stringify(nearestTower.tower.position)}`);
+    } else {
+      console.log('No visible cell towers found in the current camera view.');
+    }
+  }
+  
+
   function raycastFMtowers(){}
 
   let currentGridCode = null; // Keep track of the last gridCode encountered
-
-  function decimalToDMS(coord, isLongitude = false) {
-    const absolute = Math.abs(coord);
-    const degrees = Math.floor(absolute);
-    const minutesNotTruncated = (absolute - degrees) * 60;
-    const minutes = Math.floor(minutesNotTruncated);
-    const seconds = ((minutesNotTruncated - minutes) * 60).toFixed(2);
-
-    // Ensuring two digits
-    const degreesStr = degrees.toString().padStart(2, '0');
-    const minutesStr = minutes.toString().padStart(2, '0');
-    const secondsStr = parseFloat(seconds).toFixed(2).toString().padStart(5, '0'); // '5' because "00.00"
-
-    // Determining cardinal directions
-    let cardinal = '';
-    if (isLongitude) {
-        cardinal = coord >= 0 ? 'E' : 'W';  // East or West for longitude
-    } else {
-        cardinal = coord >= 0 ? 'N' : 'S';  // North or South for latitude
-    }
-
-    return `${degreesStr}° ${minutesStr}' ${secondsStr}" ${cardinal}`;
-}
-
-function printCameraCenterCoordinates(camera) {
-    const vector = new THREE.Vector3(0, 0, -1); // Vector pointing out of the camera
-    vector.unproject(camera); // Adjust the vector by the camera's projection
-    const direction = vector.sub(camera.position).normalize(); // Create the direction vector
-
-    const distance = -camera.position.z / direction.z; // Calculate the distance to the ground plane (assuming z = 0 is ground)
-    const coord = camera.position.clone().add(direction.multiplyScalar(distance)); // Calculate the intersection with ground plane
-
-    // Convert from State Plane coordinates back to Geographic coordinates
-    try {
-        const result = proj4('EPSG:2261').inverse([coord.x, coord.y]);
-        const latitudeDMS = decimalToDMS(result[1], false);  // Passing false for latitude
-        const longitudeDMS = decimalToDMS(result[0], true);  // Passing true for longitude
-        const displayText = `${latitudeDMS}<br>${longitudeDMS}`;  // Using DMS format with cardinal directions
-        document.getElementById('latLonDisplay').innerHTML = displayText;  // Use innerHTML to render the line break
-    } catch (error) {
-        console.error(`Error converting coordinates: ${error}`);
-        document.getElementById('latLonDisplay').textContent = "Error in displaying coordinates.";
-    }
-}
-
-
-//   function printCameraCenterCoordinates(camera) {
-//     const vector = new THREE.Vector3(0, 0, -1); // Vector pointing out of the camera
-//     vector.unproject(camera); // Adjust the vector by the camera's projection
-//     const direction = vector.sub(camera.position).normalize(); // Create the direction vector
-
-//     const distance = -camera.position.z / direction.z; // Calculate the distance to the ground plane (assuming z = 0 is ground)
-//     const coord = camera.position.clone().add(direction.multiplyScalar(distance)); // Calculate the intersection with ground plane
-
-//     // Convert from State Plane coordinates back to Geographic coordinates
-//     try {
-//         const result = proj4('EPSG:2261').inverse([coord.x, coord.y]);
-//         const latitude = result[1].toFixed(4);
-//         const longitude = result[0].toFixed(4);
-//         const displayText = `LAT: ${latitude}<br>LON: ${longitude}`;  // Adding a line break with <br>
-//         document.getElementById('latLonDisplay').innerHTML = displayText;  // Use innerHTML to render the line break
-//     } catch (error) {
-//         console.error(`Error converting coordinates: ${error}`);
-//         document.getElementById('latLonDisplay').textContent = "Error in displaying coordinates.";
-//     }
-// }
 
   function raycastCellServiceMesh(intersection, gridCode) {
     // Check if the gridCode has changed
@@ -584,39 +576,20 @@ function printCameraCenterCoordinates(camera) {
   function raycastAccessVertex(intersection) {
     const intersectPoint = intersection.point;
     const vertices = intersection.object.userData.vertices;
-    
+    const gridCode = intersection.object.userData.gridCode || 'unknown';  // Default to 'unknown' if not provided
+  
     if (vertices) {
-        const nearestVertex = vertices.reduce((nearest, vertex) => {
-            const distance = Math.hypot(vertex.x - intersectPoint.x, vertex.y - intersectPoint.y, vertex.z - intersectPoint.z);
-            return distance < nearest.distance ? { vertex, distance } : nearest;
-        }, { vertex: null, distance: Infinity });
-
-        const gridCode = intersection.object.userData.gridCode;
-        console.log(`Nearest vertex distance: ${nearestVertex.distance}, Vertex: ${JSON.stringify(nearestVertex.vertex)}, Grid Code: ${gridCode}`);
+      const nearestVertex = vertices.reduce((nearest, vertex) => {
+        const distance = Math.hypot(vertex.x - intersectPoint.x, vertex.y - intersectPoint.y, vertex.z - intersectPoint.z);
+        return distance < nearest.distance ? { vertex, distance } : nearest;
+      }, { vertex: null, distance: Infinity });
+  
+      console.log(`Nearest vertex distance: ${nearestVertex.distance}, Vertex: ${JSON.stringify(nearestVertex.vertex)}, Grid Code: ${gridCode}`);
     } else {
-        console.log('No vertices data found in userData');
+      console.log('No vertices data found in userData');
     }
-}
-
-      
-  function raycastCellServiceMesh(intersection, gridCode) {
-    // Based on the gridCode, trigger different events or actions
-    switch (gridCode) {
-        case '0':
-            // Trigger event or action for gridCode 0
-            console.log("Intersected gridCode 0", intersection);
-            break;
-        case '1':
-            // Trigger event or action for gridCode 1
-            console.log("Intersected gridCode 1", intersection);
-            break;
-        // Handle other cases as needed
-        default:
-            // Default action if gridCode doesn't match specific cases
-            console.log(`Intersected unspecified gridCode ${gridCode}`, intersection);
-    }
-}
-
+  }
+  
 // function createEtchLine() {
 //   // Material and geometry for the etch line
 //   const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
@@ -658,30 +631,116 @@ function printCameraCenterCoordinates(camera) {
 // overall raycaster handler for animation loop
 function handleRaycasters(camera, scene) {
   Object.entries(raycasterDict).forEach(([key, { group, enabled, onIntersect }]) => {
-      if (enabled) {
-          if (group) {
-              const raycaster = new THREE.Raycaster();
-              raycaster.setFromCamera({ x: 0, y: 0 }, camera); // Center of camera view
-              const intersections = raycaster.intersectObjects(group.children, true);
-              
-              if (intersections.length > 0) {
-                  const firstIntersection = intersections[0];
-                  const gridCode = firstIntersection.object.userData.gridCode;
-                  onIntersect(firstIntersection, gridCode);
+    if (enabled) {
+      if (group) {
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera({ x: 0, y: 0 }, camera); // Center of camera view
+        const intersections = raycaster.intersectObjects(group.children, true);
+        
+        if (intersections.length > 0) {
+          const firstIntersection = intersections[0];
+          onIntersect(firstIntersection);
 
-                  const intersectPoint = firstIntersection.point;
-                  raycasterReticule.position.set(intersectPoint.x, intersectPoint.y, intersectPoint.z);
-                  if (!raycasterReticule.parent) scene.add(raycasterReticule);
-              } else {
-                  console.log("NO INTERSECTIONS");
-              }
-          } else {
-              // Handle raycasters without a specific group (like camera center)
-              onIntersect();
-          }
+          const intersectPoint = firstIntersection.point;
+          raycasterReticule.position.set(intersectPoint.x, intersectPoint.y, intersectPoint.z);
+          if (!raycasterReticule.parent) scene.add(raycasterReticule);
+        } else {
+          if (raycasterReticule.parent) scene.remove(raycasterReticule);
+          console.log("NO INTERSECTIONS");
+        }
+      } else {
+        onIntersect();
       }
+    }
   });
 }
+
+///////////////////////////////////////////////////
+/// add scale bar + lat/long printout
+///////////////////////////////////////////////////
+
+function decimalToDMS(coord, isLongitude = false) {
+  const absolute = Math.abs(coord);
+  const degrees = Math.floor(absolute);
+  const minutesNotTruncated = (absolute - degrees) * 60;
+  const minutes = Math.floor(minutesNotTruncated);
+  const seconds = ((minutesNotTruncated - minutes) * 60).toFixed(2);
+
+  // Ensuring two digits
+  const degreesStr = degrees.toString().padStart(2, '0');
+  const minutesStr = minutes.toString().padStart(2, '0');
+  const secondsStr = parseFloat(seconds).toFixed(2).toString().padStart(5, '0'); // '5' because "00.00"
+
+  // Determining cardinal directions
+  let cardinal = '';
+  if (isLongitude) {
+      cardinal = coord >= 0 ? 'E' : 'W';  // East or West for longitude
+  } else {
+      cardinal = coord >= 0 ? 'N' : 'S';  // North or South for latitude
+  }
+
+  return `${degreesStr}° ${minutesStr}' ${secondsStr}" ${cardinal}`;
+}
+
+function printCameraCenterCoordinates(camera) {
+  const vector = new THREE.Vector3(0, 0, -1); // Vector pointing out of the camera
+  vector.unproject(camera); // Adjust the vector by the camera's projection
+  const direction = vector.sub(camera.position).normalize(); // Create the direction vector
+
+  const distance = -camera.position.z / direction.z; // Calculate the distance to the ground plane (assuming z = 0 is ground)
+  const coord = camera.position.clone().add(direction.multiplyScalar(distance)); // Calculate the intersection with ground plane
+
+  // Convert from State Plane coordinates back to Geographic coordinates
+  try {
+      const result = proj4('EPSG:2261').inverse([coord.x, coord.y]);
+      const latitudeDMS = decimalToDMS(result[1], false);  // Passing false for latitude
+      const longitudeDMS = decimalToDMS(result[0], true);  // Passing true for longitude
+      const displayText = `${latitudeDMS}<br>${longitudeDMS}`;  // Using DMS format with cardinal directions
+      document.getElementById('latLonDisplay').innerHTML = displayText;  // Use innerHTML to render the line break
+  } catch (error) {
+      console.error(`Error converting coordinates: ${error}`);
+      document.getElementById('latLonDisplay').textContent = "Error in displaying coordinates.";
+  }
+}
+
+function createScaleBar(scene) {
+  const scaleBarLength = 100; // Adjust this based on your scale
+  const divisionLength = scaleBarLength / 4;
+
+  const material = new THREE.LineBasicMaterial({ color: 0xff0000 });
+  const points = [];
+  for (let i = 0; i <= 4; i++) {
+      points.push(new THREE.Vector3(i * divisionLength - scaleBarLength / 2, 0, 0));
+      points.push(new THREE.Vector3(i * divisionLength - scaleBarLength / 2, 5, 0));
+      points.push(new THREE.Vector3(i * divisionLength - scaleBarLength / 2, 0, 0));
+  }
+
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  const line = new THREE.LineSegments(geometry, material);
+  line.position.set(0, -100, 0);
+
+  scene.add(line);
+  return line;
+}
+
+function updateScaleBar(scaleBar, camera) {
+  if (!scaleBar || !camera) {
+      console.error('Scale bar or camera is undefined!');
+      return;
+  }
+
+  // Adjust scale bar size based on camera zoom or scene scale
+  const scale = camera.zoom;
+  scaleBar.scale.set(1 / scale, 1 / scale, 1 / scale);
+
+  // Position scale bar relative to camera
+  scaleBar.position.copy(camera.position);
+  scaleBar.position.x -= 50;  // Adjust this value based on your scene setup
+  scaleBar.position.y = -50;  // Keeps the scale bar at the bottom of the camera's view
+}
+
+
+////////////////
 
   ////////////
   /////////// 
@@ -765,12 +824,13 @@ function handleRaycasters(camera, scene) {
 
       // console.log(`Camera X: ${camera.position.x}, Camera Y: ${camera.position.y}, Camera Z: ${camera.position.z}`);
 
+      // updateScaleBar(scaleBar, camera); 
+
     
       // The draw or time dependent code are here
       renderer.render(scene, camera);
 
-      stats.update();
-
+      stats.update();  
 
       delta = delta % interval;
     }
@@ -790,7 +850,6 @@ function handleRaycasters(camera, scene) {
     else if (audioContext.state !== 'suspended') {
       console.log('idk?')
     }
-console.log("idk????")
 console.log(audioContext.state)
   }
 
@@ -896,18 +955,19 @@ function toggleMapScene(switchState, source) {
     digitalGroup.visible = false;
 
     raycasterDict.cellServiceMesh.enabled = false;
-    raycasterDict.accessibilityHex.enabled = false;
+    // raycasterDict.cellTransmitterPoints.enabled = false;
+    raycasterDict.fmTransmitterPoints.enabled = false;
 
     switch (switchState) {
       case 1:
         analogGroup.visible = true;
         digitalGroup.visible = false;
 
-        // enable relevant raycaster(s)
-        // raycasterDict.cellServiceMesh.enabled = true;
-
         // show FM towers when analog is selected
         fmTransmitterPoints.visible = true;
+
+        // enable relevant raycaster(s)
+        raycasterDict.fmTransmitterPoints.enabled = true;
 
         // Redraw FM contours using the last used channel filter when switching back to analog
         if (lastChannelFilter !== null) {
@@ -923,8 +983,10 @@ function toggleMapScene(switchState, source) {
 
         digitalGroup.visible = true;
         analogGroup.visible = false;
-        // raycasterDict.accessibilityMesh.enabled = true;
 
+        raycasterDict.cellServiceMesh.enabled = true;
+        findNearestVisibleTower();
+    
         // Hide FM towers when digital is selected
         fmTransmitterPoints.visible = false;
 
@@ -947,7 +1009,6 @@ function toggleMapScene(switchState, source) {
     elevContourLines.visible = false;
     accessGroup.visible = false;
 
-    raycasterDict.cellServiceMesh.enabled = false;
     raycasterDict.accessibilityMesh.enabled = false;
 
     switch (switchState) {
@@ -961,6 +1022,7 @@ function toggleMapScene(switchState, source) {
         break;
     }
   }
+
 }
 
   
@@ -1515,7 +1577,7 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
           );
           var meshIndex = [];
           // set triangulation distance threshold to avoid connecting distant pts
-          const thresholdDistance = 0.11; 
+          const thresholdDistance = 0.075; 
 
           for (let i = 0; i < delaunay.triangles.length; i += 3) {
             const p1 = pointsForDelaunay[delaunay.triangles[i]];
@@ -1563,11 +1625,11 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
                 fillMaterial = new THREE.MeshBasicMaterial({
                   color: 0x000000, // Black color for the fill
                   transparent: true,    
-                  opacity: 1, 
+                  opacity: 0.85, 
                   alphaHash: true,
                   side: THREE.DoubleSide, //
                   wireframe: false,
-                  visible: false,
+                  visible: true,
                 });
 
             break;
@@ -1593,32 +1655,33 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
                   alphaHash: true,
                   side: THREE.DoubleSide, //
                   wireframe: false,
+                  visible: false,
                 });
 
             break;
 
               default:
 
-                wireframeMaterial = new THREE.MeshBasicMaterial({
-                  color: 0xffffff,
-                  transparent: true,
-                  alphaHash: true,
-                  opacity: 0.3,
-                  wireframe: true,
-                  side: THREE.DoubleSide,
-                  visible: false,
-                });
+                // wireframeMaterial = new THREE.MeshBasicMaterial({
+                //   color: 0xffffff,
+                //   transparent: true,
+                //   alphaHash: true,
+                //   opacity: 0.3,
+                //   wireframe: true,
+                //   side: THREE.DoubleSide,
+                //   visible: false,
+                // });
 
 
                 // Solid fill material (black fill)
-                fillMaterial = new THREE.MeshBasicMaterial({
-                  color: 0x000000, // Black color for the fill
-                  transparent: true,    
-                  opacity: 1, 
-                  alphaHash: true,
-                  side: THREE.DoubleSide, //
-                  wireframe: false,
-                });
+                // fillMaterial = new THREE.MeshBasicMaterial({
+                //   color: 0x000000, // Black color for the fill
+                //   transparent: true,    
+                //   opacity: 1, 
+                //   alphaHash: true,
+                //   side: THREE.DoubleSide, //
+                //   wireframe: false,
+                // });
 
 
             }
@@ -1688,6 +1751,7 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
     const interpolatedColor = interpolateColor(startColor, endColor, factor);
     return rgbToHex(...interpolatedColor);
   }
+  
 
   // calculate opacity ramp for accessibility mesh
   function accessibilityOpacityRamp(gridCode) {
@@ -1776,14 +1840,14 @@ function drawWireframeHexagonAtPoint(centerPoint, hexagonSize) {
             color: gridCodeColor,
             opacity: accessibilityOpacity / 2,
             transparent: true,
-            alphaHash: true,
+            alphaHash: false,
             side: THREE.DoubleSide,
             visible: true
           });
   
           const wireframeMaterial = new THREE.MeshBasicMaterial({
             color: gridCodeColor,
-            opacity: accessibilityOpacity,
+            opacity: accessibilityOpacity * 1.5,
             wireframe: true,
             transparent: true,
             alphaHash: true,
@@ -1982,9 +2046,9 @@ async function addFMTowerPts(geojson, channelFilter, group) {
   try {
     // Define the base size, height, and characteristics for the pyramids
     const baseSizeMatching = 0.008;
-    const pyramidHeightMatching = 0.03;
-    const baseSizeNonMatching = baseSizeMatching * 0.5;
-    const pyramidHeightNonMatching = pyramidHeightMatching * 0.5;
+    const pyramidHeightMatching = 0.035;
+    const baseSizeNonMatching = baseSizeMatching * 0.7;
+    const pyramidHeightNonMatching = pyramidHeightMatching * 0.7;
 
     // Define colors and opacities
     const matchingColor = new THREE.Color(colorScheme.matchingPyramidColor);
@@ -2076,7 +2140,7 @@ function addCellTowerPts(geojson) {
     try {
       // Define the base size and height for the pyramids
       const baseSize = 0.005;
-      const pyramidHeight = 0.02;
+      const pyramidHeight = 0.03;
 
       // Material for the wireframe pyramids
       let pyramidMaterialCellular = new THREE.MeshBasicMaterial({
@@ -2148,6 +2212,8 @@ function addCellTowerPts(geojson) {
             // cellTransmitterPoints.add(textSprite); // Add the label to the cellTransmitterPoints group
             // console.log(`creating label for ${label}`);
 
+            // const gridCode = firstIntersection.object.userData.gridCode;
+
             // Add the position to the points array for convex hull calculation
             points.push(new THREE.Vector3(x, y, z));
           } catch (error) {
@@ -2170,8 +2236,8 @@ function addCellTowerPts(geojson) {
           cellMstEdges,
           '#FFFFFF',
           colorScheme.mstCellColor,
-          0.0006,
-          0.002,
+          0.00075,
+          0.003,
           cellMSTLines,
         );
       }
@@ -2887,7 +2953,8 @@ function addCellTowerPts(geojson) {
 
     // console.log(`analog group: ${analogGroup}`)
 
-    toggleMapScene(1, 'switch1');
+    toggleMapScene(1, 'switch1'); // init fm on pageload
+    toggleMapScene(1, 'switch2'); // init elev contours
 
     controls.update();
 }

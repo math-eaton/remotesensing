@@ -1,5 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300;1,600&display=swap");
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300;1,600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DotGothic16&family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300;1,600&display=swap');
 
 :root {
   line-height: 1.5;
@@ -46,7 +45,7 @@ a:hover {
 }
 
 body {
-  font-family: "IBM Plex Mono", "IBM Plex Sans", "Franklin Gothic Medium", "Arial Narrow", Arial,
+  font-family: "DotGothic16", "IBM Plex Mono", "IBM Plex Sans", "Franklin Gothic Medium", "Arial Narrow", Arial,
     sans-serif;
   /* font-family: monospace; */
   display: block;
@@ -472,7 +471,7 @@ p, ul{
   text-align: right;
   /* background-color: rgba(0, 0, 0, 0.75); */
   color: white;
-  font-size: 16px;
+  font-size: 2vh;
   /* font-family: Arial, sans-serif; */
   border-radius: 5px;
   z-index: 1000; 
@@ -482,9 +481,11 @@ p, ul{
 /* Slider container */
 #fm-channel-controls {
   position: relative; 
-  margin: 2vh 3vw 0 3vw;
+  max-height: fit-content;
+  margin: 1vh 5vw 2vh 5vw;
+  padding: 1vh 0vw 2vh 0vw;
   z-index: 10000000000000;
-
+  font-size: 2.25vh;
 }
 
 /* slider itself */
