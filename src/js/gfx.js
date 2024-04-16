@@ -47,7 +47,7 @@ export function gfx() {
   elevContourLines.visible = true;
   accessibilityHex.visible = true;
   accessibilityMesh.visible = true;
-  // rayLine.visible = true;
+  // cellRayLine.visible = true;
 
   // group the geometry subgroups
   let analogGroup = new THREE.Group();
@@ -194,17 +194,17 @@ export function gfx() {
   let isCameraRotating = true; // Flag to track camera rotation
   const rotationSpeed = 0.00001; // Define the speed of rotation
 
-  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 }); // Bright red color
+  // stuff for raycaster visuals, need to compartmentalize
+  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
   let lineGeometry = new THREE.BufferGeometry();
-  let rayLine = new THREE.Line(lineGeometry, lineMaterial);
-
+  let cellRayLine = new THREE.Line(lineGeometry, lineMaterial);
 
   function initThreeJS() {
     scene = new THREE.Scene();
   //   scene.overrideMaterial = new THREE.MeshBasicMaterial({ color: "green",
   // wireframe: true, });
 
-
+    
     // camera = new THREE.PerspectiveCamera(
     //   75,
     //   window.innerWidth / window.innerHeight,
@@ -215,6 +215,9 @@ export function gfx() {
     let size = 1;
     let near = 0.25;
     let far = 2.5;
+
+
+
     camera = new THREE.OrthographicCamera(
       -size, size, size, -size, near, far
     );
@@ -261,8 +264,8 @@ export function gfx() {
 
 
     // Set the minimum and maximum polar angles (in radians) to prevent the camera from going over the vertical
-    // controls.minPolarAngle = (53.1301024/2) * (Math.PI / 180); // π/n radians (z degrees) - on the horizon
-    controls.minPolarAngle = 0; // π/n radians (z degrees) - on the horizon
+    controls.minPolarAngle = (53.1301024/2) * (Math.PI / 180); // isometric view - π/n radians (z degrees)
+    // controls.minPolarAngle = 0; // top-down
     controls.maxPolarAngle = 35.264 * (Math.PI / 180); // π/n radians (z degrees) - on the horizon
     // Set the maximum distance the camera can dolly out
     controls.maxDistance = 1.5; // max camera zoom out (perspective cam)
@@ -273,7 +276,7 @@ export function gfx() {
 
     // console.log(controls.angle)
 
-    scene.add(rayLine);  // Add the line to the scene initially
+    scene.add(cellRayLine);  // Add the line to the scene initially
 
 
     // const audioListener = new THREE.AudioListener();
@@ -477,7 +480,7 @@ export function gfx() {
     // 3: draw a line to the nearest cell tower at all times
     // method: nearest CELL TRANSMITTER vertex
     // cellTransmitterPoints: { group: cellTransmitterPoints, enabled: false, onIntersect: raycastCellTower },
-    cellTransmitterPoints: { group: accessibilityMesh, enabled: false, onIntersect: raycastTerrainVertex },
+    cellTransmitterPoints: { group: cellServiceMesh, enabled: false, onIntersect: raycastTerrainVertex },
     // 4: play a 'radio station' signal
     // method: distance from PROPAGATION POLYGON edge to centroid
     fmTransmitterPoints: { group: accessibilityMesh, enabled: false, onIntersect: raycastFMtowers },
@@ -504,26 +507,26 @@ export function gfx() {
     console.log(`Intersection at Terrain - Point: ${JSON.stringify(intersectPoint)}, Grid Code: ${gridCode}`);
     if (nearestTower) {
       console.log(`Nearest Cell Tower is ${nearestTower.distance.toFixed(2)} units away, Grid Code: ${nearestTower.gridCode}`);
-      drawRayLine(intersectPoint, nearestTower.position);
+      drawcellRayLine(intersectPoint, nearestTower.position);
     } else {
       console.log('No cell towers found');
-      if (rayLine.parent) {
-        scene.remove(rayLine);  // Remove the line if no nearest tower is found
+      if (cellRayLine.parent) {
+        scene.remove(cellRayLine);  // Remove the line if no nearest tower is found
       }
     }
   }
   
-  function drawRayLine(start, end) {
+  function drawcellRayLine(start, end) {
     // Remove old geometry
-    if (rayLine.geometry) rayLine.geometry.dispose();
+    if (cellRayLine.geometry) cellRayLine.geometry.dispose();
   
     // Create new geometry with the start and end points
     lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-    rayLine.geometry = lineGeometry;
+    cellRayLine.geometry = lineGeometry;
     
     // Ensure the line is added to the scene
-    if (!rayLine.parent) {
-      scene.add(rayLine);
+    if (!cellRayLine.parent) {
+      scene.add(cellRayLine);
     }
   }
     
@@ -566,23 +569,23 @@ export function gfx() {
     return R * c; // in meters
   }
     
-  function setupRayLine() {
+  function setupcellRayLine() {
       const rayMaterial = new THREE.LineBasicMaterial({
           color: 0xff0000, // Bright red for high visibility
       });
       const rayGeometry = new THREE.BufferGeometry();
       rayGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
-      rayLine = new THREE.Line(rayGeometry, rayMaterial);
-      scene.add(rayLine); // Add the line to the scene
+      cellRayLine = new THREE.Line(rayGeometry, rayMaterial);
+      scene.add(cellRayLine); // Add the line to the scene
   }
   
-  function updateRayLine(start, end) {
+  function updatecellRayLine(start, end) {
       const positions = new Float32Array([
           start.x, start.y, start.z, end.x, end.y, end.z
       ]);
-      rayLine.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      rayLine.geometry.attributes.position.needsUpdate = true;
-      rayLine.visible = true; // Make the line visible
+      cellRayLine.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      cellRayLine.geometry.attributes.position.needsUpdate = true;
+      cellRayLine.visible = true; // Make the line visible
   }
   
 
@@ -633,16 +636,39 @@ export function gfx() {
       console.log('No vertices data found in userData');
     }
   }
-  
+
+
+  function updateRaycasterOriginForTilt(camera, controls, terrainHeight = 0) {
+    const polarAngle = controls.getPolarAngle(); // Current vertical rotation in radians
+    const cameraHeight = camera.position.z - terrainHeight; // Height of the camera from the terrain
+
+    // Calculate the forward vector projection on the XY plane
+    const forward = new THREE.Vector3(0, 0, -1); // Downward vector in z-up world
+    camera.getWorldDirection(forward);
+    forward.z = 0; // Project onto XY plane
+    forward.normalize();
+
+    // Calculate offset based on polar angle and camera height
+    const offsetMagnitude = Math.tan(polarAngle) * cameraHeight;
+    const offset = forward.multiplyScalar(offsetMagnitude);
+
+    return new THREE.Vector3(camera.position.x + offset.x, camera.position.y + offset.y, terrainHeight);
+}
+ 
   
 // overall raycaster handler for animation loop
 function handleRaycasters(camera, scene) {
   Object.entries(raycasterDict).forEach(([key, { group, enabled, onIntersect }]) => {
       if (enabled && group) {
-          const raycaster = new THREE.Raycaster();
-          raycaster.setFromCamera({ x: 0, y: 0 }, camera);
-          const intersections = raycaster.intersectObjects(group.children, true);
-
+        const raycaster = new THREE.Raycaster();
+          
+        // Update raycaster origin based on camera tilt and position
+        const rayOrigin = updateRaycasterOriginForTilt(camera, controls);
+        
+        // Set raycaster to emit rays from the adjusted position directly downward
+        raycaster.set(rayOrigin, new THREE.Vector3(0, 0, -1));
+        
+        const intersections = raycaster.intersectObjects(group.children, true);
           if (intersections.length > 0) {
               const firstIntersection = intersections[0];
               onIntersect(firstIntersection);
@@ -754,6 +780,7 @@ function updateScaleBar(scaleBar, camera) {
   /////////// 
   ////////////////////////////////
 
+
   // Function to animate your scene
   function animate() {
     delta += clock.getDelta();
@@ -761,6 +788,10 @@ function updateScaleBar(scaleBar, camera) {
     if (delta  > interval) {
 
       controls.update();
+
+      // adjustCameraViewForTilt(camera, controls);
+
+      handleRaycasters(camera, scene);
 
       // Check if camera and controls are initialized
       if (camera && controls) {
@@ -810,35 +841,16 @@ function updateScaleBar(scaleBar, camera) {
           // Ensure the camera keeps looking at the target
           camera.lookAt(controls.target);
 
-          handleRaycasters(camera, scene);
-
-          // findNearestVisibleCellTower();
-
-          // console.log(`zoom is: ${distanceToTarget}`)
-      
+          renderer.render(scene, camera);
 
 
         }}
 
-      // updateDashSizeForZoom(); 
       if (analogGroup.visible !== false) {
         updatefmContourGroups();
 
       }
 
-
-      // console.log(`analog group state is ${analogGroup.visible}`)
-
-      // adjustMeshVisibilityBasedOnCameraDistance();
-
-
-      // console.log(`Camera X: ${camera.position.x}, Camera Y: ${camera.position.y}, Camera Z: ${camera.position.z}`);
-
-      // updateScaleBar(scaleBar, camera); 
-
-    
-      // The draw or time dependent code are here
-      renderer.render(scene, camera);
 
       stats.update();  
 
@@ -965,7 +977,7 @@ function toggleMapScene(switchState, source) {
     digitalGroup.visible = false;
 
     raycasterDict.cellServiceMesh.enabled = false;
-    // raycasterDict.cellTransmitterPoints.enabled = false;
+    raycasterDict.cellTransmitterPoints.enabled = false;
     raycasterDict.fmTransmitterPoints.enabled = false;
 
     switch (switchState) {
@@ -978,6 +990,9 @@ function toggleMapScene(switchState, source) {
 
         // enable relevant raycaster(s)
         raycasterDict.fmTransmitterPoints.enabled = true;
+        raycasterDict.cellTransmitterPoints.enabled = false;
+
+        scene.remove(cellRayLine);  // Remove the celltower cellRayLine
 
         // Redraw FM contours using the last used channel filter when switching back to analog
         if (lastChannelFilter !== null) {
