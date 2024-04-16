@@ -138,6 +138,17 @@ export function gfx() {
     return result;
   }
 
+  // reverse projection for geodesic distance calcs
+  proj4.defs('StatePlaneToLatLon', statePlaneProjString);
+  const reverseProj = proj4('EPSG:2261', 'WGS84');
+
+  // Function to convert from State Plane to Geographic Coordinates
+  function toGeographic(x, y) {
+    const [lon, lat] = reverseProj.inverse([x, y]);
+    return { lon, lat };
+  }
+
+
   // set clipping extent
   const latMin = -5, latMax = 5; // Example bounds
   const lonMin = -5, lonMax = 5; // Example bounds
@@ -250,7 +261,8 @@ export function gfx() {
 
 
     // Set the minimum and maximum polar angles (in radians) to prevent the camera from going over the vertical
-    controls.minPolarAngle = (53.1301024/2) * (Math.PI / 180); // π/n radians (z degrees) - on the horizon
+    // controls.minPolarAngle = (53.1301024/2) * (Math.PI / 180); // π/n radians (z degrees) - on the horizon
+    controls.minPolarAngle = 0; // π/n radians (z degrees) - on the horizon
     controls.maxPolarAngle = 35.264 * (Math.PI / 180); // π/n radians (z degrees) - on the horizon
     // Set the maximum distance the camera can dolly out
     controls.maxDistance = 1.5; // max camera zoom out (perspective cam)
@@ -515,19 +527,22 @@ export function gfx() {
     }
   }
     
-  function findNearestCellTower(point) {
+  function findNearestCellTower(intersectPoint) {
     let nearest = null;
     let minDistance = Infinity;
     
+    // Convert intersection point from Three.js coordinates to geographic coordinates
+    const intersectGeo = toGeographic(intersectPoint.x, intersectPoint.y);
+  
     cellTransmitterPoints.children.forEach(pyramid => {
-      const towerPosition = pyramid.userData.position;
-      const distance = point.distanceTo(towerPosition);
+      const towerGeo = toGeographic(pyramid.position.x, pyramid.position.y);
+      const distance = calculateGeodesicDistance(intersectGeo, towerGeo);
       if (distance < minDistance) {
         minDistance = distance;
         nearest = {
           distance: distance,
           gridCode: pyramid.userData.gridCode,
-          position: towerPosition
+          position: pyramid.position
         };
       }
     });
@@ -535,6 +550,22 @@ export function gfx() {
     return nearest;
   }
   
+  // Simple geodesic distance calculation (Haversine formula)
+  function calculateGeodesicDistance(p1, p2) {
+    const R = 6371e3; // metres
+    const φ1 = p1.lat * Math.PI/180;
+    const φ2 = p2.lat * Math.PI/180;
+    const Δφ = (p2.lat-p1.lat) * Math.PI/180;
+    const Δλ = (p2.lon-p1.lon) * Math.PI/180;
+  
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  
+    return R * c; // in meters
+  }
+    
   function setupRayLine() {
       const rayMaterial = new THREE.LineBasicMaterial({
           color: 0xff0000, // Bright red for high visibility
