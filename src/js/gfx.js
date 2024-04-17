@@ -113,7 +113,7 @@ export function gfx() {
     accessibilityHexColor: '#310057',
     // cellServiceNo: '#00E661',
     cellServiceNo: '#ff00ff',
-    cellServiceYes: '#161616'
+    cellServiceYes: '#3b3b3b'
   };
 
 
@@ -483,7 +483,7 @@ export function gfx() {
     cellTransmitterPoints: { group: cellServiceMesh, enabled: false, onIntersect: raycastTerrainVertex },
     // 4: play a 'radio station' signal
     // method: distance from PROPAGATION POLYGON edge to centroid
-    fmTransmitterPoints: { group: accessibilityMesh, enabled: false, onIntersect: raycastFMtowers },
+    fmTransmitterPoints: { group: accessibilityMesh, enabled: false, onIntersect: findNearestFMtower },
     cameraCenter: { 
       group: null,  // no specific group 
       enabled: true,  // always enabled
@@ -497,14 +497,28 @@ export function gfx() {
   // document.addEventListener('pointermove', onPointerMove);
 
   function raycastTerrainVertex(intersection) {
+
     const intersectPoint = intersection.point;
     const vertices = intersection.object.userData.vertices;
     const gridCode = intersection.object.userData.gridCode || 'unknown';  // Default to 'unknown' if not provided
-  
+
+    console.log(`Intersected object type: ${intersection.object.type}`);
+    console.log(`Intersected object userData: `, intersection.object.userData);
+
+
+    // Check if the gridCode is 0, if so, skip this mesh or remove the raycaster line if it's already displayed
+  //   if (intersection.object.userData.gridCode === '0') {
+  //     console.log('Grid Code is 0, skipping this mesh.');
+  //     if (cellRayLine.parent) {
+  //         scene.remove(cellRayLine);
+  //     }
+  //     return;
+  // }
+    
     // Find the nearest cell tower
     const nearestTower = findNearestCellTower(intersectPoint);
   
-    console.log(`Intersection at Terrain - Point: ${JSON.stringify(intersectPoint)}, Grid Code: ${gridCode}`);
+    console.log(`Intersection at Terrain - Point: ${JSON.stringify(intersectPoint)}, Grid Code: `, gridCode);
     if (nearestTower) {
       console.log(`Nearest Cell Tower is ${nearestTower.distance.toFixed(2)} units away, Grid Code: ${nearestTower.gridCode}`);
       drawcellRayLine(intersectPoint, nearestTower.position);
@@ -552,6 +566,9 @@ export function gfx() {
   
     return nearest;
   }
+
+
+  function findNearestFMtower(){}
   
   // Simple geodesic distance calculation (Haversine formula)
   function calculateGeodesicDistance(p1, p2) {
@@ -568,29 +585,7 @@ export function gfx() {
   
     return R * c; // in meters
   }
-    
-  function setupcellRayLine() {
-      const rayMaterial = new THREE.LineBasicMaterial({
-          color: 0xff0000, // Bright red for high visibility
-      });
-      const rayGeometry = new THREE.BufferGeometry();
-      rayGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
-      cellRayLine = new THREE.Line(rayGeometry, rayMaterial);
-      scene.add(cellRayLine); // Add the line to the scene
-  }
-  
-  function updatecellRayLine(start, end) {
-      const positions = new Float32Array([
-          start.x, start.y, start.z, end.x, end.y, end.z
-      ]);
-      cellRayLine.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      cellRayLine.geometry.attributes.position.needsUpdate = true;
-      cellRayLine.visible = true; // Make the line visible
-  }
-  
-
-    
-  function raycastFMtowers(){}
+      
 
   let currentGridCode = null; // Keep track of the last gridCode encountered
 
@@ -667,6 +662,10 @@ function handleRaycasters(camera, scene) {
         
         // Set raycaster to emit rays from the adjusted position directly downward
         raycaster.set(rayOrigin, new THREE.Vector3(0, 0, -1));
+
+        // Adjust the threshold for points; increase this value to make it more generous
+        raycaster.params.Points.threshold = 0.275;
+
         
         const intersections = raycaster.intersectObjects(group.children, true);
           if (intersections.length > 0) {
@@ -875,8 +874,10 @@ function updateScaleBar(scaleBar, camera) {
 console.log(audioContext.state)
   }
 
-  
 
+var lastSwitchState1 = null; // Initialize last state for switch1
+var lastSwitchState2 = null; // Initialize last state for switch2
+  
 function initWebSocketConnection() {
   var ws = new WebSocket('ws://localhost:8080');
 
@@ -928,12 +929,16 @@ function initWebSocketConnection() {
       globalDeltaRightPressed = serialData.deltaRightPressed;
     }
 
-    // Check for switchState1 in the data and toggle group visibility accordingly
-    if (serialData.switchState1 !== undefined) {
+    // Check for switchState1 in the data and toggle group visibility accordingly 
+    // if the state changes
+    if (serialData.switchState1 !== undefined && serialData.switchState1 !== lastSwitchState1) {
+      lastSwitchState1 = serialData.switchState1;
       toggleMapScene(serialData.switchState1, 'switch1');
     }
   
-    if (serialData.switchState2 !== undefined) {
+    // Check for switchState2 and update if changed
+    if (serialData.switchState2 !== undefined && serialData.switchState2 !== lastSwitchState2) {
+      lastSwitchState2 = serialData.switchState2;
       toggleMapScene(serialData.switchState2, 'switch2');
     }
   }
@@ -979,6 +984,13 @@ function toggleMapScene(switchState, source) {
     raycasterDict.cellServiceMesh.enabled = false;
     raycasterDict.cellTransmitterPoints.enabled = false;
     raycasterDict.fmTransmitterPoints.enabled = false;
+
+    // Set all FM propagation groups to decay immediately or hide them
+    Object.keys(fmContourGroups).forEach(groupId => {
+      fmContourGroups[groupId].isDecaying = true;
+      fmContourGroups[groupId].decayRate = 1.0; // Set decay rate for immediate effect
+      updatefmContourGroups(); // Call update function to process changes
+    });    
 
     switch (switchState) {
       case 1:
@@ -1525,6 +1537,24 @@ function toggleMapScene(switchState, source) {
   //   });
   // }
 
+// debug
+
+function logMeshData(group) {
+  group.children.forEach((child, index) => {
+      console.log(`Child ${index}: Type = ${child.type}`);
+      if (child.userData && Object.keys(child.userData).length > 0) {
+          console.log(`  UserData: `, child.userData);
+      } else {
+          console.log(`  No userData found`);
+      }
+      if (child.children && child.children.length > 0) {
+          console.log(`  This child has ${child.children.length} sub-children, checking those now:`);
+          logMeshData(child);  // Recursively log data for nested children
+      }
+  });
+}
+
+
   function addCellServiceMesh(geojson, stride = 1) {
     return new Promise((resolve, reject) => {
       try {
@@ -1545,27 +1575,6 @@ function toggleMapScene(switchState, source) {
           }
           groups[gridCode].push(new THREE.Vector3(x, y, z));
         }
-
-        // create points group for raycasting / sound triggers only
-        Object.keys(groups).forEach(gridCode => {
-          const pointsForDelaunay = groups[gridCode];
-          const pointsMaterial = new THREE.PointsMaterial({
-            // size: 5,
-            // color: accessibilityColorRamp(parseInt(gridCode)),
-            // opacity: accessibilityOpacityRamp(parseInt(gridCode)),
-            transparent: false,
-            visible: false,
-          });
-          const pointsGeometry = new THREE.BufferGeometry().setFromPoints(pointsForDelaunay);
-          const points = new THREE.Points(pointsGeometry, pointsMaterial);
-
-          points.userData = { gridCode, vertices: pointsForDelaunay };
-
-          var group = new THREE.Group();
-          group.add(points);  // Add points directly to the group
-
-          cellServiceMesh.add(group);
-        });
 
   
         // Process each grid_code group separately
@@ -1644,7 +1653,7 @@ function toggleMapScene(switchState, source) {
                   opacity: 0.4,
                   wireframe: true,
                   side: THREE.DoubleSide,
-                  visible: false,
+                  visible: true,
                 });
 
                 // Solid fill material (black fill)
@@ -1689,11 +1698,11 @@ function toggleMapScene(switchState, source) {
 
           // Create mesh with the fill material
           var fillMesh = new THREE.Mesh(geom, fillMaterial);
-          fillMesh.name = 'fillMesh-' + gridCode;
+          // fillMesh.name = 'fillMesh-' + gridCode;
 
           // Create mesh with the wireframe material
           var wireframeMesh = new THREE.Mesh(geom, wireframeMaterial);
-          wireframeMesh.name = 'wireframeMesh-' + gridCode;
+          // wireframeMesh.name = 'wireframeMesh-' + gridCode;
 
           // add metadata to the meshes for raycaster triggers
           fillMesh.userData.gridCode = gridCode;
@@ -1702,15 +1711,40 @@ function toggleMapScene(switchState, source) {
           // Group to hold both meshes
           var group = new THREE.Group();
           group.add(wireframeMesh);
-          // group.add(fillMesh);
+          group.add(fillMesh);
+
 
           // Add the group to the cellServiceMesh group
           cellServiceMesh.add(group);
         });
 
+        // create points group for raycasting / sound triggers only
+        Object.keys(groups).forEach(gridCode => {
+          const pointsForDelaunay = groups[gridCode];
+          const pointsMaterial = new THREE.PointsMaterial({
+            // size: 5,
+            // color: accessibilityColorRamp(parseInt(gridCode)),
+            // opacity: accessibilityOpacityRamp(parseInt(gridCode)),
+            transparent: false,
+            visible: false,
+          });
+          const pointsGeometry = new THREE.BufferGeometry().setFromPoints(pointsForDelaunay);
+          const points = new THREE.Points(pointsGeometry, pointsMaterial);
+
+          points.userData = { gridCode, vertices: pointsForDelaunay };
+
+          var group = new THREE.Group();
+          group.add(points);  // Add points directly to the group
+
+          cellServiceMesh.add(group);
+        });
+
+
         // Add the cellServiceMesh group to the scene
         scene.add(cellServiceMesh);
-        console.log(`access mesh length: ${geojson.features.length}`)
+
+        logMeshData(cellServiceMesh);
+
 
 
         resolve(cellServiceMesh); // Optionally return the group for further manipulation
@@ -1719,6 +1753,8 @@ function toggleMapScene(switchState, source) {
       }
     });
   }
+
+
 
   // function to create color ramps programatically
   function interpolateColor(color1, color2, factor) {
@@ -1838,9 +1874,9 @@ function toggleMapScene(switchState, source) {
   
           let fillMaterial = new THREE.MeshBasicMaterial({
             color: gridCodeColor,
-            opacity: accessibilityOpacity / 2,
+            opacity: accessibilityOpacity / 1.5,
             transparent: true,
-            alphaHash: false,
+            alphaHash: true,
             side: THREE.DoubleSide,
             visible: true
           });
@@ -2832,7 +2868,7 @@ function addCellTowerPts(geojson) {
       case 'src/assets/data/fm_contours_shaved.geojson':
         fmContoursGeojsonData = data;
         // run on pageload with default channel 201 as filter
-        addFMpropagation3D(data, 201, propagationPolygons)
+        addFMpropagation3D(data, channelFilter, propagationPolygons)
         analogGroup.add(propagationPolygons)
         break;
   
@@ -2881,7 +2917,7 @@ function addCellTowerPts(geojson) {
       // updated points using fm contour origins
       case 'src/assets/data/FM_transmitter_sites.geojson':
         fmTransmitterGeojsonData = data;
-        addFMTowerPts(data, 201, fmTransmitterPoints)
+        addFMTowerPts(data, channelFilter, fmTransmitterPoints)
         analogGroup.add(fmTransmitterPoints);
         break;
 
