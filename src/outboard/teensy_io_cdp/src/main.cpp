@@ -51,10 +51,13 @@ bool buttonPressedRight = false;
 
 // Sampling and averaging for potentiometer debounce
 const int numSamples = 3;
-int potSamples[numSamples]; // Array to store potentiometer samples
+int ledPotSamples[numSamples]; // Array to store potentiometer samples
+int zoomPotSamples[numSamples]; // Array to store potentiometer samples
 int sampleIndex = 0; // Current index in the samples array
-long totalPotValue = 0; // Total of the samples
-int averagePotValue = 0; // Average of the samples
+long totalLEDPotValue = 0; // Total of the samples
+int averageLEDPotValue = 0; // Average of the samples
+long totalZoomPotValue = 0; // Total of the samples
+int averageZoomPotValue = 0; // Average of the samples
 
 
 // // TM1637 Display connections
@@ -88,9 +91,9 @@ void setup() {
   // display.clear(); // Clear any existing data on the display
 
 
-  // Initialize potSamples array
+  // Initialize ledPotSamples array
   for(int i = 0; i < numSamples; i++) {
-    potSamples[i] = 0;
+    ledPotSamples[i] = 0;
   }
 }
 
@@ -203,19 +206,26 @@ void loop() {
 
   // POTDEBOUNCE
   // Subtract the last reading
-  totalPotValue -= potSamples[sampleIndex];
+  totalLEDPotValue -= ledPotSamples[sampleIndex];
   // Read from the sensor and store it into the array
-  potSamples[sampleIndex] = LEDpotValue;
+  ledPotSamples[sampleIndex] = LEDpotValue;
   // Add the reading to the total
-  totalPotValue += potSamples[sampleIndex];
+  totalLEDPotValue += ledPotSamples[sampleIndex];
   // Advance to the next position in the array
   sampleIndex = (sampleIndex + 1) % numSamples;
   // Calculate the average
-  averagePotValue = totalPotValue / numSamples;
+  averageLEDPotValue = totalLEDPotValue / numSamples;
 
-  // Now use averagePotValue instead of LEDpotValue for mapping and further logic
-  int mappedLEDpotValue = map(averagePotValue, 0, 1023, 201, 300); 
-  int mappedZoomPotValue = map(zoomPotValue, 0, 1023, 0, 1023); 
+  // same for zoom pot
+  totalZoomPotValue -= zoomPotSamples[sampleIndex];
+  zoomPotSamples[sampleIndex] = analogRead(zoomPotPin);
+  totalZoomPotValue += zoomPotSamples[sampleIndex];
+  sampleIndex = (sampleIndex + 1) % numSamples;
+  averageZoomPotValue = totalZoomPotValue / numSamples;
+
+  // Now use averageLEDPotValue instead of LEDpotValue for mapping and further logic
+  int mappedLEDpotValue = map(averageLEDPotValue, 0, 1023, 201, 300); 
+  int mappedZoomPotValue = map(averageZoomPotValue, 0, 1023, 0, 1023); 
 
   // calculate pot LED brightness based on slider value
   float phase = (float(LEDpotValue) * 2 * PI * ledCycles) / 1023.0; // Calculate phase for sine wave
