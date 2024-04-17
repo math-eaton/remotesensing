@@ -205,10 +205,12 @@ export function gfx() {
   const rotationSpeed = 0.00001; // Define the speed of rotation
 
   // stuff for raycaster visuals, need to compartmentalize
-  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
-  let lineGeometry = new THREE.BufferGeometry();
-  let cellRayLine = new THREE.Line(lineGeometry, lineMaterial);
-  let fmRayLine = new THREE.Line(lineGeometry, lineMaterial);
+  const cellRayMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
+  const fmRayMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff });
+  let cellRayGeometry = new THREE.BufferGeometry();
+  let fmRayGeometry = new THREE.BufferGeometry();
+  let cellRayLine = new THREE.Line(cellRayGeometry, cellRayMaterial);
+  let fmRayLine = new THREE.Line(fmRayGeometry, fmRayMaterial);
 
 
   function initThreeJS() {
@@ -547,8 +549,8 @@ export function gfx() {
     if (cellRayLine.geometry) cellRayLine.geometry.dispose();
   
     // Create new geometry with the start and end points
-    lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-    cellRayLine.geometry = lineGeometry;
+    cellRayGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+    cellRayLine.geometry = cellRayGeometry;
     
     // Ensure the line is added to the scene
     if (!cellRayLine.parent) {
@@ -584,8 +586,8 @@ export function gfx() {
 function drawFMLine(start, end) {
     if (fmRayLine.geometry) fmRayLine.geometry.dispose();  // Clean up old geometry
 
-    const lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-    fmRayLine.geometry = lineGeometry;
+    const fmRayGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+    fmRayLine.geometry = fmRayGeometry;
 
     if (!fmRayLine.parent) {
       scene.add(fmRayLine);  // Add to scene if not already there
@@ -594,55 +596,43 @@ function drawFMLine(start, end) {
 
 function raycastFMpolygon(intersection) {
   const intersectPoint = intersection.point;
-  const channelFilter = intersection.object.userData.channelFilter; 
+  const uniqueId = intersection.object.userData.uniqueId;
 
-  // Continue only if the channel matches the filter
-  if (channelFilter === lastChannelFilter) {
-    console.log(`Intersected FM polygon matching channel: ${channelFilter}`);
-    const nearestTower = findNearestFMTower(intersectPoint, channelFilter);
-    if (nearestTower) {
-      drawFMLine(intersectPoint, nearestTower.position);
-      console.log(`Nearest FM Tower is ${nearestTower.distance.toFixed(2)} meters away, Channel: ${nearestTower.channel}`);
-    } else {
-      console.log('No matching FM towers found');
-      if (fmRayLine.parent) {
-        scene.remove(fmRayLine);  // Remove the line if no nearest tower is found
-      }
-    }
+  console.log(`Intersected FM polygon ID: ${uniqueId}`);
+  const matchingTower = findMatchingFMTower(uniqueId);
+  if (matchingTower) {
+    drawFMLine(intersectPoint, matchingTower.position);
+    console.log(`Line drawn to FM Tower with ID: ${matchingTower.uniqueId}`);
   } else {
-    console.log('Filtered out by channel mismatch');
+    if (fmRayLine.parent) {
+      scene.remove(fmRayLine); // Remove the line if no matching tower is found
+    }
   }
 }
 
-function findNearestFMTower(intersectPoint, channelFilter) {
-  let nearest = null;
-  let minDistance = Infinity;
+function findMatchingFMTower(intersectionUniqueId) {
+  let matchingTower = null;
 
-  // Handle both matching and non-matching instanced meshes
+  // Check both matching and non-matching instanced meshes
   [window.instancedPyramidMatching, window.instancedPyramidNonMatching].forEach(instancedMesh => {
     const count = instancedMesh.count;
     for (let i = 0; i < count; i++) {
-      const channel = instancedMesh.userData[i]?.channel;
-      if (channel === channelFilter) {
+      const uniqueId = instancedMesh.userData[i]?.uniqueId;
+      if (uniqueId === intersectionUniqueId) {
         const matrix = new THREE.Matrix4();
         instancedMesh.getMatrixAt(i, matrix);
         const position = new THREE.Vector3().setFromMatrixPosition(matrix);
-        const distance = calculateGeodesicDistance(intersectPoint, position);
-        if (distance < minDistance) {
-          minDistance = distance;
-          nearest = {
-            distance: distance,
-            channel: channel,
-            position: position.clone()  // Clone to avoid direct references
-          };
-        }
+        matchingTower = {
+          uniqueId: uniqueId,
+          position: position.clone() // Clone to avoid direct references
+        };
+        break;
       }
     }
   });
 
-  return nearest;
+  return matchingTower;
 }
-
   
   // Simple geodesic distance calculation (Haversine formula)
   function calculateGeodesicDistance(p1, p2) {
@@ -741,10 +731,10 @@ function handleRaycasters(camera, scene) {
         raycaster.params.Points.threshold = 0.275;
 
         // to only raycast against visible objects ...
-        // const visibleChildren = group.children.filter(child => child.visible);
-        // const intersections = raycaster.intersectObjects(visibleChildren, true);
+        const visibleChildren = group.children.filter(child => child.visible);
+        const intersections = raycaster.intersectObjects(visibleChildren, true);
 
-        const intersections = raycaster.intersectObjects(group.children, true);
+        // const intersections = raycaster.intersectObjects(group.children, true);
 
             if (intersections.length > 0) {
               const firstIntersection = intersections[0];
@@ -761,6 +751,9 @@ function handleRaycasters(camera, scene) {
                   scene.remove(raycasterReticule);
               }
               console.log("NO INTERSECTIONS");
+              scene.remove(fmRayLine); // Remove the line if no matching tower is found
+              scene.remove(cellRayLine); // Remove the line if no matching tower is found
+
           }
       }
   });
@@ -2043,7 +2036,7 @@ function addFMpropagation3D(geojson, channelFilter, fmPropagationContours, strid
       const opacityReductionThreshold = 1; // Start reducing opacity from this index
       const minIndexForOpacity = Math.min(...indices);
       const maxOpacity = .9;
-      const minOpacity = 0.1;
+      const minOpacity = 0.3;
 
       // Separate indices into negative and non-negative
         const negativeIndices = geojson.features.map(feature => {
@@ -2060,6 +2053,7 @@ function addFMpropagation3D(geojson, channelFilter, fmPropagationContours, strid
 
         geojson.features.forEach((feature, idx) => {
             if (idx % stride !== 0) return;
+            const uniqueId = feature.properties.key.split('_')[0]; // Assuming this is how you extract the ID
             const channel = parseInt(feature.properties.channel, 10);
             if (channel !== channelFilter) return;
 
@@ -2126,6 +2120,7 @@ function addFMpropagation3D(geojson, channelFilter, fmPropagationContours, strid
           const mesh = new THREE.Mesh(meshGeometry, meshMaterial);
           mesh.userData = {
             channelFilter: feature.properties.channel, 
+            uniqueId: uniqueId,
             // vertices: vertices,
           };
                   
@@ -2203,6 +2198,7 @@ async function addFMTowerPts(geojson, channelFilter, group) {
       const elevation = feature.properties.elevation;
       const [x, y] = toStatePlane(lon, lat);
       const z = elevation * zScale;
+      const uniqueId = feature.properties.lms_application_id;
       
       if (x === null || y === null || isNaN(z)) return;
       
@@ -2215,7 +2211,10 @@ async function addFMTowerPts(geojson, channelFilter, group) {
       dummy.updateMatrix();
       if (isMatching) {
         window.instancedPyramidMatching.setMatrixAt(index, dummy.matrix);
-        window.instancedPyramidMatching.userData[index] = { channelFilter };  // Assign channel data to userData
+        window.instancedPyramidMatching.userData[index] = {
+          channel: parseInt(feature.properties.channel, 10),
+          uniqueId: uniqueId
+        };
         // Scale non-matching instances to normal size; they remain visible regardless
         window.instancedPyramidNonMatching.setMatrixAt(index, dummy.matrix);
       } else {
