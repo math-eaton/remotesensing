@@ -510,14 +510,14 @@ export function gfx() {
 
   // document.addEventListener('pointermove', onPointerMove);
 
-  function raycastCellServiceVertex(intersection, maxTowers = 10) {
+  function raycastCellServiceVertex(intersection, maxCellTowerRays) {
     const intersectPoint = intersection.point;
 
     console.log(`Intersected object type: ${intersection.object.type}`);
     console.log(`Intersected object userData: `, intersection.object.userData);
 
     // Find the nearest cell towers
-    const nearestTowers = findNearestCellTowers(intersectPoint, maxTowers);
+    const nearestTowers = findNearestCellTowers(intersectPoint, maxCellTowerRays);
 
     if (nearestTowers.length > 0) {
         nearestTowers.forEach(tower => {
@@ -553,7 +553,7 @@ function drawcellRayLine(start, end) {
     }
 }
     
-  function findNearestCellTowers(intersectPoint, maxTowers = 200) {
+  function findNearestCellTowers(intersectPoint, maxCellTowerRays = 10) {
     let towers = [];
     
     // Convert intersection point from Three.js coordinates to geographic coordinates
@@ -569,63 +569,76 @@ function drawcellRayLine(start, end) {
         });
     });
 
-    // Sort towers by distance and return up to `maxTowers` towers
-    return towers.sort((a, b) => a.distance - b.distance).slice(0, maxTowers);
+    // Sort towers by distance and return up to `maxCellTowerRays` towers
+    return towers.sort((a, b) => a.distance - b.distance).slice(0, maxCellTowerRays);
 }
 
 
-function drawFMLine(start, end) {
-    if (fmRayLine.geometry) fmRayLine.geometry.dispose();  // Clean up old geometry
 
-    const fmRayGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-    fmRayLine.geometry = fmRayGeometry;
+function raycastFMpolygon(intersections) {
+  intersections.forEach(intersection => {
+      const intersectPoint = intersection.point;
+      const uniqueId = intersection.object.userData.uniqueId;
 
-    if (!fmRayLine.parent) {
-      scene.add(fmRayLine);  // Add to scene if not already there
-    }
+      console.log(`Intersected FM polygon ID: ${uniqueId}`);
+      const matchingTowers = findAllMatchingFMTowers(uniqueId);
+      matchingTowers.forEach(tower => {
+          if (tower) {
+              drawFMLine(intersectPoint, tower.position);
+              console.log(`Line drawn to FM Tower with ID: ${tower.uniqueId}`);
+          }
+      });
+  });
 }
 
-function raycastFMpolygon(intersection) {
-  const intersectPoint = intersection.point;
-  const uniqueId = intersection.object.userData.uniqueId;
+function findAllMatchingFMTowers(intersectionUniqueId) {
+  let matchingTowers = [];
 
-  console.log(`Intersected FM polygon ID: ${uniqueId}`);
-  const matchingTower = findMatchingFMTower(uniqueId);
-  if (matchingTower) {
-    drawFMLine(intersectPoint, matchingTower.position);
-    console.log(`Line drawn to FM Tower with ID: ${matchingTower.uniqueId}`);
-  } else {
-    if (fmRayLine.parent) {
-      scene.remove(fmRayLine); // Remove the line if no matching tower is found
-    }
-  }
-}
-
-function findMatchingFMTower(intersectionUniqueId) {
-  let matchingTower = null;
-
-  // Check both matching and non-matching instanced meshes
   [window.instancedPyramidMatching, window.instancedPyramidNonMatching].forEach(instancedMesh => {
     const count = instancedMesh.count;
     for (let i = 0; i < count; i++) {
-      const uniqueId = instancedMesh.userData[i]?.uniqueId;
-      if (uniqueId === intersectionUniqueId) {
+      if (instancedMesh.userData[i]?.uniqueId === intersectionUniqueId) {
         const matrix = new THREE.Matrix4();
         instancedMesh.getMatrixAt(i, matrix);
         const position = new THREE.Vector3().setFromMatrixPosition(matrix);
-        matchingTower = {
-          uniqueId: uniqueId,
-          position: position.clone() // Clone to avoid direct references
-        };
-        break;
+
+        // Check if position components are valid numbers
+        if (!isNaN(position.x) && !isNaN(position.y) && !isNaN(position.z)) {
+          matchingTowers.push({
+            uniqueId: intersectionUniqueId,
+            position: position.clone()
+          });
+        } else {
+          console.error("Invalid position data", position);
+        }
       }
     }
   });
 
-  return matchingTower;
+  return matchingTowers;
 }
-  
-  // Simple geodesic distance calculation (Haversine formula)
+
+let fmRayLines = [];
+
+function drawFMLine(start, end) {
+  const fmRayGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+  const fmRayMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 }); // Ensure this is defined
+  const line = new THREE.Line(fmRayGeometry, fmRayMaterial);
+
+  fmRayLines.push(line);  // Track lines
+  scene.add(line);
+
+  // Clean up lines to keep scene manageable
+  while (fmRayLines.length > 10) {  // Adjust based on the application needs
+    const oldLine = fmRayLines.shift();
+    if (oldLine) {
+      scene.remove(oldLine);
+      if (oldLine.geometry) oldLine.geometry.dispose();
+    }
+  }
+}
+
+// Simple geodesic distance calculation (Haversine formula)
   function calculateGeodesicDistance(p1, p2) {
     const R = 6371e3; // metres
     const φ1 = p1.lat * Math.PI/180;
@@ -710,41 +723,34 @@ function findMatchingFMTower(intersectionUniqueId) {
 function handleRaycasters(camera, scene) {
   Object.entries(raycasterDict).forEach(([key, { group, enabled, onIntersect }]) => {
       if (enabled && group) {
-        const raycaster = new THREE.Raycaster();
-          
-        // Update raycaster origin based on camera tilt and position
-        const rayOrigin = updateRaycasterOriginForTilt(camera, controls);
-        
-        // Set raycaster to emit rays from the adjusted position directly downward
-        raycaster.set(rayOrigin, new THREE.Vector3(0, 0, -1));
+          const raycaster = new THREE.Raycaster();
+          const rayOrigin = updateRaycasterOriginForTilt(camera, controls);
+          raycaster.set(rayOrigin, new THREE.Vector3(0, 0, -1));
+          raycaster.params.Points.threshold = 0.275;
 
-        // Adjust the threshold for points; increase this value to make it more generous
-        raycaster.params.Points.threshold = 0.275;
+          const visibleChildren = group.children.filter(child => child.visible);
+          const intersections = raycaster.intersectObjects(visibleChildren, true);
 
-        // to only raycast against visible objects ...
-        const visibleChildren = group.children.filter(child => child.visible);
-        const intersections = raycaster.intersectObjects(visibleChildren, true);
-
-        // const intersections = raycaster.intersectObjects(group.children, true);
-
-            if (intersections.length > 0) {
-              const firstIntersection = intersections[0];
-              onIntersect(firstIntersection);
-              const intersectPoint = firstIntersection.point;
-              printCameraCenterCoordinates(firstIntersection.point);
-              raycasterReticule.position.set(intersectPoint.x, intersectPoint.y, intersectPoint.z);
-              if (!raycasterReticule.parent) {
-                  scene.add(raycasterReticule);
-                  // console.log(raycasterReticule.position);
+          if (intersections.length > 0) {
+              // Determine if this group should process all intersections
+              if (key === 'fmTransmitterPoints') {
+                  onIntersect(intersections); // Handle all intersections
+              } else {
+                  onIntersect(intersections[0]); // Handle only the first intersection
               }
+              
+              intersections.forEach(intersection => {
+                  printCameraCenterCoordinates(intersection.point);
+                  raycasterReticule.position.set(intersection.point.x, intersection.point.y, intersection.point.z);
+                  if (!raycasterReticule.parent) {
+                      scene.add(raycasterReticule);
+                  }
+              });
           } else {
               if (raycasterReticule.parent) {
                   scene.remove(raycasterReticule);
               }
               console.log("NO INTERSECTIONS");
-              scene.remove(fmRayLine); // Remove the line if no matching tower is found
-              scene.remove(cellRayLine); // Remove the line if no matching tower is found
-
           }
       }
   });
