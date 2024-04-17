@@ -166,7 +166,14 @@ export function gfx() {
   function remapValues(num, in_min, in_max, out_min, out_max) {
     return (num - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
   }
-  
+
+  function remapValuesExp(num, in_min, in_max, out_min, out_max, exponent) {
+    // Normalize the input value within [0, 1]
+    const normalized = (num - in_min) / (in_max - in_min);
+    // Apply exponential curve and then scale to output range
+    const scaled = Math.pow(normalized, exponent) * (out_max - out_min) + out_min;
+    return scaled;
+  } 
 
   // tone.js ////////////////////////////
   //////////////
@@ -903,13 +910,10 @@ function initWebSocketConnection() {
     }
 
     if (serialData.zoomPotValue !== undefined && !isDragging) {
-      const scaledValue = Math.round(remapValues(serialData.zoomPotValue, 201, 300, 300, 201));
-      // todo zooming ctrls;
-    }
-
-    if (serialData.zoomPotValue !== undefined && !isDragging) {
       // scale between min zoom and max zoom values for ortho cam
-      const scaledValue = Math.round(remapValues(serialData.zoomPotValue, 0, 1023, 50, 150));
+      const exponent = 2;  // add exponential curve to remapping
+      const scaledValue = Math.round(remapValuesExp(serialData.zoomPotValue, 0, 1023, 60, 360, exponent));
+      console.log(scaledValue[0])
       adjustCameraZoomSlidePot(scaledValue);
     }
   
