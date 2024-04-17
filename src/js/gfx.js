@@ -21,13 +21,15 @@ let visualizationReady = false;
 
 export function gfx() {
 
+
   // Define global geographic layer groups
   let fmTransmitterPoints = new THREE.Group();
   let fmMSTLines = new THREE.Group();
   let cellTransmitterPoints = new THREE.Group();
   let cellMSTLines = new THREE.Group();
   let elevContourLines = new THREE.Group();
-  let propagationPolygons = new THREE.Group();
+  let fmPropagationContours = new THREE.Group();
+  let fmPropagationPolygons = new THREE.Group();
   let waterPolys = new THREE.Group();
   let cellServiceMesh = new THREE.Group();
   let accessibilityMesh = new THREE.Group();
@@ -40,7 +42,8 @@ export function gfx() {
 
   // init visibility 
   fmTransmitterPoints.visible = true;
-  propagationPolygons.visible = true;
+  fmPropagationContours.visible = true;
+  fmPropagationPolygons.visible = false;
   cellServiceMesh.visible = true;
   cellTransmitterPoints.visible = true;
   cellMSTLines.visible = true;
@@ -61,7 +64,7 @@ export function gfx() {
 
 
   let scaleBar;
-  // analog = fmtransmitter, propagationPolygons, 
+  // analog = fmtransmitter, fmPropagationContours, 
   // digital = cellServiceMesh, cellTransmitterPoints, cellMSTLines
 
   // downsample framerate for performance
@@ -84,7 +87,7 @@ export function gfx() {
   let audioContext;
 
   // temp geometry for raycast testing
-  const reticuleSize = 0.015;
+  const reticuleSize = 0.025;
   const reticuleGeometry = new THREE.RingGeometry( reticuleSize,reticuleSize, 8)
   const reticuleMaterial = new THREE.MeshBasicMaterial({ color: '#0000ff', wireframe: false, });
   const raycasterReticule = new THREE.LineSegments(reticuleGeometry, reticuleMaterial);
@@ -205,6 +208,8 @@ export function gfx() {
   const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
   let lineGeometry = new THREE.BufferGeometry();
   let cellRayLine = new THREE.Line(lineGeometry, lineMaterial);
+  let fmRayLine = new THREE.Line(lineGeometry, lineMaterial);
+
 
   function initThreeJS() {
     scene = new THREE.Scene();
@@ -284,6 +289,7 @@ export function gfx() {
     // console.log(controls.angle)
 
     scene.add(cellRayLine);  // Add the line to the scene initially
+    scene.add(fmRayLine);  // Add the line to the scene initially
 
 
     // const audioListener = new THREE.AudioListener();
@@ -311,7 +317,6 @@ export function gfx() {
       // const zoomRange = (controls.maxZoom - controls.minZoom);
       let zoomValue = value / 100;
       camera.zoom = zoomValue;
-      console.log(zoomValue)
     } else if (camera.isPerspectiveCamera) {
       // Map the potentiometer value to the perspective camera FOV range.
       const fovRange = controls.maxDistance - controls.minDistance; 
@@ -487,10 +492,10 @@ export function gfx() {
     // 3: draw a line to the nearest cell tower at all times
     // method: nearest CELL TRANSMITTER vertex
     // cellTransmitterPoints: { group: cellTransmitterPoints, enabled: false, onIntersect: raycastCellTower },
-    cellTransmitterPoints: { group: cellServiceMesh, enabled: false, onIntersect: raycastTerrainVertex },
+    cellTransmitterPoints: { group: cellServiceMesh, enabled: false, onIntersect: raycastCellServiceVertex },
     // 4: play a 'radio station' signal
     // method: distance from PROPAGATION POLYGON edge to centroid
-    fmTransmitterPoints: { group: accessibilityMesh, enabled: false, onIntersect: findNearestFMtower },
+    fmTransmitterPoints: { group: fmPropagationPolygons, enabled: false, onIntersect: raycastFMpolygon },
     cameraCenter: { 
       group: null,  // no specific group 
       enabled: true,  // always enabled
@@ -503,7 +508,7 @@ export function gfx() {
 
   // document.addEventListener('pointermove', onPointerMove);
 
-  function raycastTerrainVertex(intersection) {
+  function raycastCellServiceVertex(intersection) {
 
     const intersectPoint = intersection.point;
     const vertices = intersection.object.userData.vertices;
@@ -575,7 +580,69 @@ export function gfx() {
   }
 
 
-  function findNearestFMtower(){}
+
+function drawFMLine(start, end) {
+    if (fmRayLine.geometry) fmRayLine.geometry.dispose();  // Clean up old geometry
+
+    const lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+    fmRayLine.geometry = lineGeometry;
+
+    if (!fmRayLine.parent) {
+      scene.add(fmRayLine);  // Add to scene if not already there
+    }
+}
+
+function raycastFMpolygon(intersection) {
+  const intersectPoint = intersection.point;
+  const channelFilter = intersection.object.userData.channelFilter; 
+
+  // Continue only if the channel matches the filter
+  if (channelFilter === lastChannelFilter) {
+    console.log(`Intersected FM polygon matching channel: ${channelFilter}`);
+    const nearestTower = findNearestFMTower(intersectPoint, channelFilter);
+    if (nearestTower) {
+      drawFMLine(intersectPoint, nearestTower.position);
+      console.log(`Nearest FM Tower is ${nearestTower.distance.toFixed(2)} meters away, Channel: ${nearestTower.channel}`);
+    } else {
+      console.log('No matching FM towers found');
+      if (fmRayLine.parent) {
+        scene.remove(fmRayLine);  // Remove the line if no nearest tower is found
+      }
+    }
+  } else {
+    console.log('Filtered out by channel mismatch');
+  }
+}
+
+function findNearestFMTower(intersectPoint, channelFilter) {
+  let nearest = null;
+  let minDistance = Infinity;
+
+  // Handle both matching and non-matching instanced meshes
+  [window.instancedPyramidMatching, window.instancedPyramidNonMatching].forEach(instancedMesh => {
+    const count = instancedMesh.count;
+    for (let i = 0; i < count; i++) {
+      const channel = instancedMesh.userData[i]?.channel;
+      if (channel === channelFilter) {
+        const matrix = new THREE.Matrix4();
+        instancedMesh.getMatrixAt(i, matrix);
+        const position = new THREE.Vector3().setFromMatrixPosition(matrix);
+        const distance = calculateGeodesicDistance(intersectPoint, position);
+        if (distance < minDistance) {
+          minDistance = distance;
+          nearest = {
+            distance: distance,
+            channel: channel,
+            position: position.clone()  // Clone to avoid direct references
+          };
+        }
+      }
+    }
+  });
+
+  return nearest;
+}
+
   
   // Simple geodesic distance calculation (Haversine formula)
   function calculateGeodesicDistance(p1, p2) {
@@ -673,9 +740,13 @@ function handleRaycasters(camera, scene) {
         // Adjust the threshold for points; increase this value to make it more generous
         raycaster.params.Points.threshold = 0.275;
 
-        
+        // to only raycast against visible objects ...
+        // const visibleChildren = group.children.filter(child => child.visible);
+        // const intersections = raycaster.intersectObjects(visibleChildren, true);
+
         const intersections = raycaster.intersectObjects(group.children, true);
-          if (intersections.length > 0) {
+
+            if (intersections.length > 0) {
               const firstIntersection = intersections[0];
               onIntersect(firstIntersection);
               const intersectPoint = firstIntersection.point;
@@ -913,7 +984,6 @@ function initWebSocketConnection() {
       // scale between min zoom and max zoom values for ortho cam
       const exponent = 2;  // add exponential curve to remapping
       const scaledValue = Math.round(remapValuesExp(serialData.zoomPotValue, 0, 1023, 60, 360, exponent));
-      console.log(scaledValue[0])
       adjustCameraZoomSlidePot(scaledValue);
     }
   
@@ -983,6 +1053,7 @@ function toggleMapScene(switchState, source) {
     raycasterDict.cellServiceMesh.enabled = false;
     raycasterDict.cellTransmitterPoints.enabled = false;
     raycasterDict.fmTransmitterPoints.enabled = false;
+    
 
     // Set all FM propagation groups to decay immediately or hide them
     Object.keys(fmContourGroups).forEach(groupId => {
@@ -1007,7 +1078,7 @@ function toggleMapScene(switchState, source) {
 
         // Redraw FM contours using the last used channel filter when switching back to analog
         if (lastChannelFilter !== null) {
-          addFMpropagation3D(fmContoursGeojsonData, lastChannelFilter, propagationPolygons);
+          addFMpropagation3D(fmContoursGeojsonData, lastChannelFilter, fmPropagationContours);
         }
 
         // reset css filter
@@ -1022,6 +1093,7 @@ function toggleMapScene(switchState, source) {
 
         raycasterDict.cellServiceMesh.enabled = true;
         raycasterDict.cellTransmitterPoints.enabled = true;
+        raycasterDict.fmTransmitterPoints.enabled = false;
         
     
         // Hide FM towers when digital is selected
@@ -1288,7 +1360,7 @@ function toggleMapScene(switchState, source) {
 
   // Define a scaling factor for the Z values (elevation)
   // const zScale = 0.00025; // smaller value better for perspective cam
-  const zScale = 0.0004; // larger value better for ortho cam
+  const zScale = 0.00035; // larger value better for ortho cam
 
   // Function to get color based on elevation
   function getColorForElevation(elevation, minElevation, maxElevation) {
@@ -1904,7 +1976,7 @@ function logMeshData(group) {
         });
   
         scene.add(accessibilityMesh);
-        console.log(`Accessibility mesh added with ${geojson.features.length / stride} features`);
+        // console.log(`Accessibility mesh added with ${geojson.features.length / stride} features`);
   
         resolve(accessibilityMesh);
       } catch (error) {
@@ -1934,26 +2006,22 @@ function updatefmContourGroups() {
       if (group.opacity <= 0) {
         group.meshes.forEach(mesh => {
           scene.remove(mesh);
-          if (mesh.geometry) mesh.geometry.dispose();
-          if (mesh.material) mesh.material.dispose();
+          mesh.geometry.dispose();
+          mesh.material.dispose();
         });
         delete fmContourGroups[groupId];
       }
-    } else {
-      group.meshes.forEach(mesh => {
-        mesh.visible = analogGroup.visible && !group.isDecaying;
-      });
     }
   });
 }
 
 // Function to add FM propagation 3D line loops
-function addFMpropagation3D(geojson, channelFilter, propagationPolygons, stride = 1) {
+function addFMpropagation3D(geojson, channelFilter, fmPropagationContours, stride = 1) {
   return new Promise((resolve, reject) => {
-      propagationPolygons.children.forEach(child => {
-        propagationPolygons.remove(child);
+      fmPropagationContours.children.forEach(child => {
+        fmPropagationContours.remove(child);
         if (child.geometry) child.geometry.dispose();
-        if (child.material) child.material.dispose();
+        if (child.lineMaterial) child.lineMaterial.dispose();
     });
 
 
@@ -1988,7 +2056,7 @@ function addFMpropagation3D(geojson, channelFilter, propagationPolygons, stride 
         const minNegativeIndex = Math.min(...negativeIndices); // Further from 0
         const opacityRange = maxOpacity - minOpacity; // Defined range for negatives
 
-        console.log(geojson.features.length)
+        // console.log(`FM propagation curves added with ${geojson.features.length / stride} features`);
 
         geojson.features.forEach((feature, idx) => {
             if (idx % stride !== 0) return;
@@ -2010,12 +2078,12 @@ function addFMpropagation3D(geojson, channelFilter, propagationPolygons, stride 
               opacity = minOpacity + (opacityRange * (featureIndex - minIndexForOpacity) / (opacityReductionThreshold - 1 - minIndexForOpacity));
             }
 
-            const material = new THREE.LineBasicMaterial({
+            const lineMaterial = new THREE.LineBasicMaterial({
               color: colorScheme.polygonColor,
               transparent: true,
               alphaHash: true,
               opacity: opacity,   
-              visible: analogGroup.visible // Set visibility based on analogGroup  
+              visible: analogGroup.visible && channel === channelFilter // Set visibility based on analogGroup  
           });
       
           const vertices = feature.geometry.coordinates[0].map(coord => {
@@ -2025,7 +2093,7 @@ function addFMpropagation3D(geojson, channelFilter, propagationPolygons, stride 
           });
       
           const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
-          const lineLoop = new THREE.Line(geometry, material);
+          const lineLoop = new THREE.Line(geometry, lineMaterial);
           lineLoop.computeLineDistances();
       
           // Triangulate for filled mesh
@@ -2041,20 +2109,26 @@ function addFMpropagation3D(geojson, channelFilter, propagationPolygons, stride 
           triangles.forEach((index, i) => {
               positionArray[i * 3] = vertices[index].x;
               positionArray[i * 3 + 1] = vertices[index].y;
-              positionArray[i * 3 + 2] = vertices[index].z; // Apply elevation
+              // positionArray[i * 3 + 2] = vertices[index].z; // Apply elevation
+              positionArray[i * 3 + 2] = 0 // or not! for raycasting sake
           });
           meshGeometry.setAttribute('position', new THREE.BufferAttribute(positionArray, 3));
       
           const meshMaterial = new THREE.MeshBasicMaterial({
               color: colorScheme.polygonColor,
               side: THREE.DoubleSide,
-              wireframe: true,
+              wireframe: false,
               transparent: true,
               opacity: opacity,
-              visible: false,
-          });
+              visible: analogGroup.visible && channel === channelFilter
+            });
+
           const mesh = new THREE.Mesh(meshGeometry, meshMaterial);
-      
+          mesh.userData = {
+            channelFilter: feature.properties.channel, 
+            // vertices: vertices,
+          };
+                  
           // Add to group and scene
           const groupId = feature.properties.key.split('_')[0];
           if (!fmContourGroups[groupId] || analogGroup.visible === false) {
@@ -2066,12 +2140,13 @@ function addFMpropagation3D(geojson, channelFilter, propagationPolygons, stride 
               };
           }
           fmContourGroups[groupId].meshes.push(lineLoop, mesh);
-          propagationPolygons.add(lineLoop);
-          propagationPolygons.add(mesh);
+          fmPropagationContours.add(lineLoop);
+          fmPropagationPolygons.add(mesh);
       });
 
 
-      scene.add(propagationPolygons)
+      scene.add(fmPropagationContours);
+      scene.add(fmPropagationPolygons);
 
       resolve();
   });
@@ -2140,6 +2215,7 @@ async function addFMTowerPts(geojson, channelFilter, group) {
       dummy.updateMatrix();
       if (isMatching) {
         window.instancedPyramidMatching.setMatrixAt(index, dummy.matrix);
+        window.instancedPyramidMatching.userData[index] = { channelFilter };  // Assign channel data to userData
         // Scale non-matching instances to normal size; they remain visible regardless
         window.instancedPyramidNonMatching.setMatrixAt(index, dummy.matrix);
       } else {
@@ -2151,6 +2227,7 @@ async function addFMTowerPts(geojson, channelFilter, group) {
         dummy.scale.set(1, 1, 1);
         dummy.updateMatrix();
         window.instancedPyramidNonMatching.setMatrixAt(index, dummy.matrix);
+        window.instancedPyramidNonMatching.userData[index] = { channelFilter };  // Assign channel data to userData
       }
     });
 
@@ -2315,6 +2392,8 @@ function addCellTowerPts(geojson) {
   function updateLabelPosition(sliderValue) {
     const slider = document.getElementById('fm-channel-slider');
     const label = document.getElementById('fm-frequency-display');
+
+    console.log(sliderValue)
   
     const min = parseInt(slider.min, 10);
     const max = parseInt(slider.max, 10);
@@ -2396,7 +2475,7 @@ function addCellTowerPts(geojson) {
     }
 
 
-    addFMpropagation3D(fmContoursGeojsonData, channelFilter, propagationPolygons)
+    addFMpropagation3D(fmContoursGeojsonData, channelFilter, fmPropagationContours)
       // .then(() => console.log("FM propagation updated"))
       .catch(error => console.error("Failed to update contour channel:", error));
 
@@ -2645,7 +2724,6 @@ function addCellTowerPts(geojson) {
               polygon.forEach((linearRing) => {
                 const geometry = new THREE.BufferGeometry();
                 const vertices = [];
-                console.log("here?")
 
                 linearRing.forEach((coord) => {
                   const [lon, lat] = coord;
@@ -2867,8 +2945,9 @@ function addCellTowerPts(geojson) {
       case 'src/assets/data/fm_contours_shaved.geojson':
         fmContoursGeojsonData = data;
         // run on pageload with default channel 201 as filter
-        addFMpropagation3D(data, channelFilter, propagationPolygons)
-        analogGroup.add(propagationPolygons)
+        addFMpropagation3D(data, channelFilter, fmPropagationContours)
+        analogGroup.add(fmPropagationContours)
+        analogGroup.add(fmPropagationPolygons)
         break;
   
 
