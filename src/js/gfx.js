@@ -510,77 +510,68 @@ export function gfx() {
 
   // document.addEventListener('pointermove', onPointerMove);
 
-  function raycastCellServiceVertex(intersection) {
-
+  function raycastCellServiceVertex(intersection, maxTowers = 10) {
     const intersectPoint = intersection.point;
-    const vertices = intersection.object.userData.vertices;
-    const gridCode = intersection.object.userData.gridCode || 'unknown';  // Default to 'unknown' if not provided
 
     console.log(`Intersected object type: ${intersection.object.type}`);
     console.log(`Intersected object userData: `, intersection.object.userData);
 
+    // Find the nearest cell towers
+    const nearestTowers = findNearestCellTowers(intersectPoint, maxTowers);
 
-    // Check if the gridCode is 0, if so, skip this mesh or remove the raycaster line if it's already displayed
-  //   if (intersection.object.userData.gridCode === '0') {
-  //     console.log('Grid Code is 0, skipping this mesh.');
-  //     if (cellRayLine.parent) {
-  //         scene.remove(cellRayLine);
-  //     }
-  //     return;
-  // }
-    
-    // Find the nearest cell tower
-    const nearestTower = findNearestCellTower(intersectPoint);
-  
-    console.log(`Intersection at Terrain - Point: ${JSON.stringify(intersectPoint)}, Grid Code: `, gridCode);
-    if (nearestTower) {
-      console.log(`Nearest Cell Tower is ${nearestTower.distance.toFixed(2)} units away, Grid Code: ${nearestTower.gridCode}`);
-      drawcellRayLine(intersectPoint, nearestTower.position);
+    if (nearestTowers.length > 0) {
+        nearestTowers.forEach(tower => {
+            console.log(`Nearest Cell Tower is ${tower.distance.toFixed(2)} units away, Grid Code: ${tower.gridCode}`);
+            drawcellRayLine(intersectPoint, tower.position);
+        });
     } else {
-      console.log('No cell towers found');
-      if (cellRayLine.parent) {
-        scene.remove(cellRayLine);  // Remove the line if no nearest tower is found
-      }
+        console.log('No cell towers found');
+        if (cellRayLine.parent) {
+            scene.remove(cellRayLine); // Remove the line if no nearest tower is found
+        }
     }
-  }
+}
   
-  function drawcellRayLine(start, end) {
-    // Remove old geometry
-    if (cellRayLine.geometry) cellRayLine.geometry.dispose();
-  
-    // Create new geometry with the start and end points
-    cellRayGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-    cellRayLine.geometry = cellRayGeometry;
-    
-    // Ensure the line is added to the scene
-    if (!cellRayLine.parent) {
-      scene.add(cellRayLine);
+let currentRayLines = [];
+
+
+function drawcellRayLine(start, end) {
+    // Create new geometry and line
+    const lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 }); // Example color
+    const line = new THREE.Line(lineGeometry, lineMaterial);
+
+    // Add line to the scene and store it in the array
+    scene.add(line);
+    currentRayLines.push(line);
+
+    // Ensure we do not exceed the number of maximum allowable lines
+    while (currentRayLines.length > 10) {
+        const oldLine = currentRayLines.shift(); // Remove the oldest line
+        scene.remove(oldLine);
+        if (oldLine.geometry) oldLine.geometry.dispose(); // Dispose geometry to free resources
     }
-  }
+}
     
-  function findNearestCellTower(intersectPoint) {
-    let nearest = null;
-    let minDistance = Infinity;
+  function findNearestCellTowers(intersectPoint, maxTowers = 200) {
+    let towers = [];
     
     // Convert intersection point from Three.js coordinates to geographic coordinates
     const intersectGeo = toGeographic(intersectPoint.x, intersectPoint.y);
-  
-    cellTransmitterPoints.children.forEach(pyramid => {
-      const towerGeo = toGeographic(pyramid.position.x, pyramid.position.y);
-      const distance = calculateGeodesicDistance(intersectGeo, towerGeo);
-      if (distance < minDistance) {
-        minDistance = distance;
-        nearest = {
-          distance: distance,
-          gridCode: pyramid.userData.gridCode,
-          position: pyramid.position
-        };
-      }
-    });
-  
-    return nearest;
-  }
 
+    cellTransmitterPoints.children.forEach(pyramid => {
+        const towerGeo = toGeographic(pyramid.position.x, pyramid.position.y);
+        const distance = calculateGeodesicDistance(intersectGeo, towerGeo);
+        towers.push({
+            distance: distance,
+            gridCode: pyramid.userData.gridCode,
+            position: pyramid.position.clone()
+        });
+    });
+
+    // Sort towers by distance and return up to `maxTowers` towers
+    return towers.sort((a, b) => a.distance - b.distance).slice(0, maxTowers);
+}
 
 
 function drawFMLine(start, end) {
@@ -923,6 +914,16 @@ function updateScaleBar(scaleBar, camera) {
     }
     requestAnimationFrame(animate);
   }
+
+  function clearRayLines() {
+    // Remove all current ray lines from the scene and clear the array
+    currentRayLines.forEach(line => {
+        scene.remove(line);
+        if (line.geometry) line.geometry.dispose();
+    });
+    currentRayLines = [];
+  }
+  
 
   // unlock AudioContext with websocket interaction
   function unlockAudioContext() {
