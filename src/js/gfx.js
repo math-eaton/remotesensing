@@ -672,6 +672,7 @@ function handleRaycasters(camera, scene) {
               const firstIntersection = intersections[0];
               onIntersect(firstIntersection);
               const intersectPoint = firstIntersection.point;
+              printCameraCenterCoordinates(firstIntersection.point);
               raycasterReticule.position.set(intersectPoint.x, intersectPoint.y, intersectPoint.z);
               if (!raycasterReticule.parent) {
                   scene.add(raycasterReticule);
@@ -715,17 +716,10 @@ function decimalToDMS(coord, isLongitude = false) {
   return `${degreesStr}° ${minutesStr}' ${secondsStr}" ${cardinal}`;
 }
 
-function printCameraCenterCoordinates(camera) {
-  const vector = new THREE.Vector3(0, 0, -1); // Vector pointing out of the camera
-  vector.unproject(camera); // Adjust the vector by the camera's projection
-  const direction = vector.sub(camera.position).normalize(); // Create the direction vector
-
-  const distance = -camera.position.z / direction.z; // Calculate the distance to the ground plane (assuming z = 0 is ground)
-  const coord = camera.position.clone().add(direction.multiplyScalar(distance)); // Calculate the intersection with ground plane
-
+function printCameraCenterCoordinates(intersectPoint) {
   // Convert from State Plane coordinates back to Geographic coordinates
   try {
-      const result = proj4('EPSG:2261').inverse([coord.x, coord.y]);
+      const result = proj4('EPSG:2261').inverse([intersectPoint.x, intersectPoint.y]);
       const latitudeDMS = decimalToDMS(result[1], false);  // Passing false for latitude
       const longitudeDMS = decimalToDMS(result[0], true);  // Passing true for longitude
       const displayText = `${latitudeDMS}<br>${longitudeDMS}`;  // Using DMS format with cardinal directions
@@ -735,6 +729,7 @@ function printCameraCenterCoordinates(camera) {
       document.getElementById('latLonDisplay').textContent = "Error in displaying coordinates.";
   }
 }
+
 
 function createScaleBar(scene) {
   const scaleBarLength = 100; // Adjust this based on your scale
