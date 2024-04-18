@@ -38,7 +38,6 @@ export function gfx() {
   let coastline = new THREE.Group();
     
 
-  // let raycasterReticule = new THREE.Group();
 
   // init visibility 
   fmTransmitterPoints.visible = true;
@@ -86,11 +85,13 @@ export function gfx() {
 
   let audioContext;
 
-  // temp geometry for raycast testing
+  // geometry for raycast testing
   const reticuleSize = 0.025;
   const reticuleGeometry = new THREE.RingGeometry( reticuleSize,reticuleSize, 8)
   const reticuleMaterial = new THREE.MeshBasicMaterial({ color: '#0000ff', wireframe: false, });
-  const raycasterReticule = new THREE.LineSegments(reticuleGeometry, reticuleMaterial);
+  const analogReticuleMaterial = new THREE.MeshBasicMaterial({ color: '#ff00ff', wireframe: false, });
+  const digitalReticuleMaterial = new THREE.MeshBasicMaterial({ color: '#0000ff', wireframe: false, });
+  let raycasterReticule = new THREE.LineSegments(reticuleGeometry, reticuleMaterial);
   
   // Define color scheme variables
   const colorScheme = {
@@ -512,15 +513,15 @@ export function gfx() {
   function raycastCellServiceVertex(intersection, maxCellTowerRays = 10) {
     const intersectPoint = intersection.point;
 
-    console.log(`Intersected object type: ${intersection.object.type}`);
-    console.log(`Intersected object userData: `, intersection.object.userData);
+    // console.log(`Intersected object type: ${intersection.object.type}`);
+    // console.log(`Intersected object userData: `, intersection.object.userData);
 
     // Find the nearest cell towers
     const nearestTowers = findNearestCellTowers(intersectPoint, maxCellTowerRays);
 
     if (nearestTowers.length > 0) {
         nearestTowers.forEach(tower => {
-            console.log(`Nearest Cell Tower is ${tower.distance.toFixed(2)} units away, Grid Code: ${tower.gridCode}`);
+            // console.log(`Nearest Cell Tower is ${tower.distance.toFixed(2)} units away, Grid Code: ${tower.gridCode}`);
             drawcellRayLine(intersectPoint, tower.position, maxCellTowerRays);  // Pass maxCellTowerRays for cleanup
         });
     } else {
@@ -530,7 +531,6 @@ export function gfx() {
 }
   
 let currentRayLines = [];
-
 
 function drawcellRayLine(start, end, maxCellTowerRays) {
   // Create new geometry and line
@@ -593,21 +593,33 @@ function clearCellRays() {
 
 
 
-function raycastFMpolygon(intersections, maxFMRayLines = 2) {
+function raycastFMpolygon(intersections) {
+  let currentActiveIds = new Set();
+
   intersections.forEach(intersection => {
       const intersectPoint = intersection.point;
       const uniqueId = intersection.object.userData.uniqueId;
+      currentActiveIds.add(uniqueId);
 
-      console.log(`Intersected FM polygon ID: ${uniqueId}`);
       const matchingTowers = findAllMatchingFMTowers(uniqueId);
       matchingTowers.forEach(tower => {
           if (tower) {
-              drawFMLine(intersectPoint, tower.position, maxFMRayLines);
-              console.log(`Line drawn to FM Tower with ID: ${tower.uniqueId}`);
+              drawFMLine(intersectPoint, tower.position, uniqueId);
+              // console.log(`Line drawn to FM Tower with ID: ${tower.uniqueId}`);
           }
       });
   });
+
+  // Remove lines for polygons no longer intersected
+  fmRayLinesByUniqueId.forEach((line, uniqueId) => {
+      if (!currentActiveIds.has(uniqueId)) {
+          scene.remove(line);
+          line.geometry.dispose();
+          fmRayLinesByUniqueId.delete(uniqueId);
+      }
+  });
 }
+
 
 function findAllMatchingFMTowers(intersectionUniqueId) {
   let matchingTowers = [];
@@ -638,38 +650,148 @@ function findAllMatchingFMTowers(intersectionUniqueId) {
 
 let fmRayLines = [];
 
-function fmRayCleanup(maxFMRayLines) {
-    while (fmRayLines.length > maxFMRayLines) {
-        const oldLine = fmRayLines.shift();
-        if (oldLine) {
-            scene.remove(oldLine);
-            if (oldLine.geometry) oldLine.geometry.dispose();
-        }
+// function fmRayCleanup(maxFMRayLines) {
+//     while (fmRayLines.length > maxFMRayLines) {
+//         const oldLine = fmRayLines.shift();
+//         if (oldLine) {
+//             scene.remove(oldLine);
+//             if (oldLine.geometry) oldLine.geometry.dispose();
+//         }
+//     }
+// }
+
+
+
+let fmRayLinesByUniqueId = new Map();
+
+function drawFMLine(intersectPoint, end, uniqueId) {
+    let line = fmRayLinesByUniqueId.get(uniqueId);
+
+    if (line) {
+        // Update existing line geometry
+        let lineGeometry = new THREE.BufferGeometry().setFromPoints([intersectPoint, end]);
+        line.geometry.dispose();  // Dispose of the old geometry
+        line.geometry = lineGeometry;
+    } else {
+        // Create a new line
+        const fmRayGeometry = new THREE.BufferGeometry().setFromPoints([intersectPoint, end]);
+        const fmRayMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+        line = new THREE.Line(fmRayGeometry, fmRayMaterial);
+        scene.add(line);
+        fmRayLinesByUniqueId.set(uniqueId, line);
     }
+
 }
 
 function clearFMrays() {
-  fmRayLines.forEach(line => {
-      scene.remove(line);
-      if (line.geometry) line.geometry.dispose();
+    fmRayLinesByUniqueId.forEach((line, uniqueId) => {
+        scene.remove(line);
+        line.geometry.dispose();
+    });
+    fmRayLinesByUniqueId.clear();
+}
+
+
+
+function getSortedCellRayDistances() {
+  // Calculate distances and store them with indices
+  const rayDistances = currentRayLines.map((line, index) => {
+      const start = line.geometry.attributes.position.array.slice(0, 3);
+      const end = line.geometry.attributes.position.array.slice(3, 6);
+      const distance = Math.sqrt(
+          Math.pow(end[0] - start[0], 2) +
+          Math.pow(end[1] - start[1], 2) +
+          Math.pow(end[2] - start[2], 2)
+      );
+      return { index, distance };
   });
-  fmRayLines = [];  // Reset the array after clearing
+
+  // Sort rays by distance
+  rayDistances.sort((a, b) => a.distance - b.distance);
+
+  // Assign unique indices from shortest to longest
+  const sortedRaysWithIndices = rayDistances.map((ray, newIdx) => ({
+      originalIndex: ray.index,
+      sortedIndex: newIdx,
+      distance: ray.distance
+  }));
+
+  return sortedRaysWithIndices;
 }
 
+// Function to access and use the sorted rays outside
+function processSortedCellRays() {
+  const sortedRays = getSortedCellRayDistances();
+  sortedRays.forEach(ray => {
+      console.log(`Ray ${ray.originalIndex} is sorted at index ${ray.sortedIndex} with distance ${ray.distance.toFixed(2)}`);
+  });
 
-
-function drawFMLine(start, end, maxFMRayLines = 10) {
-  const fmRayGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-  const fmRayMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 }); // Define the line color
-  const line = new THREE.Line(fmRayGeometry, fmRayMaterial);
-
-  fmRayLines.push(line);  // Track lines
-  scene.add(line);
-
-  // Use the cleanup function to manage line count
-  fmRayCleanup(maxFMRayLines);
+  // Example of passing to another function
+  // otherFunction(sortedRays);
 }
 
+function getSortedFMRayDistances() {
+  let fmRayDistances = [];
+  fmRayLinesByUniqueId.forEach((line, uniqueId) => {
+      const start = new THREE.Vector3().fromArray(line.geometry.attributes.position.array, 0);
+      const end = new THREE.Vector3().fromArray(line.geometry.attributes.position.array, 3);
+      const distance = start.distanceTo(end);
+      fmRayDistances.push({ uniqueId, distance });
+  });
+
+  fmRayDistances.sort((a, b) => a.distance - b.distance);
+  return fmRayDistances.map((ray, index) => ({
+      uniqueId: ray.uniqueId,
+      sortedIndex: index,
+      distance: ray.distance
+  }));
+}
+
+function processSortedFmRays() {
+  const sortedFMRays = getSortedFMRayDistances();
+  console.log('Updated FM Rays Sorted by Distance:');
+  sortedFMRays.forEach(ray => {
+      console.log(`FM Ray ID: ${ray.uniqueId}, Sorted Index: ${ray.sortedIndex}, Distance: ${ray.distance.toFixed(2)} units.`);
+  });
+}
+
+// optimizing ray redrawing
+// Last known values to detect significant changes
+let lastCameraPosition = new THREE.Vector3();
+let lastCameraQuaternion = new THREE.Quaternion();
+
+// Thresholds for detecting significant movement or rotation
+const positionThreshold = 0.05; // units
+const rotationThreshold = 0.001; // radians
+
+function needsUpdate(camera) {
+    // Calculate the change in position
+    const positionChange = lastCameraPosition.distanceTo(camera.position);
+
+    // Calculate the change in rotation using quaternion angle difference
+    const rotationChange = lastCameraQuaternion.angleTo(camera.quaternion);
+
+    // Check if the changes exceed thresholds
+    if (positionChange > positionThreshold || rotationChange > rotationThreshold) {
+        // Update last known values
+        lastCameraPosition.copy(camera.position);
+        lastCameraQuaternion.copy(camera.quaternion);
+        return true;
+    }
+    return false;
+}
+
+function updateActiveRaycasterRays() {
+  if (needsUpdate(camera)) {
+      if (raycasterDict.cellTransmitterPoints.enabled) {
+          getSortedCellRayDistances();
+          processSortedCellRays();
+      } else if (raycasterDict.fmTransmitterPoints.enabled) {
+          getSortedFMRayDistances();
+          processSortedFmRays();
+      }
+  }
+}
 
 // Simple geodesic distance calculation (Haversine formula)
   function calculateGeodesicDistance(p1, p2) {
@@ -751,7 +873,6 @@ function drawFMLine(start, end, maxFMRayLines = 10) {
     return new THREE.Vector3(camera.position.x + offset.x, camera.position.y + offset.y, terrainHeight);
 }
  
-  
 // overall raycaster handler for animation loop
 function handleRaycasters(camera, scene) {
   Object.entries(raycasterDict).forEach(([key, { group, enabled, onIntersect }]) => {
@@ -780,6 +901,7 @@ function handleRaycasters(camera, scene) {
                   }
               });
           } else {
+            clearFMrays();
               if (raycasterReticule.parent) {
                   scene.remove(raycasterReticule);
               }
@@ -826,7 +948,7 @@ function printCameraCenterCoordinates(intersectPoint) {
       const displayText = `${latitudeDMS}<br>${longitudeDMS}`;  // Using DMS format with cardinal directions
       document.getElementById('latLonDisplay').innerHTML = displayText;  // Use innerHTML to render the line break
   } catch (error) {
-      console.error(`Error converting coordinates: ${error}`);
+      // console.error(`Error converting coordinates: ${error}`);
       document.getElementById('latLonDisplay').textContent = "Error in displaying coordinates.";
   }
 }
@@ -933,8 +1055,10 @@ function updateScaleBar(scaleBar, camera) {
             globalDeltaRightPressed = 0;
           }    
 
-          // Ensure the camera keeps looking at the target
+          // Ensure the camera keeps looking at the targe11t
           camera.lookAt(controls.target);
+
+          updateActiveRaycasterRays();
 
           renderer.render(scene, camera);
 
@@ -1087,6 +1211,8 @@ function toggleMapScene(switchState, source) {
     raycasterDict.cellTransmitterPoints.enabled = false;
     raycasterDict.fmTransmitterPoints.enabled = false;
 
+    let raycasterReticule;
+
     // Clear existing ray lines from all groups
     clearFMrays();
     clearCellRays();
@@ -1104,6 +1230,8 @@ function toggleMapScene(switchState, source) {
         analogGroup.visible = true;
         digitalGroup.visible = false;
 
+        clearCellRays();
+
         // show FM towers when analog is selected
         fmTransmitterPoints.visible = true;
 
@@ -1112,7 +1240,12 @@ function toggleMapScene(switchState, source) {
         raycasterDict.cellTransmitterPoints.enabled = false;
 
         scene.remove(cellRayLine);  // Remove the celltower cellRayLine
-        clearCellRays();
+
+        if (raycasterReticule) {
+          raycasterReticule.material = analogReticuleMaterial;
+        }
+
+
 
         // Redraw FM contours using the last used channel filter when switching back to analog
         if (lastChannelFilter !== null) {
@@ -1126,15 +1259,24 @@ function toggleMapScene(switchState, source) {
       case 2:
         lastChannelFilter = channelFilter;
 
+        clearFMrays();
+
+
         digitalGroup.visible = true;
         analogGroup.visible = false;
+
 
         raycasterDict.cellServiceMesh.enabled = true;
         raycasterDict.cellTransmitterPoints.enabled = true;
         raycasterDict.fmTransmitterPoints.enabled = false;
-        
+
+
+
+        if (raycasterReticule) {
+          raycasterReticule.material = digitalReticuleMaterial;
+        }
+
     
-        clearFMrays();
         // Hide FM towers when digital is selected
         fmTransmitterPoints.visible = false;
 
