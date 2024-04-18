@@ -499,7 +499,7 @@ export function gfx() {
     // method: distance from PROPAGATION POLYGON edge to centroid
     fmTransmitterPoints: { group: fmPropagationPolygons, enabled: false, onIntersect: raycastFMpolygon },
     cameraCenter: { 
-      group: null,  // no specific group 
+      group: accessibilityMesh,  // terrain proxy 
       enabled: true,  // always enabled
       onIntersect: () => printCameraCenterCoordinates(camera)  // this function prints coords to a text div
 }
@@ -509,8 +509,7 @@ export function gfx() {
 
 
   // document.addEventListener('pointermove', onPointerMove);
-
-  function raycastCellServiceVertex(intersection, maxCellTowerRays) {
+  function raycastCellServiceVertex(intersection, maxCellTowerRays = 10) {
     const intersectPoint = intersection.point;
 
     console.log(`Intersected object type: ${intersection.object.type}`);
@@ -522,37 +521,56 @@ export function gfx() {
     if (nearestTowers.length > 0) {
         nearestTowers.forEach(tower => {
             console.log(`Nearest Cell Tower is ${tower.distance.toFixed(2)} units away, Grid Code: ${tower.gridCode}`);
-            drawcellRayLine(intersectPoint, tower.position);
+            drawcellRayLine(intersectPoint, tower.position, maxCellTowerRays);  // Pass maxCellTowerRays for cleanup
         });
     } else {
         console.log('No cell towers found');
-        if (cellRayLine.parent) {
-            scene.remove(cellRayLine); // Remove the line if no nearest tower is found
-        }
+        cellRayCleanup(maxCellTowerRays);  // Cleanup when no towers are found
     }
 }
   
 let currentRayLines = [];
 
 
-function drawcellRayLine(start, end) {
-    // Create new geometry and line
-    const lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 }); // Example color
-    const line = new THREE.Line(lineGeometry, lineMaterial);
+function drawcellRayLine(start, end, maxCellTowerRays) {
+  // Create new geometry and line
+  const lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });  // Example color
+  const line = new THREE.Line(lineGeometry, lineMaterial);
 
-    // Add line to the scene and store it in the array
-    scene.add(line);
-    currentRayLines.push(line);
+  // Add line to the scene and store it in the array
+  scene.add(line);
+  currentRayLines.push(line);
 
-    // Ensure we do not exceed the number of maximum allowable lines
-    while (currentRayLines.length > 10) {
-        const oldLine = currentRayLines.shift(); // Remove the oldest line
-        scene.remove(oldLine);
-        if (oldLine.geometry) oldLine.geometry.dispose(); // Dispose geometry to free resources
-    }
+  // Ensure we do not exceed the number of maximum allowable lines
+  while (currentRayLines.length > maxCellTowerRays) {
+      const oldLine = currentRayLines.shift();  // Remove the oldest line
+      scene.remove(oldLine);
+      if (oldLine.geometry) oldLine.geometry.dispose();  // Dispose of geometry to free resources
+  }
 }
-    
+
+
+function cellRayCleanup(maxCellTowerRays) {
+  while (currentRayLines.length > maxCellTowerRays) {
+      const oldLine = currentRayLines.shift();
+      if (oldLine) {
+          scene.remove(oldLine);
+          if (oldLine.geometry) oldLine.geometry.dispose();
+      }
+  }
+}
+
+function clearCellRays() {
+  currentRayLines.forEach(line => {
+      scene.remove(line);
+      if (line.geometry) line.geometry.dispose();
+  });
+  currentRayLines = [];  // Reset the array after clearing
+}
+
+
+
   function findNearestCellTowers(intersectPoint, maxCellTowerRays = 10) {
     let towers = [];
     
@@ -575,7 +593,7 @@ function drawcellRayLine(start, end) {
 
 
 
-function raycastFMpolygon(intersections) {
+function raycastFMpolygon(intersections, maxFMRayLines = 2) {
   intersections.forEach(intersection => {
       const intersectPoint = intersection.point;
       const uniqueId = intersection.object.userData.uniqueId;
@@ -584,7 +602,7 @@ function raycastFMpolygon(intersections) {
       const matchingTowers = findAllMatchingFMTowers(uniqueId);
       matchingTowers.forEach(tower => {
           if (tower) {
-              drawFMLine(intersectPoint, tower.position);
+              drawFMLine(intersectPoint, tower.position, maxFMRayLines);
               console.log(`Line drawn to FM Tower with ID: ${tower.uniqueId}`);
           }
       });
@@ -620,23 +638,38 @@ function findAllMatchingFMTowers(intersectionUniqueId) {
 
 let fmRayLines = [];
 
-function drawFMLine(start, end) {
+function fmRayCleanup(maxFMRayLines) {
+    while (fmRayLines.length > maxFMRayLines) {
+        const oldLine = fmRayLines.shift();
+        if (oldLine) {
+            scene.remove(oldLine);
+            if (oldLine.geometry) oldLine.geometry.dispose();
+        }
+    }
+}
+
+function clearFMrays() {
+  fmRayLines.forEach(line => {
+      scene.remove(line);
+      if (line.geometry) line.geometry.dispose();
+  });
+  fmRayLines = [];  // Reset the array after clearing
+}
+
+
+
+function drawFMLine(start, end, maxFMRayLines = 10) {
   const fmRayGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-  const fmRayMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 }); // Ensure this is defined
+  const fmRayMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 }); // Define the line color
   const line = new THREE.Line(fmRayGeometry, fmRayMaterial);
 
   fmRayLines.push(line);  // Track lines
   scene.add(line);
 
-  // Clean up lines to keep scene manageable
-  while (fmRayLines.length > 10) {  // Adjust based on the application needs
-    const oldLine = fmRayLines.shift();
-    if (oldLine) {
-      scene.remove(oldLine);
-      if (oldLine.geometry) oldLine.geometry.dispose();
-    }
-  }
+  // Use the cleanup function to manage line count
+  fmRayCleanup(maxFMRayLines);
 }
+
 
 // Simple geodesic distance calculation (Haversine formula)
   function calculateGeodesicDistance(p1, p2) {
@@ -1053,7 +1086,11 @@ function toggleMapScene(switchState, source) {
     raycasterDict.cellServiceMesh.enabled = false;
     raycasterDict.cellTransmitterPoints.enabled = false;
     raycasterDict.fmTransmitterPoints.enabled = false;
-    
+
+    // Clear existing ray lines from all groups
+    clearFMrays();
+    clearCellRays();
+
 
     // Set all FM propagation groups to decay immediately or hide them
     Object.keys(fmContourGroups).forEach(groupId => {
@@ -1075,6 +1112,7 @@ function toggleMapScene(switchState, source) {
         raycasterDict.cellTransmitterPoints.enabled = false;
 
         scene.remove(cellRayLine);  // Remove the celltower cellRayLine
+        clearCellRays();
 
         // Redraw FM contours using the last used channel filter when switching back to analog
         if (lastChannelFilter !== null) {
@@ -1096,6 +1134,7 @@ function toggleMapScene(switchState, source) {
         raycasterDict.fmTransmitterPoints.enabled = false;
         
     
+        clearFMrays();
         // Hide FM towers when digital is selected
         fmTransmitterPoints.visible = false;
 
