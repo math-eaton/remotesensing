@@ -188,10 +188,21 @@ const synths = {};
 const maxVoices = 10; // Maximum number of voices your application might need
 
 let lastEventTime = Tone.now();
+const timeStep = 0.1; // Minimum time step between events
+
+function getNextEventTime() {
+  const now = Tone.now();
+  lastEventTime = Math.max(lastEventTime + timeStep, now);
+  return lastEventTime;
+}
 
 // ensure linear time / consecutive events
 function safeTriggerSynth(synth, note, duration) {
-  const time = getNextEventTime(); // Ensure we fetch a new safe time
+  if (!synth) {
+    console.error("Attempted to trigger a synth that does not exist");
+    return;
+  }
+  const time = getNextEventTime();
   synth.triggerAttackRelease(note, duration, time);
 }
 
@@ -200,24 +211,9 @@ function createSynth(type) {
   if (!synths[type]) {
     console.log(`Creating new synth of type: ${type}`);
     switch (type) {
-      case 'fmContourSynth':
+      case 'FMSynth':
         // Setup for a typical FM synthesizer with modulation capabilities
-        synths[type] = new Tone.FMSynth({
-          harmonicity: 3, // Ratio between the frequency of the modulator and the carrier
-          modulationIndex: 10, // Depth of the frequency modulation
-          envelope: {
-            attack: 0.5,
-            decay: 0.2,
-            sustain: 1,
-            release: 1.5
-          },
-          modulationEnvelope: {
-            attack: 0.5,
-            decay: 0.1,
-            sustain: 1,
-            release: 1
-          }
-        }).toDestination();
+        synths[type] = new Tone.FMSynth().toDestination();
         break;
       case 'NoiseSynth':
         synths[type] = new Tone.NoiseSynth().toDestination();
@@ -250,11 +246,6 @@ function switchSynth(activeSynthType) {
   return synth;
 }
 
-function getNextEventTime() {
-  const now = Tone.now();
-  lastEventTime = Math.max(lastEventTime + 0.1, now);
-  return lastEventTime;
-}
 
 function loadSynthPresets(data) {
   synthPresets = data;
@@ -271,8 +262,6 @@ function applyPreset(preset) {
       safeTriggerSynth(synth, "D4", "8n"); // Use the safe trigger function
   }
 }
-
-
 
 function interpolatePresets(presetMin, presetMax, fraction) {
   if (!presetMin || !presetMax) {
@@ -303,7 +292,6 @@ function interpolatePresets(presetMin, presetMax, fraction) {
 function lerp(value1, value2, fraction) {
   return value1 + (value2 - value1) * fraction;
 }
-
 
 
 // Function to calculate and apply the interpolated presets based on distance
@@ -824,7 +812,7 @@ function drawFMLine(intersectPoint, end, index) {
 function controlOscillatorForLine(index, length) {
   let synth = synths[index];
   if (!synth) {
-    synth = createSynth('fmContourSynth');
+    synth = createSynth('FMSynth');
     synths[index] = synth;
   }
   
@@ -848,8 +836,8 @@ function controlOscillatorForLine(index, length) {
 function releaseOscillatorForLine(index) {
   const synth = synths[index];
   if (synth) {
-    synth.triggerRelease();
-    delete synths[index]; // Clean up the synth entry
+    synth.triggerRelease([Tone.now() + 0.1]); // This stops all currently playing notes. Adjust if your synth setup is different.
+    // delete synths[index]; // Clean up the synth entry
   }
 }
 
@@ -887,18 +875,9 @@ function processSortedFmRays() {
       const newPreset = interpolatePresets(presetMin, presetMax, fraction);
 
       applyPreset(newPreset);
-      safeTriggerSynth(synth, frequency, "8n", Tone.now() + index * 0.1); // Stagger start times slightly
   });
 }
 
-function applyPresetToVoice(voiceIndex, preset, frequency) {
-  const synthVoice = synth.get(voiceIndex);
-  if (synthVoice) {
-      synthVoice.set(preset.settings);
-      synthVoice.frequency.value = frequency; // Example of setting frequency
-      safeTriggerSynth(synthVoice, frequency, "8n");
-  }
-}
 
 function clearFMrays() {
   fmRayLinesByUniqueId.forEach((line, uniqueId) => {
@@ -939,7 +918,7 @@ function getSortedCellRayDistances() {
 function processSortedCellRays() {
   const sortedRays = getSortedCellRayDistances();
   sortedRays.forEach(ray => {
-      console.log(`Ray ${ray.originalIndex} is sorted at index ${ray.sortedIndex} with distance ${ray.distance.toFixed(4)}`);
+      // console.log(`Ray ${ray.originalIndex} is sorted at index ${ray.sortedIndex} with distance ${ray.distance.toFixed(4)}`);
   });
 
   // Example of passing to another function
@@ -1014,11 +993,13 @@ function calculateGeodesicDistance(p1, p2) {
       const preset = synthPresets.presets["cellServiceMesh"][gridCode];
       if (preset) {
 
-        applyPreset(preset);
   
         // Stop any currently playing notes
-        synth.triggerRelease([Tone.now()]); // This stops all currently playing notes. Adjust if your synth setup is different.
-  
+        // synth.triggerRelease([Tone.now() + 0.1]); // This stops all currently playing notes. Adjust if your synth setup is different.
+       
+        applyPreset(preset);
+
+
         // Start a new note or drone. Adjust the note and duration as needed.
         synth.triggerAttack([Tone.now() + 0.1]); // Use triggerAttack for a continuous sound
       } else {
@@ -1047,7 +1028,7 @@ function calculateGeodesicDistance(p1, p2) {
     }
   }
 
-
+  // reorient cam-center raycaster for orthographic perspective
   function updateRaycasterOriginForTilt(camera, controls, terrainHeight = 0) {
     const polarAngle = controls.getPolarAngle(); // Current vertical rotation in radians
     const cameraHeight = camera.position.z - terrainHeight; // Height of the camera from the terrain
@@ -1092,9 +1073,12 @@ function handleRaycasters(camera, scene) {
                       scene.add(raycasterReticule);
                   }
               });
+
+              // active synth should play a note
+
           } else {
             if (key === 'fmTransmitterPoints') {
-              releaseAllSynthNotes(); // Release all notes if no intersections are found
+               // release all notes if no intersections are found
                 }
 
               clearFMrays();
@@ -1107,11 +1091,6 @@ function handleRaycasters(camera, scene) {
   });
 }
 
-function releaseAllSynthNotes() {
-  Object.keys(synths).forEach(index => {
-      releaseOscillatorForLine(index);
-  });
-}
 
 
 ///////////////////////////////////////////////////
@@ -1304,6 +1283,8 @@ function updateScaleBar(scaleBar, camera) {
       console.log('idk?')
     }
 console.log(audioContext.state)
+Tone.start(); // Necessary to start audio context in response to user interaction
+Tone.Transport.start("+0.1")  
   }
 
 
@@ -1432,7 +1413,7 @@ function toggleMapScene(switchState, source) {
         raycasterDict.fmTransmitterPoints.enabled = true;
         raycasterDict.cellTransmitterPoints.enabled = false;
         scene.remove(cellRayLine);
-        activeSynthType = 'fmContourSynth';
+        activeSynthType = 'FMSynth';
 
         // Redraw FM contours using the last used channel filter when switching back to analog
         if (lastChannelFilter !== null) {
@@ -1468,14 +1449,14 @@ function toggleMapScene(switchState, source) {
         elevContourLines.visible = true;
         accessGroup.visible = false;
         raycasterDict.accessibilityMesh.enabled = false;
-        switchSynth('CellSynth'); // Hypothetical synthesizer for this mode
+        // switchSynth('CellSynth'); // Hypothetical synthesizer for this mode
         break;
 
       case 2: // Accessibility mode
         accessGroup.visible = true;
         elevContourLines.visible = false;
         raycasterDict.accessibilityMesh.enabled = true;
-        switchSynth('AccessSynth'); // Hypothetical synthesizer for this mode
+        // switchSynth('AccessSynth'); // Hypothetical synthesizer for this mode
         break;
     }
   }
@@ -1497,8 +1478,8 @@ function toggleMapScene(switchState, source) {
 
       // // Ensure the sliderValue is up-to-date
       // sliderValue = (parseFloat(document.getElementById('fm-channel-slider').value) / sliderLength);
-      const resolutionSlider = document.getElementById('fm-channel-slider');
-      updateSliderDisplay(sliderValue, resolutionSlider);
+      // const resolutionSlider = document.getElementById('fm-channel-slider');
+      // updateSliderDisplay(sliderValue, resolutionSlider);
   
 
       initWebSocketConnection();
@@ -2161,7 +2142,8 @@ function logMeshData(group) {
         // Add the cellServiceMesh group to the scene
         scene.add(cellServiceMesh);
 
-        logMeshData(cellServiceMesh);
+        // report on group geom types
+        // logMeshData(cellServiceMesh);
 
 
 
@@ -3427,8 +3409,6 @@ function addCellTowerPts(geojson) {
 
     toggleMapScene(1, 'switch1'); // init fm on pageload
     toggleMapScene(1, 'switch2'); // init elev contours
-
-    Tone.start(); // Necessary to start audio context in response to user interaction
 
     controls.update();
 }
