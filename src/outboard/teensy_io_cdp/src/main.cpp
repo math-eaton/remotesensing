@@ -50,9 +50,10 @@ bool buttonPressedRight = false;
 // const int potStabilityThreshold = 100; // Acceptable change in value to consider stable
 
 // Sampling and averaging for potentiometer debounce
-const int numSamples = 3;
-int ledPotSamples[numSamples]; // Array to store potentiometer samples
-int zoomPotSamples[numSamples]; // Array to store potentiometer samples
+const int numLEDsamples = 3;
+const int numZoomSamples = 3;
+int ledPotSamples[numLEDsamples]; // Array to store potentiometer samples
+int zoomPotSamples[numZoomSamples]; // Array to store potentiometer samples
 int sampleIndex = 0; // Current index in the samples array
 long totalLEDPotValue = 0; // Total of the samples
 int averageLEDPotValue = 0; // Average of the samples
@@ -92,10 +93,18 @@ void setup() {
 
 
   // Initialize ledPotSamples array
-  for(int i = 0; i < numSamples; i++) {
+  for(int i = 0; i < numLEDsamples; i++) {
     ledPotSamples[i] = 0;
   }
+
+    // Initialize zoompotsamples array
+  for(int i = 0; i < numZoomSamples; i++) {
+    ledPotSamples[i] = 0;
+  }
+
 }
+
+
 
 void loop() {
   // Read the state of SPDT switch 1 (radio vs cell)
@@ -212,16 +221,16 @@ void loop() {
   // Add the reading to the total
   totalLEDPotValue += ledPotSamples[sampleIndex];
   // Advance to the next position in the array
-  sampleIndex = (sampleIndex + 1) % numSamples;
+  sampleIndex = (sampleIndex + 1) % numLEDsamples;
   // Calculate the average
-  averageLEDPotValue = totalLEDPotValue / numSamples;
+  averageLEDPotValue = totalLEDPotValue / numLEDsamples;
 
   // same for zoom pot
   totalZoomPotValue -= zoomPotSamples[sampleIndex];
-  zoomPotSamples[sampleIndex] = analogRead(zoomPotPin);
+  zoomPotSamples[sampleIndex] = zoomPotValue;
   totalZoomPotValue += zoomPotSamples[sampleIndex];
-  sampleIndex = (sampleIndex + 1) % numSamples;
-  averageZoomPotValue = totalZoomPotValue / numSamples;
+  sampleIndex = (sampleIndex + 1) % numZoomSamples;
+  averageZoomPotValue = totalZoomPotValue / numZoomSamples;
 
   // Now use averageLEDPotValue instead of LEDpotValue for mapping and further logic
   int mappedLEDpotValue = map(averageLEDPotValue, 0, 1023, 201, 300); 

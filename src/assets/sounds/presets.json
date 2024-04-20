@@ -127,7 +127,9 @@
               "type": "FMSynth",
               "settings": {
                   "oscillator": {
-                      "type": "sine"
+                      "type": "sine",
+                      "frequency": 440
+                    
                   },
                   "envelope": {
                       "attack": 0.1,
@@ -141,7 +143,9 @@
               "type": "FMSynth",
               "settings": {
                   "oscillator": {
-                      "type": "triangle"
+                      "type": "triangle",
+                      "frequency": 880
+
                   },
                   "envelope": {
                       "attack": 0.5,
