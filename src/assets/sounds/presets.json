@@ -1,118 +1,156 @@
 {
-    "presets": {
-        "cellServiceOld": {
-            "0": {
-                "oscillator": {"type": "sine"},
-                "modulationIndex": 2,
-                "harmonicity": 1.5,
-                "envelope": {
-                "attack": 1,
-                "decay": 1,
-                "sustain": 1,
-                "release": 1
-                }
-            },
-            "1": {
-                "oscillator": {"type": "sine"},
-                "modulationIndex": 1,
-                "harmonicity": 1.0,
-                "envelope": {
-                "attack": 1,
-                "decay": 1,
-                "sustain": 1,
-                "release": 1
-                }
-            }
-        },
-    "cellService": {
-        "0": {
-            "noise": {"type": "pink"},
-            "envelope": {
-              "attack": 0.1,
-              "decay": 0.1,
-              "sustain": 0.5,
-              "release": 1
-            },
-            "filter": {
-              "type": "lowpass",
-              "frequency": 800,
-              "rolloff": -12
-            }
+  "presets": {
+      "cellServiceMesh": {
+          "0": {
+              "type": "MonoSynth",
+              "settings": {
+                  "oscillator": {
+                      "type": "square"
+                  },
+                  "filter": {
+                      "Q": 2,
+                      "type": "lowpass",
+                      "frequency": 800
+                  },
+                  "envelope": {
+                      "attack": 0.05,
+                      "decay": 0.1,
+                      "sustain": 0.9,
+                      "release": 0.2
+                  }
+              }
           },
           "1": {
-            "noise": {"type": "pink"},
-            "envelope": {
-              "attack": 0.1,
-              "decay": 1,
-              "sustain": 0.3,
-              "release": 2
-            },
-            "filter": {
-              "type": "lowpass",
-              "frequency": 500,
-              "rolloff": -24
-            }
-          },
-          "default": {
-            "noise": {"type": "brown"},
-            "envelope": {
-              "attack": 1,
-              "decay": 0.5,
-              "sustain": 0.2,
-              "release": 1.5
-            },
-            "filter": {
-              "type": "bandpass",
-              "frequency": 1000,
-              "rolloff": -12
-            }
+              "type": "MonoSynth",
+              "settings": {
+                  "oscillator": {
+                      "type": "square"
+                  },
+                  "filter": {
+                      "Q": 1,
+                      "type": "highpass",
+                      "frequency": 500
+                  },
+                  "envelope": {
+                      "attack": 0.5,
+                      "decay": 0.5,
+                      "sustain": 0.2,
+                      "release": 1
+                  }
+              }
           }
-        },
-    "accessibility": {
-        "0": {
-            "noise": {"type": "pink"},
-            "envelope": {
-                "attack": 0.1,
-                "decay": 0.1,
-                "sustain": 0.5,
-                "release": 1
-            },
-            "filter": {
-                "type": "lowpass",
-                "frequency": 800,
-                "rolloff": -12
-            }
-            },
-            "1": {
-            "noise": {"type": "pink"},
-            "envelope": {
-                "attack": 0.1,
-                "decay": 1,
-                "sustain": 0.3,
-                "release": 2
-            },
-            "filter": {
-                "type": "lowpass",
-                "frequency": 1,
-                "rolloff": -24
-            }
-            },
-            "default": {
-            "noise": {"type": "brown"},
-            "envelope": {
-                "attack": 1,
-                "decay": 0.5,
-                "sustain": 0.2,
-                "release": 1.5
-            },
-            "filter": {
-                "type": "bandpass",
-                "frequency": 1000,
-                "rolloff": -12
-            }
-            }
-        }
-    
+      },
+      "accessibilityMesh": {
+          "0": {
+              "type": "NoiseSynth",
+              "settings": {
+                  "noise": {
+                      "type": "white"
+                  },
+                  "envelope": {
+                      "attack": 0.01,
+                      "decay": 0.1,
+                      "sustain": 0.8,
+                      "release": 0.1
+                  }
+              }
+          },
+          "1": {
+              "type": "NoiseSynth",
+              "settings": {
+                  "noise": {
+                      "type": "white"
+                  },
+                  "envelope": {
+                      "attack": 1,
+                      "decay": 2,
+                      "sustain": 0.1,
+                      "release": 2
+                  }
+              }
+          }
+      },
+      "cellTransmitterPoints": {
+          "0": {
+              "type": "FMSynth",
+              "settings": {
+                  "harmonicity": 8,
+                  "modulationIndex": 14,
+                  "oscillator": {
+                      "type": "sine"
+                  },
+                  "envelope": {
+                      "attack": 0.01,
+                      "decay": 0.2,
+                      "sustain": 1,
+                      "release": 0.5
+                  },
+                  "modulation": {
+                      "type": "triangle"
+                  },
+                  "modulationEnvelope": {
+                      "attack": 0.5,
+                      "decay": 0,
+                      "sustain": 1,
+                      "release": 0.5
+                  }
+              }
+          },
+          "1": {
+              "type": "FMSynth",
+              "settings": {
+                  "harmonicity": 1,
+                  "modulationIndex": 2,
+                  "oscillator": {
+                      "type": "triangle"
+                  },
+                  "envelope": {
+                      "attack": 1,
+                      "decay": 1,
+                      "sustain": 0.1,
+                      "release": 1
+                  },
+                  "modulation": {
+                      "type": "square"
+                  },
+                  "modulationEnvelope": {
+                      "attack": 1,
+                      "decay": 0.5,
+                      "sustain": 0.1,
+                      "release": 0.5
+                  }
+              }
+          }
+      },
+      "fmContours": {
+          "0": {
+              "type": "PolySynth",
+              "settings": {
+                  "oscillator": {
+                      "type": "sine"
+                  },
+                  "envelope": {
+                      "attack": 0.1,
+                      "decay": 0.2,
+                      "sustain": 0.9,
+                      "release": 0.1
+                  }
+              }
+          },
+          "1": {
+              "type": "PolySynth",
+              "settings": {
+                  "oscillator": {
+                      "type": "triangle"
+                  },
+                  "envelope": {
+                      "attack": 0.5,
+                      "decay": 0.5,
+                      "sustain": 0.1,
+                      "release": 0.5
+                  }
+              }
+          }
       }
-    
-    }
+  }
+}

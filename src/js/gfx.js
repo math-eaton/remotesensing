@@ -37,6 +37,7 @@ export function gfx() {
   let analysisArea = new THREE.Group();
   let coastline = new THREE.Group();
     
+  let synthPresets = {};
 
 
   // init visibility 
@@ -70,7 +71,7 @@ export function gfx() {
   let clock = new THREE.Clock();
   let delta = 0;
   // N fps
-  let interval = 1 / 24;
+  let interval = 1 / 18;
 
   let sliderValue = 1;  //  default value
   const sliderLength = 100;
@@ -181,21 +182,129 @@ export function gfx() {
 
   // tone.js ////////////////////////////
   //////////////
-  // const synth = new Tone.PolySynth(Tone.FMSynth).toDestination();
-  const synth = new Tone.NoiseSynth().toDestination();
+// Registry for storing synthesizers by type
+let synth;
+const synths = {};
+
+let lastEventTime = Tone.now();
+
+// ensure linear time / consecutive events
+function safeTriggerSynth(synth, note, duration) {
+  const time = getNextEventTime(); // Ensure we fetch a new safe time
+  synth.triggerAttackRelease(note, duration, time);
+}
+
+function getNextEventTime() {
+  const now = Tone.now();
+  lastEventTime = Math.max(lastEventTime + 0.1, now);
+  return lastEventTime;
+}
+
+function createSynth(type) {
+  if (!synths[type]) {
+    console.log(`Creating new synth of type: ${type}`);
+    switch (type) {
+      case 'SineDrone':
+        synths[type] = new Tone.MonoSynth().toDestination();
+        break;
+      case 'NoiseSynth':
+        synths[type] = new Tone.NoiseSynth().toDestination();
+        break;
+      case 'CellSynth':
+        synths[type] = new Tone.MonoSynth().toDestination();
+        break;
+      case 'AccessSynth':
+        synths[type] = new Tone.MetalSynth().toDestination();
+        break;
+      default:
+        console.error(`Unknown synth type: ${type}`);
+        // Ensure fallback is only created if it's absolutely necessary
+        if (!synths[type]) {
+          synths[type] = new Tone.Synth().toDestination(); // Fallback synth
+        }
+        break;
+    }
+  }
+  synths[type].volume.value = -Infinity; // Mute all synths initially
+  return synths[type];
+}
 
 
-  function loadSynthPresets(data) {
-    synthPresets = data;
-    console.log("Synth presets loaded", synthPresets);
+
+
+function loadSynthPresets(data) {
+  synthPresets = data;
+  console.log("Synth presets loaded", synthPresets);
+}
+
+function applyPreset(preset) {
+  if (preset.type) {
+      synth = createSynth(preset.type); // Ensure synth is properly initialized
+      synth.volume.value = 0; // Unmute this synth
+  }
+  if (synth && preset.settings) {
+      synth.set(preset.settings);
+      safeTriggerSynth(synth, "D4", "8n"); // Use the safe trigger function
+  }
+}
+
+function switchSynth(activeSynthType) {
+  Object.values(synths).forEach(synth => synth.volume.value = -Infinity); // Mute all synths
+  synth = createSynth(activeSynthType); // Update global synth
+  synth.volume.value = 0; // Unmute the selected synth
+  return synth;
+}
+
+
+function interpolatePresets(presetMin, presetMax, fraction) {
+  if (!presetMin || !presetMax) {
+      console.error("Invalid presets", { presetMin, presetMax });
+      return null;  // Return null if presets are missing
   }
 
-    // Function to apply a preset to the synthesizer
-  function applyPreset(preset) {
-    synth.set(preset);
-  }
+  let interpolatedPreset = {};
 
-  
+  // Iterate over keys in the minimum preset (assuming it has all necessary keys)
+  Object.keys(presetMin).forEach(key => {
+      if (presetMin[key] !== null && typeof presetMin[key] === 'object' && !Array.isArray(presetMin[key])) {
+          // Recursively interpolate sub-objects
+          interpolatedPreset[key] = interpolatePresets(presetMin[key], presetMax[key], fraction);
+      } else if (typeof presetMin[key] === 'number') {
+          // Directly interpolate numeric values
+          interpolatedPreset[key] = lerp(presetMin[key], presetMax[key], fraction);
+      } else {
+          // Choose based on the dominant fraction for non-numeric values
+          interpolatedPreset[key] = fraction > 0.5 ? presetMax[key] : presetMin[key];
+      }
+  });
+
+  return interpolatedPreset;
+}
+
+// Example LERP function for numeric values
+function lerp(value1, value2, fraction) {
+  return value1 + (value2 - value1) * fraction;
+}
+
+// Function to calculate and apply the interpolated presets based on distance
+function updateSynthParameters(intersections) {
+  intersections.forEach(intersection => {
+      const gridCode = intersection.object.userData.gridCode;
+      const presetsForCode = synthPresets.presets[gridCode];
+      if (!presetsForCode) {
+          console.error("No preset found for grid code:", gridCode);
+          return;
+      }
+
+      const nearest = presetsForCode[0]; // assuming sorted by relevance or distance
+      const farthest = presetsForCode[presetsForCode.length - 1];
+      const fraction = calculateInterpolationFraction(intersection.distance, nearest.distance, farthest.distance);
+
+      const interpolatedPreset = interpolatePresets(nearest, farthest, fraction);
+      applyPreset(interpolatedPreset);
+  });
+}
+
 
   //////////////////////////////////////
   // loading screen! //////////////////
@@ -510,7 +619,7 @@ export function gfx() {
 
 
   // document.addEventListener('pointermove', onPointerMove);
-  function raycastCellServiceVertex(intersection, maxCellTowerRays = 10) {
+  function raycastCellServiceVertex(intersection, maxCellTowerRays = 5) {
     const intersectPoint = intersection.point;
 
     // console.log(`Intersected object type: ${intersection.object.type}`);
@@ -571,26 +680,31 @@ function clearCellRays() {
 
 
 
-  function findNearestCellTowers(intersectPoint, maxCellTowerRays = 10) {
+let activeTowerPositions = new Set();  // Tracks the positions of towers currently targeted by rays
+
+function findNearestCellTowers(intersectPoint, maxCellTowerRays = 5) {
     let towers = [];
-    
+
     // Convert intersection point from Three.js coordinates to geographic coordinates
     const intersectGeo = toGeographic(intersectPoint.x, intersectPoint.y);
 
     cellTransmitterPoints.children.forEach(pyramid => {
         const towerGeo = toGeographic(pyramid.position.x, pyramid.position.y);
         const distance = calculateGeodesicDistance(intersectGeo, towerGeo);
-        towers.push({
-            distance: distance,
-            gridCode: pyramid.userData.gridCode,
-            position: pyramid.position.clone()
-        });
+        const positionKey = `${pyramid.position.x.toFixed(3)},${pyramid.position.y.toFixed(3)},${pyramid.position.z.toFixed(3)}`;
+        if (!activeTowerPositions.has(positionKey)) {
+            towers.push({
+                distance: distance,
+                gridCode: pyramid.userData.gridCode,
+                position: pyramid.position.clone(),
+                positionKey: positionKey
+            });
+        }
     });
 
     // Sort towers by distance and return up to `maxCellTowerRays` towers
     return towers.sort((a, b) => a.distance - b.distance).slice(0, maxCellTowerRays);
 }
-
 
 
 function raycastFMpolygon(intersections) {
@@ -683,6 +797,41 @@ function drawFMLine(intersectPoint, end, uniqueId) {
 
 }
 
+
+function getSortedFMRayDistances() {
+  let fmRayDistances = [];
+  fmRayLinesByUniqueId.forEach((line, uniqueId) => {
+      const start = new THREE.Vector3().fromArray(line.geometry.attributes.position.array, 0);
+      const end = new THREE.Vector3().fromArray(line.geometry.attributes.position.array, 3);
+      const distance = start.distanceTo(end);
+      fmRayDistances.push({ uniqueId, distance });
+  });
+
+  fmRayDistances.sort((a, b) => a.distance - b.distance);
+  return fmRayDistances.map((ray, index) => ({
+      uniqueId: ray.uniqueId,
+      sortedIndex: index,
+      distance: ray.distance
+  }));
+}
+
+function processSortedFmRays() {
+  const sortedFMRays = getSortedFMRayDistances();
+  sortedFMRays.forEach(ray => {
+    const fraction = Math.max(0, Math.min(1, (ray.distance - 0.001) / (1.0 - 0.001)));
+    const presetMin = synthPresets.presets.fmContours["0"];
+    const presetMax = synthPresets.presets.fmContours["1"];
+    const newPreset = interpolatePresets(presetMin, presetMax, fraction);
+    applyPreset(newPreset);
+
+    if (synth) {
+      safeTriggerSynth(synth, "C4", "8n"); // Use safe trigger function
+    } else {
+      console.error("No active synthesizer found");
+    }
+  });
+}
+
 function clearFMrays() {
     fmRayLinesByUniqueId.forEach((line, uniqueId) => {
         scene.remove(line);
@@ -690,7 +839,6 @@ function clearFMrays() {
     });
     fmRayLinesByUniqueId.clear();
 }
-
 
 
 function getSortedCellRayDistances() {
@@ -723,37 +871,13 @@ function getSortedCellRayDistances() {
 function processSortedCellRays() {
   const sortedRays = getSortedCellRayDistances();
   sortedRays.forEach(ray => {
-      console.log(`Ray ${ray.originalIndex} is sorted at index ${ray.sortedIndex} with distance ${ray.distance.toFixed(2)}`);
+      console.log(`Ray ${ray.originalIndex} is sorted at index ${ray.sortedIndex} with distance ${ray.distance.toFixed(4)}`);
   });
 
   // Example of passing to another function
   // otherFunction(sortedRays);
 }
 
-function getSortedFMRayDistances() {
-  let fmRayDistances = [];
-  fmRayLinesByUniqueId.forEach((line, uniqueId) => {
-      const start = new THREE.Vector3().fromArray(line.geometry.attributes.position.array, 0);
-      const end = new THREE.Vector3().fromArray(line.geometry.attributes.position.array, 3);
-      const distance = start.distanceTo(end);
-      fmRayDistances.push({ uniqueId, distance });
-  });
-
-  fmRayDistances.sort((a, b) => a.distance - b.distance);
-  return fmRayDistances.map((ray, index) => ({
-      uniqueId: ray.uniqueId,
-      sortedIndex: index,
-      distance: ray.distance
-  }));
-}
-
-function processSortedFmRays() {
-  const sortedFMRays = getSortedFMRayDistances();
-  console.log('Updated FM Rays Sorted by Distance:');
-  sortedFMRays.forEach(ray => {
-      console.log(`FM Ray ID: ${ray.uniqueId}, Sorted Index: ${ray.sortedIndex}, Distance: ${ray.distance.toFixed(2)} units.`);
-  });
-}
 
 // optimizing ray redrawing
 // Last known values to detect significant changes
@@ -761,8 +885,8 @@ let lastCameraPosition = new THREE.Vector3();
 let lastCameraQuaternion = new THREE.Quaternion();
 
 // Thresholds for detecting significant movement or rotation
-const positionThreshold = 0.05; // units
-const rotationThreshold = 0.001; // radians
+const positionThreshold = 0; // page units
+const rotationThreshold = 0.5; // radians
 
 function needsUpdate(camera) {
     // Calculate the change in position
@@ -794,21 +918,21 @@ function updateActiveRaycasterRays() {
 }
 
 // Simple geodesic distance calculation (Haversine formula)
-  function calculateGeodesicDistance(p1, p2) {
-    const R = 6371e3; // metres
-    const φ1 = p1.lat * Math.PI/180;
-    const φ2 = p2.lat * Math.PI/180;
-    const Δφ = (p2.lat-p1.lat) * Math.PI/180;
-    const Δλ = (p2.lon-p1.lon) * Math.PI/180;
-  
-    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ/2) * Math.sin(Δλ/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  
-    return R * c; // in meters
-  }
-      
+function calculateGeodesicDistance(p1, p2) {
+  const R = 6371000; // Radius of Earth in meters, more precise value
+  const φ1 = p1.lat * Math.PI / 180; // Convert degrees to radians
+  const φ2 = p2.lat * Math.PI / 180;
+  const Δφ = (p2.lat - p1.lat) * Math.PI / 180; // Delta latitude in radians
+  const Δλ = (p2.lon - p1.lon) * Math.PI / 180; // Delta longitude in radians
+
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; // Distance in meters
+}
+    
 
   let currentGridCode = null; // Keep track of the last gridCode encountered
 
@@ -819,9 +943,9 @@ function updateActiveRaycasterRays() {
       currentGridCode = gridCode;
   
       // Access the preset for the new gridCode
-      const preset = synthPresets.presets["cellService"][gridCode];
+      const preset = synthPresets.presets["cellServiceMesh"][gridCode];
       if (preset) {
-        // Apply the new preset
+
         applyPreset(preset);
   
         // Stop any currently playing notes
@@ -1198,12 +1322,10 @@ function onDocumentKeyDown(event) {
 
 // scene layer toggles
 function toggleMapScene(switchState, source) {
-
-  const canvas = document.getElementById('gfx'); // Get the canvas element by its ID
-
-  // console.log(`switch stuff: ${switchState}, ${source}`);
+  const canvas = document.getElementById('gfx');
 
   if (source === 'switch1') {
+    let activeSynthType;
     analogGroup.visible = false;
     digitalGroup.visible = false;
 
@@ -1211,12 +1333,11 @@ function toggleMapScene(switchState, source) {
     raycasterDict.cellTransmitterPoints.enabled = false;
     raycasterDict.fmTransmitterPoints.enabled = false;
 
-    let raycasterReticule;
+    // let raycasterReticule;
 
     // Clear existing ray lines from all groups
     clearFMrays();
     clearCellRays();
-
 
     // Set all FM propagation groups to decay immediately or hide them
     Object.keys(fmContourGroups).forEach(groupId => {
@@ -1225,94 +1346,61 @@ function toggleMapScene(switchState, source) {
       updatefmContourGroups(); // Call update function to process changes
     });    
 
+
     switch (switchState) {
-      case 1:
+      case 1: // Analog mode
         analogGroup.visible = true;
-        digitalGroup.visible = false;
-
-        clearCellRays();
-
-        // show FM towers when analog is selected
         fmTransmitterPoints.visible = true;
-
-        // enable relevant raycaster(s)
         raycasterDict.fmTransmitterPoints.enabled = true;
         raycasterDict.cellTransmitterPoints.enabled = false;
-
-        scene.remove(cellRayLine);  // Remove the celltower cellRayLine
-
-        if (raycasterReticule) {
-          raycasterReticule.material = analogReticuleMaterial;
-        }
-
-
+        scene.remove(cellRayLine);
+        activeSynthType = 'SineDrone';
 
         // Redraw FM contours using the last used channel filter when switching back to analog
         if (lastChannelFilter !== null) {
           addFMpropagation3D(fmContoursGeojsonData, lastChannelFilter, fmPropagationContours);
         }
-
-        // reset css filter
-        canvas.style.filter = '';
-
+        
         break;
-      case 2:
+
+      case 2: // Digital mode
         lastChannelFilter = channelFilter;
-
-        clearFMrays();
-
-
         digitalGroup.visible = true;
         analogGroup.visible = false;
-
-
+        fmTransmitterPoints.visible = false;
         raycasterDict.cellServiceMesh.enabled = true;
         raycasterDict.cellTransmitterPoints.enabled = true;
         raycasterDict.fmTransmitterPoints.enabled = false;
+        activeSynthType = 'NoiseSynth';
 
-
-
-        if (raycasterReticule) {
-          raycasterReticule.material = digitalReticuleMaterial;
-        }
-
-    
-        // Hide FM towers when digital is selected
-        fmTransmitterPoints.visible = false;
-
-        // Set all FM propagation groups to decay immediately or hide them
         Object.keys(fmContourGroups).forEach(groupId => {
           fmContourGroups[groupId].isDecaying = true;
           fmContourGroups[groupId].decayRate = 1.0; // Set decay rate for immediate effect
           updatefmContourGroups(); // Call update function to process changes
         });
 
-        // apply css filter
-        // canvas.style.filter = 'hue-rotate(270deg) grayscale(1) contrast(1.5)';
-        // canvas.style.filter = 'hue-rotate(200deg)';
-
-
-
         break;
     }
+    // canvas.style.filter = switchState === 2 ? 'hue-rotate(200deg)' : '';
+    switchSynth(activeSynthType);
+
   } else if (source === 'switch2') {
-    elevContourLines.visible = false;
-    accessGroup.visible = false;
-
-    raycasterDict.accessibilityMesh.enabled = false;
-
     switch (switchState) {
-      case 1:
+      case 1: // Elevation Contours
         elevContourLines.visible = true;
-        // raycasterDict.accessibilityHex.enabled = true;
+        accessGroup.visible = false;
+        raycasterDict.accessibilityMesh.enabled = false;
+        switchSynth('CellSynth'); // Hypothetical synthesizer for this mode
         break;
-      case 2:
+
+      case 2: // Accessibility mode
         accessGroup.visible = true;
+        elevContourLines.visible = false;
         raycasterDict.accessibilityMesh.enabled = true;
+        switchSynth('AccessSynth'); // Hypothetical synthesizer for this mode
         break;
     }
   }
-
 }
 
   
@@ -3114,8 +3202,6 @@ function addCellTowerPts(geojson) {
     accessibilityMeshGeojsonData,
     fmFreqDictionaryJson;
 
-  let synthPresets = {};
-
 
   function handleGeoJSONData(url, data) {
     switch (url) {
@@ -3263,6 +3349,8 @@ function addCellTowerPts(geojson) {
 
     toggleMapScene(1, 'switch1'); // init fm on pageload
     toggleMapScene(1, 'switch2'); // init elev contours
+
+    Tone.start(); // Necessary to start audio context in response to user interaction
 
     controls.update();
 }
