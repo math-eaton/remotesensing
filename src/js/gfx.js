@@ -840,7 +840,6 @@ function updateDroneSynthBasedOnShortestRay() {
   let shortestDistance = Infinity;
   let shouldAdjust = false;
 
-  // Calculate shortest distance from the lines currently drawn
   fmRayLinesByUniqueId.forEach(line => {
       const positions = line.geometry.attributes.position.array;
       const start = new THREE.Vector3(positions[0], positions[1], positions[2]);
@@ -853,17 +852,16 @@ function updateDroneSynthBasedOnShortestRay() {
   });
 
   if (shouldAdjust) {
-      // Assuming distance ranges possibly from 0.01 (close) to 2 (far)
       const normalizedDistance = Math.max(0, Math.min(1, (shortestDistance - 0.01) / (2 - 0.01)));
       const targetHarmonicity = 1.0 - normalizedDistance;
       const targetVolume = Tone.gainToDb(1 - normalizedDistance);
 
-      // Ramp harmonicity and volume to new values over 0.1 seconds to smooth transitions
       droneSynth.harmonicity.rampTo(targetHarmonicity, 0.1);
       droneSynth.volume.rampTo(targetVolume, 0.1);
   } else {
-      // Smoothly transition to silence if no rays are active
-      droneSynth.volume.rampTo(-Infinity, 0.1); // Fade out smoothly
+      // Instead of setting to -Infinity, ramp to a very low but audible level
+      droneSynth.harmonicity.rampTo(0.1, 0.1); // Example baseline harmonicity
+      droneSynth.volume.rampTo(Tone.gainToDb(0.1), 0.1); // Maintain a low volume
   }
 }
 
@@ -934,7 +932,7 @@ function clearFMrays(currentActiveIds) {
       scene.remove(line);
       line.geometry.dispose();
       fmRayLinesByUniqueId.delete(uniqueId);
-      synth.triggerRelease([Tone.now() + 0.1]); 
+      // synth.triggerRelease([Tone.now() + 0.1]); 
 });
       console.error("Invalid or undefined currentActiveIds passed to clearFMrays");
       return;  // Exit the function if currentActiveIds is not valid
@@ -1019,22 +1017,6 @@ function updateActiveRaycasterRays() {
   }
 }
 
-// Simple geodesic distance calculation (Haversine formula)
-function calculateGeodesicDistance(p1, p2) {
-  const R = 6371000; // Radius of Earth in meters, more precise value
-  const φ1 = p1.lat * Math.PI / 180; // Convert degrees to radians
-  const φ2 = p2.lat * Math.PI / 180;
-  const Δφ = (p2.lat - p1.lat) * Math.PI / 180; // Delta latitude in radians
-  const Δλ = (p2.lon - p1.lon) * Math.PI / 180; // Delta longitude in radians
-
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return R * c; // Distance in meters
-}
-    
 
   let currentGridCode = null; // Keep track of the last gridCode encountered
 
@@ -1104,44 +1086,60 @@ function calculateGeodesicDistance(p1, p2) {
 // overall raycaster handler for animation loop
 function handleRaycasters(camera, scene) {
   Object.entries(raycasterDict).forEach(([key, { group, enabled, onIntersect }]) => {
-    if (enabled && group) {
-      const raycaster = new THREE.Raycaster();
-      const rayOrigin = updateRaycasterOriginForTilt(camera, controls);
-      raycaster.set(rayOrigin, new THREE.Vector3(0, 0, -1));
-      raycaster.params.Points.threshold = 0.275;
+      if (enabled && group) {
+          const raycaster = new THREE.Raycaster();
+          const rayOrigin = updateRaycasterOriginForTilt(camera, controls);
+          raycaster.set(rayOrigin, new THREE.Vector3(0, 0, -1));
+          raycaster.params.Points.threshold = 0.275;
 
-      const visibleChildren = group.children.filter(child => child.visible);
-      const intersections = raycaster.intersectObjects(visibleChildren, true);
+          const visibleChildren = group.children.filter(child => child.visible);
+          const intersections = raycaster.intersectObjects(visibleChildren, true);
 
-      if (intersections.length > 0) {
-        if (key === 'fmTransmitterPoints') {
-          updateDroneSynth(intersections); // Update drone synth for fmTransmitterPoints
-          onIntersect(intersections); // Handle all intersections
-        } else {
-          onIntersect(intersections[0]); // Handle only the first intersection for other cases
-        }
-        
-        intersections.forEach(intersection => {
-          printCameraCenterCoordinates(intersection.point);
-          raycasterReticule.position.set(intersection.point.x, intersection.point.y, intersection.point.z);
-          if (!raycasterReticule.parent) {
-            scene.add(raycasterReticule);
+          if (intersections.length > 0) {
+              if (key === 'fmTransmitterPoints') {
+                  updateDroneSynth(intersections); // Ensure this updates based on current intersections
+                  onIntersect(intersections);
+              } else {
+                  onIntersect(intersections[0]);
+              }
+
+              intersections.forEach(intersection => {
+                  printCameraCenterCoordinates(intersection.point);
+                  raycasterReticule.position.set(intersection.point.x, intersection.point.y, intersection.point.z);
+                  if (!raycasterReticule.parent) {
+                      scene.add(raycasterReticule);
+                  }
+              });
+          } else {
+              if (key === 'fmTransmitterPoints') {
+                  updateDroneSynth([]); // Ensure the drone maintains a low-volume state
+              }
+              clearFMrays();
+              if (raycasterReticule.parent) {
+                  scene.remove(raycasterReticule);
+              }
+              console.log("NO INTERSECTIONS");
           }
-        });
-      } else {
-        if (key === 'fmTransmitterPoints') {
-          updateDroneSynth([]); // Mute drone synth if no intersections for fmTransmitterPoints
-        }
-        clearFMrays(); // Clear any FM rays, specifics depend on your implementation
-        if (raycasterReticule.parent) {
-          scene.remove(raycasterReticule);
-        }
-        console.log("NO INTERSECTIONS");
       }
-    }
   });
 }
 
+// Simple geodesic distance calculation (Haversine formula)
+function calculateGeodesicDistance(p1, p2) {
+  const R = 6371000; // Radius of Earth in meters, more precise value
+  const φ1 = p1.lat * Math.PI / 180; // Convert degrees to radians
+  const φ2 = p2.lat * Math.PI / 180;
+  const Δφ = (p2.lat - p1.lat) * Math.PI / 180; // Delta latitude in radians
+  const Δλ = (p2.lon - p1.lon) * Math.PI / 180; // Delta longitude in radians
+
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; // Distance in meters
+}
+    
 
 ///////////////////////////////////////////////////
 /// add scale bar + lat/long printout
