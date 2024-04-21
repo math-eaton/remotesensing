@@ -331,7 +331,8 @@ function updateDroneSynth(intersections, minDistance = 0.001, maxDistance = 1.0)
           oscillator: { type: "sine", frequency: 220 }, // Lower frequency or any idle state config
           envelope: { attack: 1, decay: 1, sustain: 1, release: 1 }
       });
-      droneSynth.volume.value = Tone.gainToDb(0.1); // Keep volume low but audible
+      droneSynth.harmonicity.rampTo(0.1, 2); // Slower ramp for a subtle effect
+      droneSynth.volume.rampTo(Tone.gainToDb(0.1), 2); // Extended time for a smoother fade-out
   }
 }
 
@@ -859,9 +860,9 @@ function updateDroneSynthBasedOnShortestRay() {
       droneSynth.harmonicity.rampTo(targetHarmonicity, 0.1);
       droneSynth.volume.rampTo(targetVolume, 0.1);
   } else {
-      // Instead of setting to -Infinity, ramp to a very low but audible level
-      droneSynth.harmonicity.rampTo(0.1, 0.1); // Example baseline harmonicity
-      droneSynth.volume.rampTo(Tone.gainToDb(0.1), 0.1); // Maintain a low volume
+      // Smoothly transition to a very low but audible level if no rays are active over 3 seconds
+      droneSynth.harmonicity.rampTo(0.1, 3); // Slower ramp for a subtle effect
+      droneSynth.volume.rampTo(Tone.gainToDb(0.1), 3); // Extended time for a smoother fade-out
   }
 }
 
