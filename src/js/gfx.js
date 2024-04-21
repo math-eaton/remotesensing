@@ -795,10 +795,49 @@ function findNearestCellTowers(intersectPoint, maxCellTowerRays = 5) {
 }
 
 
+// function raycastFMpolygon(intersections) {
+//   let currentActiveIds = new Set();
+
+//   intersections.forEach(intersection => {
+//       const uniqueId = intersection.object.userData.uniqueId;
+//       currentActiveIds.add(uniqueId);
+
+//       const matchingTowers = findAllMatchingFMTowers(uniqueId);
+//       matchingTowers.forEach(tower => {
+//           if (tower) {
+//               drawFMLine(intersection.point, tower.position, uniqueId);
+//           }
+//       });
+//   });
+
+
+//     // Remove lines for polygons no longer intersected
+//     fmRayLinesByUniqueId.forEach((line, uniqueId) => {
+//       if (!currentActiveIds.has(uniqueId)) {
+//           scene.remove(line);
+//           line.geometry.dispose();
+//           fmRayLinesByUniqueId.delete(uniqueId);
+//       }
+//   });
+
+//   console.log("Current Active IDs:", currentActiveIds);
+
+//   // Call to clear rays no longer intersected
+//   clearFMrays(currentActiveIds);
+// }
+
+
+
 function raycastFMpolygon(intersections) {
   let currentActiveIds = new Set();
 
-  intersections.forEach(intersection => {
+  // Filter intersections where userData.contourIndex is -4
+  const relevantIntersections = intersections.filter(intersection => {
+      return intersection.object.userData.contourIndex === -4;
+  });
+
+  // Process filtered intersections and update or add new rays
+  relevantIntersections.forEach(intersection => {
       const uniqueId = intersection.object.userData.uniqueId;
       currentActiveIds.add(uniqueId);
 
@@ -810,29 +849,30 @@ function raycastFMpolygon(intersections) {
       });
   });
 
-
-    // Remove lines for polygons no longer intersected
-    fmRayLinesByUniqueId.forEach((line, uniqueId) => {
+  // Remove lines for polygons no longer intersected
+  fmRayLinesByUniqueId.forEach((line, uniqueId) => {
       if (!currentActiveIds.has(uniqueId)) {
-          scene.remove(line);
-          line.geometry.dispose();
-          fmRayLinesByUniqueId.delete(uniqueId);
+          removeRayLine(uniqueId);
       }
   });
-
-  console.log("Current Active IDs:", currentActiveIds);
-
-  // Call to clear rays no longer intersected
-  clearFMrays(currentActiveIds);
 }
 
-function findAllMatchingFMTowers(intersectionUniqueId) {
+function removeRayLine(uniqueId) {
+  let line = fmRayLinesByUniqueId.get(uniqueId);
+  if (line) {
+      scene.remove(line);
+      line.geometry.dispose();
+      fmRayLinesByUniqueId.delete(uniqueId);
+  }
+}
+
+function findAllMatchingFMTowers(uniqueId) {
   let matchingTowers = [];
 
   [window.instancedPyramidMatching, window.instancedPyramidNonMatching].forEach(instancedMesh => {
     const count = instancedMesh.count;
     for (let i = 0; i < count; i++) {
-      if (instancedMesh.userData[i]?.uniqueId === intersectionUniqueId) {
+      if (instancedMesh.userData[i]?.uniqueId === uniqueId) {
         const matrix = new THREE.Matrix4();
         instancedMesh.getMatrixAt(i, matrix);
         const position = new THREE.Vector3().setFromMatrixPosition(matrix);
@@ -840,7 +880,7 @@ function findAllMatchingFMTowers(intersectionUniqueId) {
         // Check if position components are valid numbers
         if (!isNaN(position.x) && !isNaN(position.y) && !isNaN(position.z)) {
           matchingTowers.push({
-            uniqueId: intersectionUniqueId,
+            uniqueId: uniqueId,
             position: position.clone()
           });
         } else {
@@ -869,35 +909,27 @@ let fmRayLines = [];
 
 let fmRayLinesByUniqueId = new Map();
 
-function drawFMLine(intersectPoint, end, index) {
-  let line = fmRayLinesByUniqueId.get(index);
-  let lineGeometry;
-  const length = intersectPoint.distanceTo(end);
+function drawFMLine(intersectPoint, end, uniqueId) {
+  let line = fmRayLinesByUniqueId.get(uniqueId);
+  let lineGeometry = new THREE.BufferGeometry().setFromPoints([intersectPoint, end]);
 
   if (line) {
-      lineGeometry = new THREE.BufferGeometry().setFromPoints([intersectPoint, end]);
-      line.geometry.dispose();
-      line.geometry = lineGeometry;
-  } else {
-      lineGeometry = new THREE.BufferGeometry().setFromPoints([intersectPoint, end]);
-      const fmRayMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
-      line = new THREE.Line(lineGeometry, fmRayMaterial);
-      scene.add(line);
-      fmRayLinesByUniqueId.set(index, line);
+      scene.remove(line);  // Remove the old line from the scene first
+      line.geometry.dispose();  // Dispose of the old geometry
   }
+
+  // Create a new line, regardless if it was previously existing
+  const fmRayMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+  line = new THREE.Line(lineGeometry, fmRayMaterial);
+  scene.add(line);
+  fmRayLinesByUniqueId.set(uniqueId, line);
 
   // Update synthesizer parameters based on the current line length
-  updateFMSynthParameters(index, length);
+  const length = intersectPoint.distanceTo(end);
+  updateFMSynthParameters(uniqueId, length);
 }
 
 
-function releaseOscillator(index) {
-  const synth = synths[index];
-  if (synth) {
-    synth.triggerRelease([Tone.now() + 0.1]); // This stops all currently playing notes. Adjust if your synth setup is different.
-    // delete synths[index]; // Clean up the synth entry
-  }
-}
 
 function getSortedFMRayDistances() {
   let fmRayDistances = [];
@@ -936,16 +968,6 @@ function processSortedFmRays() {
   });
 }
 
-
-// function clearFMrays() {
-//   fmRayLinesByUniqueId.forEach((line, uniqueId) => {
-//       scene.remove(line);
-//       line.geometry.dispose();
-//       releaseOscillator();
-//   });
-//   fmRayLinesByUniqueId.clear();
-// }
-
 function clearFMrays(currentActiveIds) {
   
   // Check if currentActiveIds is defined and is a Set
@@ -953,27 +975,11 @@ function clearFMrays(currentActiveIds) {
     fmRayLinesByUniqueId.forEach((line, uniqueId) => {
       scene.remove(line);
       line.geometry.dispose();
-      releaseOscillator();
-  });
-      // console.error("Invalid or undefined currentActiveIds passed to clearFMrays");
+      fmRayLinesByUniqueId.delete(uniqueId);
+      synth.triggerRelease([Tone.now() + 0.1]); 
+});
+      console.error("Invalid or undefined currentActiveIds passed to clearFMrays");
       return;  // Exit the function if currentActiveIds is not valid
-  }
-
-  fmRayLinesByUniqueId.forEach((line, id) => {
-      if (!currentActiveIds.has(id)) {
-          scene.remove(line);
-          line.geometry.dispose();
-          releaseOscillatorForLine(id);
-          fmRayLinesByUniqueId.delete(id);
-      }
-  });
-}
-
-function releaseOscillatorForLine(uniqueId) {
-  const synth = synths[uniqueId];
-  if (synth) {
-      synth.triggerRelease();
-      delete synths[uniqueId];
   }
 }
 
@@ -1085,7 +1091,7 @@ function calculateGeodesicDistance(p1, p2) {
 
   
         // Stop any currently playing notes
-        // synth.triggerRelease([Tone.now() + 0.1]); // This stops all currently playing notes. Adjust if your synth setup is different.
+        synth.triggerRelease([Tone.now() + 0.1]); // This stops all currently playing notes. Adjust if your synth setup is different.
        
         applyPreset(preset);
 
@@ -2490,12 +2496,12 @@ function addFMpropagation3D(geojson, channelFilter, fmPropagationContours, strid
             // }
 
             // Calculate feature opacity based on its index
-            let featureIndex = parseInt(feature.properties.key.split('_').pop(), 10);
+            let contourIndex = parseInt(feature.properties.key.split('_').pop(), 10);
             let opacity = maxOpacity;
 
             // Apply dynamic opacity for indices < N through the minimum negative index
-            if (featureIndex < opacityReductionThreshold) {
-              opacity = minOpacity + (opacityRange * (featureIndex - minIndexForOpacity) / (opacityReductionThreshold - 1 - minIndexForOpacity));
+            if (contourIndex < opacityReductionThreshold) {
+              opacity = minOpacity + (opacityRange * (contourIndex - minIndexForOpacity) / (opacityReductionThreshold - 1 - minIndexForOpacity));
             }
 
             const lineMaterial = new THREE.LineBasicMaterial({
@@ -2508,7 +2514,7 @@ function addFMpropagation3D(geojson, channelFilter, fmPropagationContours, strid
       
           const vertices = feature.geometry.coordinates[0].map(coord => {
               const [x, y] = toStatePlane(coord[0], coord[1]);
-              const z = elevationData[Math.abs(featureIndex)] * zScale;
+              const z = elevationData[Math.abs(contourIndex)] * zScale;
               return new THREE.Vector3(x, y, z);
           });
       
@@ -2547,6 +2553,7 @@ function addFMpropagation3D(geojson, channelFilter, fmPropagationContours, strid
           mesh.userData = {
             channelFilter: feature.properties.channel, 
             uniqueId: uniqueId,
+            contourIndex: contourIndex,
             // vertices: vertices,
           };
                   
