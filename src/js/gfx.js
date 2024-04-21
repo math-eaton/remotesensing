@@ -197,49 +197,101 @@ let lastEventTime = Tone.now();
 const timeIncrement = 0.1;
 const randomBuffer = 0.01; // Adding a small random buffer to avoid collisions
 
+// transport stuff
+function getNextEventTime() {
+  const now = Tone.now();
+  lastEventTime = Math.max(lastEventTime + timeIncrement, now) + (Math.random() * randomBuffer);
+  return lastEventTime;
+}
+
+// ensure linear time / consecutive events
+function safeTriggerSynth(synth, note, duration) {
+if (!synth) {
+  console.error("Attempted to trigger a synth that does not exist");
+  return;
+}
+const time = getNextEventTime();
+synth.triggerAttackRelease(note, duration, time);
+}
+
+// setup effects
+let sharedReverb = new Tone.Reverb({
+  decay: 4,    // Decay time of the reverb in seconds
+  preDelay: 0.25 // Delay before the reverb effect kicks in
+}).toDestination();
+
+sharedReverb.wet.value = 0.1; // Mixing ratio of the wet (processed) signal
+
+function calculateReverbWetLevel(cameraZoom) {
+  // Define the zoom range and corresponding wet levels
+  const minZoom = 0.6;
+  const maxZoom = 3.6;
+  const minWetLevel = 0.05;
+  const maxWetLevel = 1.0;
+
+  // Normalize the current zoom within the range
+  const normalized = (cameraZoom - minZoom) / (maxZoom - minZoom);
+
+  // Calculate wet level: Inverse relationship (more zoom out, higher wet level)
+  const wetLevel = maxWetLevel - normalized * (maxWetLevel - minWetLevel);
+
+  return wetLevel;
+}
+
+function updateReverbBasedOnCameraZoom(camera) {
+  const wetLevel = calculateReverbWetLevel(camera.zoom);
+  sharedReverb.wet.rampTo(wetLevel, 0.5);  // Ramp the wet level to smooth transitions
+}
+
+function calculateReverbWetLevel(cameraZoom) {
+  const minZoom = controls.minZoom;  // Update with actual minZoom
+  const maxZoom = controls.maxZoom;  // Update with actual maxZoom
+  const minWetLevel = 0.05;
+  const maxWetLevel = 1.0;
+
+  const normalized = (cameraZoom - minZoom) / (maxZoom - minZoom);
+  const wetLevel = maxWetLevel - normalized * (maxWetLevel - minWetLevel);
+
+  return wetLevel;
+}
+
+function adjustReverbSettings(decay, preDelay, wetLevel) {
+  sharedReverb.decay = decay;
+  sharedReverb.preDelay = preDelay;
+  sharedReverb.wet.value = wetLevel;
+}
 
 function setupDroneSynth() {
   droneSynth = new Tone.AMSynth({
       oscillator: { type: "sine" },
       envelope: {
-        attack: 10,   // Long attack time of 5 seconds
-        decay: 0.4,
-        sustain: 0.1,
-        release: 1
+          attack: 10,   // Long attack time of 10 seconds
+          decay: 0.4,
+          sustain: 0.1,
+          release: 1
       },
       detune: 100,
       harmonicity: 0.5,
-  },).toDestination();
+  });
 
-  // Adding a low-pass filter to the signal chain
+  // Initialize the filter
   droneFilter = new Tone.Filter({
       type: 'lowpass',
       frequency: 100,  // Starting cutoff frequency
-      rolloff : -96 ,
-      Q : 10 ,
+      rolloff: -96,
+      Q: 2,
   });
 
+  // Connect the synth to the filter
   droneSynth.connect(droneFilter);
-  droneFilter.toDestination();
 
-  droneSynth.triggerAttack("D2"); // Continuous note
+  // Then connect the filter to the reverb
+  droneFilter.connect(sharedReverb);
+
+  // Trigger continuous note
+  droneSynth.triggerAttack("F2");
 }
 
-function getNextEventTime() {
-    const now = Tone.now();
-    lastEventTime = Math.max(lastEventTime + timeIncrement, now) + (Math.random() * randomBuffer);
-    return lastEventTime;
-}
-
-// ensure linear time / consecutive events
-function safeTriggerSynth(synth, note, duration) {
-  if (!synth) {
-    console.error("Attempted to trigger a synth that does not exist");
-    return;
-  }
-  const time = getNextEventTime();
-  synth.triggerAttackRelease(note, duration, time);
-}
 
 function createSynth(type) {
   if (synths[type]) {
@@ -524,7 +576,11 @@ function monitorSynths() {
     controls.minZoom = 0.5; // min camera zoom out (ortho cam)
     controls.maxZoom = 5; // max camera zoom in (ortho cam)
 
-
+      // Listener to handle camera zoom changes
+      controls.addEventListener('change', () => {
+        updateReverbBasedOnCameraZoom(camera);
+    });
+  
     // console.log(controls.angle)
 
     scene.add(cellRayLine);  // Add the line to the scene initially
@@ -555,14 +611,17 @@ function monitorSynths() {
       // Map the potentiometer value to the orthographic camera zoom range.
       // const zoomRange = (controls.maxZoom - controls.minZoom);
       let zoomValue = value / 100;
+      zoomValue = Math.max(controls.minZoom, Math.min(controls.maxZoom, zoomValue));
       camera.zoom = zoomValue;
-    } else if (camera.isPerspectiveCamera) {
-      // Map the potentiometer value to the perspective camera FOV range.
-      const fovRange = controls.maxDistance - controls.minDistance; 
-      const fovValue = controls.minDistance + (fovRange * ((value - 0) / (1023 - 0)));
-      camera.fov = fovValue;
+
+      // Update the projection matrix after changing the zoom
+      camera.updateProjectionMatrix();
+
+      // Update reverb based on the new zoom level
+      updateReverbBasedOnCameraZoom(camera);
+  } else  {
+      console.log("unknown camera!")
     }
-    camera.updateProjectionMatrix();
   }
   
 
