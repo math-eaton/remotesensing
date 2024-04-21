@@ -124,7 +124,7 @@ export function gfx() {
 
   // synth inits
   let synthPresets = {};
-  let droneSynth; // Global drone synth
+  let droneSynth, droneFilter; // Global 
 
 
 
@@ -200,12 +200,23 @@ const randomBuffer = 0.01; // Adding a small random buffer to avoid collisions
 
 function setupDroneSynth() {
   droneSynth = new Tone.AMSynth({
-    oscillator: { type: "sine" },
-    detune: 100,
-    harmonicity: 0.5,
+      oscillator: { type: "sine" },
+      detune: 100,
+      harmonicity: 0.5,
   }).toDestination();
-  
-  droneSynth.triggerAttack("F2"); // Continuous note
+
+  // Adding a low-pass filter to the signal chain
+  droneFilter = new Tone.Filter({
+      type: 'lowpass',
+      frequency: 100,  // Starting cutoff frequency
+      rolloff : -96 ,
+      Q : 10 ,
+  });
+
+  droneSynth.connect(droneFilter);
+  droneFilter.toDestination();
+
+  droneSynth.triggerAttack("D2"); // Continuous note
 }
 
 function getNextEventTime() {
@@ -320,10 +331,12 @@ function updateDroneSynth(intersections, minDistance = 0.001, maxDistance = 1.0)
       droneSynth.set({
           oscillator: interpolatedPreset.oscillator,
           envelope: interpolatedPreset.envelope,
-          envelope: interpolatedPreset.envelope,
+          // envelope: interpolatedPreset.envelope,
           
       });
       droneSynth.volume.value = Tone.gainToDb(1 - normalizedDistance); // Adjust volume based on distance
+      droneSynth.detune.value = (1.0 - normalizedDistance) * 2;
+
 
   } else {
       // Set to a base "idle" state with low volume or subtle modulation
@@ -854,15 +867,16 @@ function updateDroneSynthBasedOnShortestRay() {
 
   if (shouldAdjust) {
       const normalizedDistance = Math.max(0, Math.min(1, (shortestDistance - 0.01) / (2 - 0.01)));
-      const targetHarmonicity = 1.0 - normalizedDistance;
       const targetVolume = Tone.gainToDb(1 - normalizedDistance);
+      const targetCutoff = 500 * (1 - normalizedDistance);  // Decrease cutoff with distance
 
-      droneSynth.harmonicity.rampTo(targetHarmonicity, 0.1);
+      droneSynth.harmonicity.rampTo(1.0 - normalizedDistance, 0.1);
       droneSynth.volume.rampTo(targetVolume, 0.1);
+      droneFilter.frequency.rampTo(targetCutoff, 0.1); // Adjust filter cutoff based on distance
   } else {
-      // Smoothly transition to a very low but audible level if no rays are active over 3 seconds
-      droneSynth.harmonicity.rampTo(0.1, 3); // Slower ramp for a subtle effect
-      droneSynth.volume.rampTo(Tone.gainToDb(0.1), 3); // Extended time for a smoother fade-out
+      droneSynth.harmonicity.rampTo(0.1, 3);
+      droneSynth.volume.rampTo(Tone.gainToDb(0.1), 3);
+      droneFilter.frequency.rampTo(5, 3); // Low cutoff for a subdued sound
   }
 }
 
