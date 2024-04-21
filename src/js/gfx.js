@@ -37,8 +37,6 @@ export function gfx() {
   let analysisArea = new THREE.Group();
   let coastline = new THREE.Group();
     
-  let synthPresets = {};
-
 
   // init visibility 
   fmTransmitterPoints.visible = true;
@@ -124,6 +122,11 @@ export function gfx() {
     cellServiceYes: '#3b3b3b'
   };
 
+  // synth inits
+  let synthPresets = {};
+  let droneSynth; // Global drone synth
+
+
 
 ///////////////////////// MAP /////////////////////////////
 ////////////////////// PROJECTION /////////////////////////////////
@@ -188,11 +191,22 @@ export function gfx() {
 // Registry for storing synthesizers by type
 let synth;
 const synths = {};
-const maxVoices = 3; // Maximum number of voices your application might need
+// const maxVoices = 3; // Maximum number of voices your application might need
 
 let lastEventTime = Tone.now();
 const timeIncrement = 0.1;
 const randomBuffer = 0.01; // Adding a small random buffer to avoid collisions
+
+
+function setupDroneSynth() {
+  droneSynth = new Tone.AMSynth({
+    oscillator: { type: "sine" },
+    detune: 100,
+    harmonicity: 0.5,
+  }).toDestination();
+  
+  droneSynth.triggerAttack("F2"); // Continuous note
+}
 
 function getNextEventTime() {
     const now = Tone.now();
@@ -210,41 +224,46 @@ function safeTriggerSynth(synth, note, duration) {
   synth.triggerAttackRelease(note, duration, time);
 }
 
-
 function createSynth(type) {
-  if (!synths[type]) {
-    console.log(`Creating new synth of type: ${type}`);
-    switch (type) {
-      case 'FMSynth':
-        // Setup for a typical FM synthesizer with modulation capabilities
-        synths[type] = new Tone.FMSynth().toDestination();
-        break;
-      case 'NoiseSynth':
-        synths[type] = new Tone.NoiseSynth().toDestination();
-        break;
-      case 'CellSynth':
-        synths[type] = new Tone.MonoSynth().toDestination();
-        break;
-      case 'AccessSynth':
-        synths[type] = new Tone.MetalSynth().toDestination();
-        break;
-      default:
-        console.error(`Unknown synth type: ${type}`);
-        // Ensure fallback is only created if it's absolutely necessary
-        if (!synths[type]) {
-          synths[type] = new Tone.Synth().toDestination(); // Fallback synth
-        }
-        break;
-    }
+  if (synths[type]) {
+    console.log(`Reusing existing synth of type: ${type}`);
+    return synths[type];
   }
-  synths[type].volume.value = -Infinity; // Mute all synths initially
-  return synths[type];
+  
+  console.log(`Creating new synth of type: ${type}`);
+  let newSynth;
+  switch (type) {
+    case 'fmContoursSynth':
+      newSynth = new Tone.FMSynth().toDestination();
+      break;
+    case 'NoiseSynth':
+      newSynth = new Tone.NoiseSynth().toDestination();
+      break;
+    case 'CellSynth':
+      newSynth = new Tone.MonoSynth().toDestination();
+      break;
+    case 'AccessSynth':
+      newSynth = new Tone.MetalSynth().toDestination();
+      break;
+    default:
+      console.error(`Unknown synth type: ${type}`);
+      newSynth = new Tone.Synth().toDestination(); // Fallback synth if type is not recognized
+      break;
+  }
+  
+  newSynth.volume.value = -Infinity; // Mute newly created synths initially
+  synths[type] = newSynth;
+  return newSynth;
 }
 
 
 function switchSynth(activeSynthType) {
   Object.values(synths).forEach(synth => synth.volume.value = -Infinity); // Mute all synths
-  synth = createSynth(activeSynthType); // Update global synth
+  if (activeSynthType === 'fmContoursSynth') {
+    synth = droneSynth; // Use the global drone synth for FMSynth
+  } else {
+    synth = createSynth(activeSynthType); // This will reuse or create a new synth
+  }
   synth.volume.value = 0; // Unmute the selected synth
   return synth;
 }
@@ -257,35 +276,31 @@ function loadSynthPresets(data) {
 
 function applyPreset(preset) {
   if (preset.type) {
-      synth = createSynth(preset.type); // Ensure synth is properly initialized
-      synth.volume.value = 0; // Unmute this synth
+    synth = createSynth(preset.type); // This ensures the synth is properly initialized
+    synth.volume.value = 0; // Unmute this synth
   }
   if (synth && preset.settings) {
-      synth.set(preset.settings);
-      safeTriggerSynth(synth, "D4", "8n"); // Use the safe trigger function
+    synth.set(preset.settings);
+    safeTriggerSynth(synth, "D4", "8n"); // Use the safe trigger function
   }
 }
 
-function interpolatePresets(presetMin, presetMax, fraction) {
-  if (!presetMin || !presetMax) {
-      console.error("Invalid presets", { presetMin, presetMax });
-      return null;  // Return null if presets are missing
-  }
 
+
+function interpolatePresets(presetMin, presetMax, fraction) {
   let interpolatedPreset = {};
 
-  // Iterate over keys in the minimum preset (assuming it has all necessary keys)
-  Object.keys(presetMin).forEach(key => {
-      if (presetMin[key] !== null && typeof presetMin[key] === 'object' && !Array.isArray(presetMin[key])) {
-          // Recursively interpolate sub-objects
-          interpolatedPreset[key] = interpolatePresets(presetMin[key], presetMax[key], fraction);
-      } else if (typeof presetMin[key] === 'number') {
-          // Directly interpolate numeric values
-          interpolatedPreset[key] = lerp(presetMin[key], presetMax[key], fraction);
+  Object.keys(presetMin.settings).forEach(key => {
+    interpolatedPreset[key] = {};
+    Object.keys(presetMin.settings[key]).forEach(subKey => {
+      const minVal = presetMin.settings[key][subKey];
+      const maxVal = presetMax.settings[key][subKey];
+      if (typeof minVal === 'number' && typeof maxVal === 'number') {
+        interpolatedPreset[key][subKey] = lerp(minVal, maxVal, fraction);
       } else {
-          // Choose based on the dominant fraction for non-numeric values
-          interpolatedPreset[key] = fraction > 0.5 ? presetMax[key] : presetMin[key];
+        interpolatedPreset[key][subKey] = fraction > 0.5 ? maxVal : minVal;
       }
+    });
   });
 
   return interpolatedPreset;
@@ -295,6 +310,63 @@ function interpolatePresets(presetMin, presetMax, fraction) {
 function lerp(value1, value2, fraction) {
   return value1 + (value2 - value1) * fraction;
 }
+
+function updateDroneSynth(intersections, minDistance = 0.001, maxDistance = 1.0) {
+  if (intersections.length > 0) {
+      let closestDistance = intersections.reduce((min, { distance }) => Math.min(min, distance), Infinity);
+      const normalizedDistance = Math.max(0, Math.min(1, (closestDistance - minDistance) / (maxDistance - minDistance)));
+      const interpolatedPreset = interpolatePresets(synthPresets.presets.fmContoursSynth['0'], synthPresets.presets.fmContoursSynth['1'], normalizedDistance);
+      
+      droneSynth.set({
+          oscillator: interpolatedPreset.oscillator,
+          envelope: interpolatedPreset.envelope,
+          envelope: interpolatedPreset.envelope,
+          
+      });
+      droneSynth.volume.value = Tone.gainToDb(1 - normalizedDistance); // Adjust volume based on distance
+
+  } else {
+      // Set to a base "idle" state with low volume or subtle modulation
+      droneSynth.set({
+          oscillator: { type: "sine", frequency: 220 }, // Lower frequency or any idle state config
+          envelope: { attack: 1, decay: 1, sustain: 1, release: 1 }
+      });
+      droneSynth.volume.value = Tone.gainToDb(0.1); // Keep volume low but audible
+  }
+}
+
+function adjustDroneSynthParametersForSwitch(switchState) {
+  if (switchState === 1) {
+      // Activate the synth only for switch1 = 1
+      droneSynth.volume.value = 0;  // Bring volume to normal listening levels
+      droneSynth.harmonicity.value = 0.5;  // Initial harmonicity setting
+  } else {
+      droneSynth.volume.value = -Infinity;  // Fade out completely for other cases
+  }
+}
+
+
+// // Function to calculate and apply the interpolated presets based on distance
+// function updateFMSynthParameters(uniqueId, length) {
+//   const synth = getOrCreateSynthForId(uniqueId);
+//   if (!synth) return;
+
+//   // Normalize the distance between the defined min and max values
+//   const distanceNormalized = Math.max(0, Math.min(1, (length - 0.001) / (1.0 - 0.001))); // Normalize length to range [0, 1]
+
+//   // Accessing the specific 'fmContours' presets
+//   const presetsForCode = synthPresets.presets.fmContoursSynth;
+//   const interpolatedPreset = interpolatePresets(presetsForCode['0'], presetsForCode['1'], distanceNormalized);
+//   synth.set({
+//     oscillator: interpolatedPreset.oscillator,
+//     envelope: interpolatedPreset.envelope
+//   });
+// }
+
+function calculateInterpolationFraction(distance, minDistance, maxDistance) {
+  return (distance - minDistance) / (maxDistance - minDistance);
+}
+
 
 
 function monitorSynths() {
@@ -306,11 +378,9 @@ function monitorSynths() {
           // Collecting information about each synth
           const info = {
               type: type,
-              state: synth.state,
               volume: synth.volume.value
           };
           
-          // Optionally, add more details if needed
           info.details = {
               oscillator: synth.oscillator ? synth.oscillator.type : 'N/A', // Specific to certain synth types
               envelope: synth.envelope ? {
@@ -327,62 +397,6 @@ function monitorSynths() {
 
   console.log("Active Synths:", activeSynthsInfo);
   return activeSynthsInfo;
-}
-
-
-
-// Function to calculate and apply the interpolated presets based on distance
-// function updateSynthParameters(intersections) {
-//   intersections.forEach(intersection => {
-//       const gridCode = intersection.object.userData.gridCode;
-//       const presetsForCode = synthPresets.presets[gridCode];
-//       if (!presetsForCode) {
-//           console.error("No preset found for grid code:", gridCode);
-//           return;
-//       }
-
-//       const nearest = presetsForCode[0]; // assuming sorted by relevance or distance
-//       const farthest = presetsForCode[presetsForCode.length - 1];
-//       const fraction = calculateInterpolationFraction(intersection.distance, nearest.distance, farthest.distance);
-
-//       const interpolatedPreset = interpolatePresets(nearest, farthest, fraction);
-//       applyPreset(interpolatedPreset);
-//   });
-// }
-
-// Function to calculate and apply the interpolated presets based on distance
-function updateFMSynthParameters(uniqueId, distance) {
-  const gridCode = 'default';  // Assuming a default grid code or logic to determine this
-  const presetsForCode = synthPresets.presets[gridCode];
-  if (!presetsForCode) {
-      console.error("No preset found for grid code:", gridCode);
-      return;
-  }
-
-  const nearest = presetsForCode[0];  // Assuming these are predefined
-  const farthest = presetsForCode[presetsForCode.length - 1];
-  const fraction = calculateInterpolationFraction(distance, nearest.distance, farthest.distance);
-
-  const interpolatedPreset = interpolatePresets(nearest, farthest, fraction);
-  applyPresetToSynth(interpolatedPreset, uniqueId);
-}
-
-function calculateInterpolationFraction(distance, minDistance, maxDistance) {
-  return (distance - minDistance) / (maxDistance - minDistance);
-}
-
-function applyPresetToSynth(preset, uniqueId) {
-  let synth = synths[uniqueId];
-  if (!synth) {
-      console.log(`Creating new synth of type: ${preset.type}`);
-      synth = createSynth(preset.type);
-      synths[uniqueId] = synth;
-  }
-  
-  synth.volume.value = 0; // Unmute the synth
-  if (preset.settings) {
-      synth.set(preset.settings);
-  }
 }
 
 
@@ -795,49 +809,11 @@ function findNearestCellTowers(intersectPoint, maxCellTowerRays = 5) {
 }
 
 
-// function raycastFMpolygon(intersections) {
-//   let currentActiveIds = new Set();
-
-//   intersections.forEach(intersection => {
-//       const uniqueId = intersection.object.userData.uniqueId;
-//       currentActiveIds.add(uniqueId);
-
-//       const matchingTowers = findAllMatchingFMTowers(uniqueId);
-//       matchingTowers.forEach(tower => {
-//           if (tower) {
-//               drawFMLine(intersection.point, tower.position, uniqueId);
-//           }
-//       });
-//   });
-
-
-//     // Remove lines for polygons no longer intersected
-//     fmRayLinesByUniqueId.forEach((line, uniqueId) => {
-//       if (!currentActiveIds.has(uniqueId)) {
-//           scene.remove(line);
-//           line.geometry.dispose();
-//           fmRayLinesByUniqueId.delete(uniqueId);
-//       }
-//   });
-
-//   console.log("Current Active IDs:", currentActiveIds);
-
-//   // Call to clear rays no longer intersected
-//   clearFMrays(currentActiveIds);
-// }
-
-
-
 function raycastFMpolygon(intersections) {
   let currentActiveIds = new Set();
 
-  // Filter intersections where userData.contourIndex is -4
-  const relevantIntersections = intersections.filter(intersection => {
-      return intersection.object.userData.contourIndex === -4;
-  });
-
-  // Process filtered intersections and update or add new rays
-  relevantIntersections.forEach(intersection => {
+  // Process all intersections
+  intersections.forEach(intersection => {
       const uniqueId = intersection.object.userData.uniqueId;
       currentActiveIds.add(uniqueId);
 
@@ -849,6 +825,9 @@ function raycastFMpolygon(intersections) {
       });
   });
 
+  // Update the drone synth parameters only based on the shortest active ray
+  updateDroneSynthBasedOnShortestRay();
+
   // Remove lines for polygons no longer intersected
   fmRayLinesByUniqueId.forEach((line, uniqueId) => {
       if (!currentActiveIds.has(uniqueId)) {
@@ -857,12 +836,46 @@ function raycastFMpolygon(intersections) {
   });
 }
 
+function updateDroneSynthBasedOnShortestRay() {
+  let shortestDistance = Infinity;
+  let shouldAdjust = false;
+
+  // Calculate shortest distance from the lines currently drawn
+  fmRayLinesByUniqueId.forEach(line => {
+      const positions = line.geometry.attributes.position.array;
+      const start = new THREE.Vector3(positions[0], positions[1], positions[2]);
+      const end = new THREE.Vector3(positions[3], positions[4], positions[5]);
+      const length = start.distanceTo(end);
+      if (length < shortestDistance) {
+          shortestDistance = length;
+          shouldAdjust = true;
+      }
+  });
+
+  if (shouldAdjust) {
+      // Assuming distance ranges possibly from 0.01 (close) to 2 (far)
+      const normalizedDistance = Math.max(0, Math.min(1, (shortestDistance - 0.01) / (2 - 0.01)));
+      const targetHarmonicity = 1.0 - normalizedDistance;
+      const targetVolume = Tone.gainToDb(1 - normalizedDistance);
+
+      // Ramp harmonicity and volume to new values over 0.1 seconds to smooth transitions
+      droneSynth.harmonicity.rampTo(targetHarmonicity, 0.1);
+      droneSynth.volume.rampTo(targetVolume, 0.1);
+  } else {
+      // Smoothly transition to silence if no rays are active
+      droneSynth.volume.rampTo(-Infinity, 0.1); // Fade out smoothly
+  }
+}
+
 function removeRayLine(uniqueId) {
   let line = fmRayLinesByUniqueId.get(uniqueId);
   if (line) {
-      scene.remove(line);
-      line.geometry.dispose();
-      fmRayLinesByUniqueId.delete(uniqueId);
+    scene.remove(line);
+    line.geometry.dispose();
+    fmRayLinesByUniqueId.delete(uniqueId);
+    if (fmRayLinesByUniqueId.size === 0) {
+      // updateDroneSynth([]); // Mute the drone synth if no lines are active
+    }
   }
 }
 
@@ -895,18 +908,6 @@ function findAllMatchingFMTowers(uniqueId) {
 
 let fmRayLines = [];
 
-// function fmRayCleanup(maxFMRayLines) {
-//     while (fmRayLines.length > maxFMRayLines) {
-//         const oldLine = fmRayLines.shift();
-//         if (oldLine) {
-//             scene.remove(oldLine);
-//             if (oldLine.geometry) oldLine.geometry.dispose();
-//         }
-//     }
-// }
-
-
-
 let fmRayLinesByUniqueId = new Map();
 
 function drawFMLine(intersectPoint, end, uniqueId) {
@@ -914,59 +915,16 @@ function drawFMLine(intersectPoint, end, uniqueId) {
   let lineGeometry = new THREE.BufferGeometry().setFromPoints([intersectPoint, end]);
 
   if (line) {
-      scene.remove(line);  // Remove the old line from the scene first
+      scene.remove(line);  // Remove the old line from the scene
       line.geometry.dispose();  // Dispose of the old geometry
   }
 
-  // Create a new line, regardless if it was previously existing
   const fmRayMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
   line = new THREE.Line(lineGeometry, fmRayMaterial);
   scene.add(line);
   fmRayLinesByUniqueId.set(uniqueId, line);
-
-  // Update synthesizer parameters based on the current line length
-  const length = intersectPoint.distanceTo(end);
-  updateFMSynthParameters(uniqueId, length);
 }
 
-
-
-function getSortedFMRayDistances() {
-  let fmRayDistances = [];
-  fmRayLinesByUniqueId.forEach((line, uniqueId) => {
-      const start = new THREE.Vector3().fromArray(line.geometry.attributes.position.array, 0);
-      const end = new THREE.Vector3().fromArray(line.geometry.attributes.position.array, 3);
-      const distance = start.distanceTo(end);
-      fmRayDistances.push({ uniqueId, distance });
-  });
-
-  fmRayDistances.sort((a, b) => a.distance - b.distance);
-  return fmRayDistances.map((ray, index) => ({
-      uniqueId: ray.uniqueId,
-      sortedIndex: index,
-      distance: ray.distance
-  }));
-}
-
-function calculateFrequencyFromDistance(distance) {
-  // This returns a frequency based on the distance
-  return 440 + (distance * 10);
-}
-
-function processSortedFmRays() {
-  const sortedFMRays = getSortedFMRayDistances();
-  sortedFMRays.forEach((ray, index) => {
-      if (index >= maxVoices) return;  // Limit the number of active voices
-
-      const frequency = calculateFrequencyFromDistance(ray.distance);
-      const fraction = Math.max(0, Math.min(1, (ray.distance - 0.001) / (1.0 - 0.001)));
-      const presetMin = synthPresets.presets.fmContours["0"];
-      const presetMax = synthPresets.presets.fmContours["1"];
-      const newPreset = interpolatePresets(presetMin, presetMax, fraction);
-
-      applyPreset(newPreset);
-  });
-}
 
 function clearFMrays(currentActiveIds) {
   
@@ -989,11 +947,11 @@ function getSortedCellRayDistances() {
   const rayDistances = currentRayLines.map((line, index) => {
       const start = line.geometry.attributes.position.array.slice(0, 3);
       const end = line.geometry.attributes.position.array.slice(3, 6);
-      const distance = Math.sqrt(
+      const distance = Math.abs(Math.sqrt(
           Math.pow(end[0] - start[0], 2) +
           Math.pow(end[1] - start[1], 2) +
           Math.pow(end[2] - start[2], 2)
-      );
+      ));
       return { index, distance };
   });
 
@@ -1054,8 +1012,9 @@ function updateActiveRaycasterRays() {
           getSortedCellRayDistances();
           processSortedCellRays();
       } else if (raycasterDict.fmTransmitterPoints.enabled) {
-          getSortedFMRayDistances();
-          processSortedFmRays();
+          // getSortedFMRayDistances();
+          // processSortedFmRays();
+          return
       }
   }
 }
@@ -1145,48 +1104,43 @@ function calculateGeodesicDistance(p1, p2) {
 // overall raycaster handler for animation loop
 function handleRaycasters(camera, scene) {
   Object.entries(raycasterDict).forEach(([key, { group, enabled, onIntersect }]) => {
-      if (enabled && group) {
-          const raycaster = new THREE.Raycaster();
-          const rayOrigin = updateRaycasterOriginForTilt(camera, controls);
-          raycaster.set(rayOrigin, new THREE.Vector3(0, 0, -1));
-          raycaster.params.Points.threshold = 0.275;
+    if (enabled && group) {
+      const raycaster = new THREE.Raycaster();
+      const rayOrigin = updateRaycasterOriginForTilt(camera, controls);
+      raycaster.set(rayOrigin, new THREE.Vector3(0, 0, -1));
+      raycaster.params.Points.threshold = 0.275;
 
-          const visibleChildren = group.children.filter(child => child.visible);
-          const intersections = raycaster.intersectObjects(visibleChildren, true);
+      const visibleChildren = group.children.filter(child => child.visible);
+      const intersections = raycaster.intersectObjects(visibleChildren, true);
 
-          if (intersections.length > 0) {
-              // Determine if this group should process all intersections
-              if (key === 'fmTransmitterPoints') {
-                  monitorSynths();
-                  onIntersect(intersections); // Handle all intersections
-              } else {
-                  onIntersect(intersections[0]); // Handle only the first intersection
-              }
-              
-              intersections.forEach(intersection => {
-                  printCameraCenterCoordinates(intersection.point);
-                  raycasterReticule.position.set(intersection.point.x, intersection.point.y, intersection.point.z);
-                  if (!raycasterReticule.parent) {
-                      scene.add(raycasterReticule);
-                  }
-              });
-
-              // active synth should play a note
-
-          } else {
-            if (key === 'fmTransmitterPoints') {
-            }
-
-              clearFMrays();
-              if (raycasterReticule.parent) {
-                  scene.remove(raycasterReticule);
-              }
-              console.log("NO INTERSECTIONS");
+      if (intersections.length > 0) {
+        if (key === 'fmTransmitterPoints') {
+          updateDroneSynth(intersections); // Update drone synth for fmTransmitterPoints
+          onIntersect(intersections); // Handle all intersections
+        } else {
+          onIntersect(intersections[0]); // Handle only the first intersection for other cases
+        }
+        
+        intersections.forEach(intersection => {
+          printCameraCenterCoordinates(intersection.point);
+          raycasterReticule.position.set(intersection.point.x, intersection.point.y, intersection.point.z);
+          if (!raycasterReticule.parent) {
+            scene.add(raycasterReticule);
           }
+        });
+      } else {
+        if (key === 'fmTransmitterPoints') {
+          updateDroneSynth([]); // Mute drone synth if no intersections for fmTransmitterPoints
+        }
+        clearFMrays(); // Clear any FM rays, specifics depend on your implementation
+        if (raycasterReticule.parent) {
+          scene.remove(raycasterReticule);
+        }
+        console.log("NO INTERSECTIONS");
       }
+    }
   });
 }
-
 
 
 ///////////////////////////////////////////////////
@@ -1490,6 +1444,9 @@ function toggleMapScene(switchState, source) {
 
     // let raycasterReticule;
 
+    adjustDroneSynthParametersForSwitch(switchState);
+
+
     // Clear existing ray lines from all groups
     clearFMrays();
     clearCellRays();
@@ -1509,7 +1466,7 @@ function toggleMapScene(switchState, source) {
         raycasterDict.fmTransmitterPoints.enabled = true;
         raycasterDict.cellTransmitterPoints.enabled = false;
         scene.remove(cellRayLine);
-        activeSynthType = 'FMSynth';
+        activeSynthType = 'fmContoursSynth';
 
         // Redraw FM contours using the last used channel filter when switching back to analog
         if (lastChannelFilter !== null) {
@@ -1581,6 +1538,9 @@ function toggleMapScene(switchState, source) {
       initWebSocketConnection();
       enableInteraction(); // Directly enable interaction without waiting for a button click
       flipCamera();
+
+
+
       // document.getElementById('progress-bar').style.display = 'none'; // Hide the progress bar
     });
 
@@ -3504,6 +3464,10 @@ function addCellTowerPts(geojson) {
 
     // console.log(`analog group: ${analogGroup}`)
 
+    // set up synths
+    setupDroneSynth();
+
+    // init switch settings
     toggleMapScene(1, 'switch1'); // init fm on pageload
     toggleMapScene(1, 'switch2'); // init elev contours
 
