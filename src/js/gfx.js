@@ -125,6 +125,7 @@ export function gfx() {
   // synth inits
   let synthPresets = {};
   let droneSynth, droneFilter; // Global 
+  let membraneSynth, membraneFilter;
 
 
 
@@ -292,6 +293,33 @@ function setupDroneSynth() {
   droneSynth.triggerAttack("F2");
 }
 
+function setupMembraneSynth() {
+  membraneSynth = new Tone.MembraneSynth({
+      envelope: {
+          attack: 0.005, // Quick attack for a sharp percussive sound
+          decay: 0.4,
+          sustain: 0.01,
+          release: 1.4
+      },
+      volume: -10 // Start at a reasonable volume
+  });
+
+  // Initialize the filter specifically for the membrane synth
+  membraneFilter = new Tone.Filter({
+      type: 'highpass', // High-pass filter might suit percussive elements better
+      frequency: 500, // Starting cutoff frequency
+      Q: 1
+  });
+
+  // Connect the synth to the filter and then to the shared reverb
+  membraneSynth.connect(membraneFilter);
+  membraneFilter.connect(sharedReverb);
+
+  // Optional: Connect directly to destination if you want a clearer sound in addition to reverb
+  membraneFilter.toDestination();
+}
+
+
 
 function createSynth(type) {
   if (synths[type]) {
@@ -380,7 +408,7 @@ function lerp(value1, value2, fraction) {
   return value1 + (value2 - value1) * fraction;
 }
 
-function updateDroneSynth(intersections, minDistance = 0.001, maxDistance = 1.0) {
+function updateDroneSynthParams(intersections, minDistance = 0.001, maxDistance = 1.0) {
   if (intersections.length > 0) {
       let closestDistance = intersections.reduce((min, { distance }) => Math.min(min, distance), Infinity);
       const normalizedDistance = Math.max(0, Math.min(1, (closestDistance - minDistance) / (maxDistance - minDistance)));
@@ -428,6 +456,12 @@ function adjustDroneSynthParametersForSwitch(switchState) {
       droneSynth.volume.rampTo(-Infinity, 3);  // Example: Ramp to -10 dB over 10 seconds
   }
 }
+
+function updateMembraneSynthParams(proximity) {
+  let cutoffFrequency = mapProximityToMembraneFrequency(proximity);
+  membraneFilter.frequency.rampTo(cutoffFrequency, 0.2);
+}
+
 
 
 // // Function to calculate and apply the interpolated presets based on distance
@@ -811,27 +845,62 @@ function monitorSynths() {
 };
 
 
-  // document.addEventListener('pointermove', onPointerMove);
-  function raycastCellServiceVertex(intersection, maxCellTowerRays = 5) {
-    const intersectPoint = intersection.point;
+function raycastCellServiceVertex(intersection, maxCellTowerRays = 5) {
+  const intersectPoint = intersection.point;
+  const nearestTowers = findNearestCellTowers(intersectPoint, maxCellTowerRays);
 
-    // console.log(`Intersected object type: ${intersection.object.type}`);
-    // console.log(`Intersected object userData: `, intersection.object.userData);
-
-    // Find the nearest cell towers
-    const nearestTowers = findNearestCellTowers(intersectPoint, maxCellTowerRays);
-
-    if (nearestTowers.length > 0) {
-        nearestTowers.forEach(tower => {
-            // console.log(`Nearest Cell Tower is ${tower.distance.toFixed(2)} units away, Grid Code: ${tower.gridCode}`);
-            drawcellRayLine(intersectPoint, tower.position, maxCellTowerRays);  // Pass maxCellTowerRays for cleanup
-        });
-    } else {
-        console.log('No cell towers found');
-        cellRayCleanup(maxCellTowerRays);  // Cleanup when no towers are found
-    }
+  if (nearestTowers.length > 0) {
+      nearestTowers.forEach(tower => {
+          const isNewTower = !activeTowerPositions.has(tower.positionKey);
+          if (isNewTower) {
+              activeTowerPositions.add(tower.positionKey);  // Mark this tower position as active
+              triggerMembraneSynth(tower.distance);  // Trigger synth based on distance
+          }
+          drawcellRayLine(intersectPoint, tower.position, maxCellTowerRays);
+      });
+  } else {
+      console.log('No cell towers found');
+      cellRayCleanup(maxCellTowerRays);
+  }
 }
-  
+
+function triggerMembraneSynth(distance) {
+  let note = mapDistanceToPitch(distance);
+  // Using safeTriggerSynth to trigger the membrane synth with correct timing
+  safeTriggerSynth(membraneSynth, note, "8n");  // "8n" stands for an eighth note
+}
+
+function mapDistanceToPitch(distance) {
+  // Example mapping: closer towers produce higher pitches
+  const maxPitch = 48;  // High note
+  const minPitch = 12;  // Low note
+  const pitchRange = maxPitch - minPitch;
+  const normalizedDistance = Math.min(1, distance / 1000); // Normalize distance
+  const pitch = maxPitch - normalizedDistance * pitchRange;
+  return `C${Math.floor(pitch / 12)}`;  // C is the note, and the octave is calculated
+}
+
+function cellRayCleanup(maxCellTowerRays) {
+  while (currentRayLines.length > maxCellTowerRays) {
+      const oldLine = currentRayLines.shift();
+      if (oldLine) {
+          const oldPositionKey = generatePositionKeyFromLine(oldLine);
+          activeTowerPositions.delete(oldPositionKey);  // Clean up active positions
+          scene.remove(oldLine);
+          if (oldLine.geometry) oldLine.geometry.dispose();
+      }
+  }
+}
+
+function generatePositionKeyFromLine(line) {
+  const positions = line.geometry.attributes.position.array;
+  const endX = positions[3].toFixed(3);
+  const endY = positions[4].toFixed(3);
+  const endZ = positions[5].toFixed(3);
+  return `${endX},${endY},${endZ}`;
+}
+
+
 let currentRayLines = [];
 
 function drawcellRayLine(start, end, maxCellTowerRays) {
@@ -899,6 +968,14 @@ function findNearestCellTowers(intersectPoint, maxCellTowerRays = 5) {
     return towers.sort((a, b) => a.distance - b.distance).slice(0, maxCellTowerRays);
 }
 
+function mapProximityToMembraneFrequency(proximity) {
+  // Assuming proximity ranges from 0 (close) to 1 (far)
+  // Map this range to a suitable frequency range for the high-pass filter
+  const minFreq = 500; // Minimum frequency
+  const maxFreq = 5000; // Maximum frequency
+  return minFreq + (maxFreq - minFreq) * proximity;
+}
+
 
 function raycastFMpolygon(intersections) {
   let currentActiveIds = new Set();
@@ -964,7 +1041,7 @@ function removeRayLine(uniqueId) {
     line.geometry.dispose();
     fmRayLinesByUniqueId.delete(uniqueId);
     if (fmRayLinesByUniqueId.size === 0) {
-      // updateDroneSynth([]); // Mute the drone synth if no lines are active
+      // updateDroneSynthParams([]); // Mute the drone synth if no lines are active
     }
   }
 }
@@ -1189,7 +1266,7 @@ function handleRaycasters(camera, scene) {
 
           if (intersections.length > 0) {
               if (key === 'fmTransmitterPoints') {
-                  updateDroneSynth(intersections); // Ensure this updates based on current intersections
+                  updateDroneSynthParams(intersections); // Ensure this updates based on current intersections
                   onIntersect(intersections);
               } else {
                   onIntersect(intersections[0]);
@@ -1204,7 +1281,7 @@ function handleRaycasters(camera, scene) {
               });
           } else {
               if (key === 'fmTransmitterPoints') {
-                  updateDroneSynth([]); // Ensure the drone maintains a low-volume state
+                  updateDroneSynthParams([]); // Ensure the drone maintains a low-volume state
               }
               clearFMrays();
               if (raycasterReticule.parent) {
@@ -3556,6 +3633,7 @@ function addCellTowerPts(geojson) {
 
     // set up synths
     setupDroneSynth();
+    setupMembraneSynth();
 
     // init switch settings
     toggleMapScene(1, 'switch1'); // init fm on pageload
