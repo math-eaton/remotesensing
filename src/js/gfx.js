@@ -201,9 +201,15 @@ const randomBuffer = 0.01; // Adding a small random buffer to avoid collisions
 function setupDroneSynth() {
   droneSynth = new Tone.AMSynth({
       oscillator: { type: "sine" },
+      envelope: {
+        attack: 10,   // Long attack time of 5 seconds
+        decay: 0.4,
+        sustain: 0.1,
+        release: 1
+      },
       detune: 100,
       harmonicity: 0.5,
-  }).toDestination();
+  },).toDestination();
 
   // Adding a low-pass filter to the signal chain
   droneFilter = new Tone.Filter({
@@ -351,11 +357,23 @@ function updateDroneSynth(intersections, minDistance = 0.001, maxDistance = 1.0)
 
 function adjustDroneSynthParametersForSwitch(switchState) {
   if (switchState === 1) {
+
+    droneSynth.set({
+      envelope: {
+          attack: 5,   // Smooth, slow attack to fade in the synth sound
+          decay: 0.4,
+          sustain: 0.1,
+          release: 1
+      },
+      volume: -20  // Start at a lower volume and ramp up if needed
+  });
+
+  droneSynth.volume.rampTo(-10, 10);  // Example: Ramp to -10 dB over 10 seconds
       // Activate the synth only for switch1 = 1
-      droneSynth.volume.value = 0;  // Bring volume to normal listening levels
-      droneSynth.harmonicity.value = 0.5;  // Initial harmonicity setting
+      // droneSynth.volume.value = 0;  // Bring volume to normal listening levels
+      // droneSynth.harmonicity.value = 1;  // Initial harmonicity setting
   } else {
-      droneSynth.volume.value = -Infinity;  // Fade out completely for other cases
+      droneSynth.volume.rampTo(-Infinity, 3);  // Example: Ramp to -10 dB over 10 seconds
   }
 }
 
