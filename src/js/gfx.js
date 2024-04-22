@@ -91,8 +91,6 @@ export function gfx() {
   const reticuleSize = 0.025;
   const reticuleGeometry = new THREE.RingGeometry( reticuleSize,reticuleSize, 8)
   const reticuleMaterial = new THREE.MeshBasicMaterial({ color: '#0000ff', wireframe: false, });
-  const analogReticuleMaterial = new THREE.MeshBasicMaterial({ color: '#ff00ff', wireframe: false, });
-  const digitalReticuleMaterial = new THREE.MeshBasicMaterial({ color: '#0000ff', wireframe: false, });
   let raycasterReticule = new THREE.LineSegments(reticuleGeometry, reticuleMaterial);
   
   // Define color scheme variables
@@ -121,12 +119,6 @@ export function gfx() {
     cellServiceNo: '#ff00ff',
     cellServiceYes: '#3b3b3b'
   };
-
-  // synth inits
-  let synthPresets = {};
-  let droneSynth, droneFilter; // Global 
-  let membraneSynth, membraneFilter;
-
 
 
 ///////////////////////// MAP /////////////////////////////
@@ -189,9 +181,20 @@ export function gfx() {
 
   // tone.js ////////////////////////////
   //////////////
-// Registry for storing synthesizers by type
-let synth;
-const synths = {};
+
+
+  // synth inits
+  let synth;
+  const synths = {};
+  let synthPresets = {};
+  let droneSynth, droneFilter; // Global 
+  let membraneSynth, membraneFilter;
+  // Global volume control
+  let globalVolume = new Tone.Volume().toDestination();
+  let limiter = new Tone.Limiter(-0.1).toDestination();
+  let meter = new Tone.Meter();
+
+
 // const maxVoices = 3; // Maximum number of voices your application might need
 
 
@@ -225,45 +228,41 @@ let sharedReverb = new Tone.Reverb({
 
 sharedReverb.wet.value = 0.1; // Mixing ratio of the wet (processed) signal
 
+// Connect reverb to the global volume
+sharedReverb.connect(globalVolume);
 
-function calculateReverbWetLevel(cameraZoom) {
-  // Define the zoom range and corresponding wet levels
-  const minZoom = 0.6;
-  const maxZoom = 3.6;
-  const minWetLevel = 0.05;
-  const maxWetLevel = 1.0;
-
-  // Normalize the current zoom within the range
-  const normalized = (cameraZoom - minZoom) / (maxZoom - minZoom);
-
-  // Calculate wet level: Inverse relationship (more zoom out, higher wet level)
-  const wetLevel = maxWetLevel - normalized * (maxWetLevel - minWetLevel);
-
-  return wetLevel;
-}
 
 function updateReverbBasedOnCameraZoom(camera) {
   const wetLevel = calculateReverbWetLevel(camera.zoom);
   sharedReverb.wet.rampTo(wetLevel, 0.5);  // Ramp the wet level to smooth transitions
+  adjustVolumeForReverb(wetLevel); // Adjust volume based on the new wet level
 }
 
 function calculateReverbWetLevel(cameraZoom) {
-  const minZoom = controls.minZoom;  // Update with actual minZoom
-  const maxZoom = controls.maxZoom;  // Update with actual maxZoom
+  const minZoom = controls.minZoom;  
+  const maxZoom = controls.maxZoom; 
   const minWetLevel = 0.05;
   const maxWetLevel = 1.0;
 
-  const normalized = (cameraZoom - minZoom) / (maxZoom - minZoom);
+  // Ensure the camera zoom is clamped within expected range
+  const clampedZoom = Math.max(minZoom, Math.min(maxZoom, cameraZoom));
+  const normalized = (clampedZoom - minZoom) / (maxZoom - minZoom);
   const wetLevel = maxWetLevel - normalized * (maxWetLevel - minWetLevel);
 
   return wetLevel;
 }
 
-function adjustReverbSettings(decay, preDelay, wetLevel) {
-  sharedReverb.decay = decay;
-  sharedReverb.preDelay = preDelay;
-  sharedReverb.wet.value = wetLevel;
+function adjustVolumeForReverb(wetLevel) {
+  // You might need to tweak these values based on testing to get the desired perceived loudness
+  const minVolume = -10; 
+  const maxVolume = -1;
+
+  // As wet level increases, decrease the volume (since wetLevel ranges from 0.05 to 1.0)
+  const volumeAdjustment = maxVolume - ((wetLevel - 0.05) / 0.95) * (minVolume - maxVolume);
+
+  globalVolume.volume.rampTo(volumeAdjustment, 0.5); // Smooth transition to the new volume level
 }
+
 
 function setupDroneSynth() {
   droneSynth = new Tone.AMSynth({
@@ -276,6 +275,7 @@ function setupDroneSynth() {
       },
       detune: 100,
       harmonicity: 0.5,
+      volume: 2
   });
 
   // Initialize the filter
@@ -411,43 +411,43 @@ function lerp(value1, value2, fraction) {
   return value1 + (value2 - value1) * fraction;
 }
 
-function updateDroneSynthParams(intersections, minDistance = 0.001, maxDistance = 1.0) {
-  if (intersections.length > 0) {
-      // Find the intersection with the closest distance
-      let closest = intersections.reduce((min, intersection) => {
-          return intersection.distance < min.distance ? intersection : min;
-      }, { distance: Infinity, object: null });
+// function updateDroneSynthParams(intersections, minDistance = 0.001, maxDistance = 1.0) {
+//   if (intersections.length > 0) {
+//       // Find the intersection with the closest distance
+//       let closest = intersections.reduce((min, intersection) => {
+//           return intersection.distance < min.distance ? intersection : min;
+//       }, { distance: Infinity, object: null });
 
-      // Retrieve the average radius from the closest intersected object's userData
-      let avgRadius = closest.object.userData.avgRadius || 1; // Use default of 1 if not defined
+//       // Retrieve the average radius from the closest intersected object's userData
+//       let avgRadius = closest.object.userData.avgRadius || 1; // Use default of 1 if not defined
 
-      // Normalize the closest distance using the average radius
-      let normalizedDistance = Math.max(0, Math.min(1, (closest.distance / avgRadius - minDistance) / (maxDistance - minDistance)));
+//       // Normalize the closest distance using the average radius
+//       let normalizedDistance = Math.max(0, Math.min(1, (closest.distance / avgRadius - minDistance) / (maxDistance - minDistance)));
 
-      // Interpolate synth presets based on the normalized distance
-      const interpolatedPreset = interpolatePresets(synthPresets.presets.fmContoursSynth['0'], synthPresets.presets.fmContoursSynth['1'], normalizedDistance);
+//       // Interpolate synth presets based on the normalized distance
+//       const interpolatedPreset = interpolatePresets(synthPresets.presets.fmContoursSynth['0'], synthPresets.presets.fmContoursSynth['1'], normalizedDistance);
       
-      // Update the synthesizer's oscillator and envelope settings based on the interpolated preset
-      droneSynth.set({
-          oscillator: interpolatedPreset.oscillator,
-          envelope: interpolatedPreset.envelope,
-      });
+//       // Update the synthesizer's oscillator and envelope settings based on the interpolated preset
+//       droneSynth.set({
+//           oscillator: interpolatedPreset.oscillator,
+//           envelope: interpolatedPreset.envelope,
+//       });
 
-      // Detune the synthesizer based on the normalized distance
-      droneSynth.detune.value = (1.0 - normalizedDistance) * 200;  // Adjust detune multiplier as needed for desired effect
+//       // Detune the synthesizer based on the normalized distance
+//       droneSynth.detune.value = (1.0 - normalizedDistance) * 200;  // Adjust detune multiplier as needed for desired effect
 
-  } else {
-      // Set to a base "idle" state with low volume or subtle modulation if no intersections are present
-      droneSynth.set({
-          oscillator: { type: "sine", frequency: 220 }, // Example idle state configuration
-          envelope: { attack: 1, decay: 1, sustain: 1, release: 1 }
-      });
+//   } else {
+//       // Set to a base "idle" state with low volume or subtle modulation if no intersections are present
+//       droneSynth.set({
+//           oscillator: { type: "sine", frequency: 220 }, // Example idle state configuration
+//           envelope: { attack: 1, decay: 1, sustain: 1, release: 1 }
+//       });
 
-      // Additional idle state adjustments can be made here
-      droneSynth.harmonicity.rampTo(0.1, 2); // Slow ramp for a subtle effect
-      droneSynth.volume.rampTo(Tone.gainToDb(0.1), 2); // Extended time for a smoother fade-out
-  }
-}
+//       // Additional idle state adjustments can be made here
+//       droneSynth.harmonicity.rampTo(0.1, 2); // Slow ramp for a subtle effect
+//       droneSynth.volume.rampTo(Tone.gainToDb(0.1), 2); // Extended time for a smoother fade-out
+//   }
+// }
 
 function adjustDroneSynthParametersForSwitch(switchState) {
   if (switchState === 1) {
@@ -462,12 +462,11 @@ function adjustDroneSynthParametersForSwitch(switchState) {
       volume: -20  // Start at a lower volume and ramp up if needed
   });
 
-  droneSynth.volume.rampTo(-10, 10);  // Example: Ramp to -10 dB over 10 seconds
+  droneSynth.volume.rampTo(-1, 3); 
       // Activate the synth only for switch1 = 1
-      // droneSynth.volume.value = 0;  // Bring volume to normal listening levels
-      // droneSynth.harmonicity.value = 1;  // Initial harmonicity setting
-  } else {
-      droneSynth.volume.rampTo(-Infinity, 3);  // Example: Ramp to -10 dB over 10 seconds
+  droneSynth.harmonicity.value = 1;  // Initial harmonicity setting
+} else {
+      droneSynth.volume.rampTo(-Infinity, 3);  
   }
 }
 
@@ -476,29 +475,54 @@ function updateMembraneSynthParams(proximity) {
   membraneFilter.frequency.rampTo(cutoffFrequency, 0.2);
 }
 
+globalVolume.connect(limiter);
 
+let compressor = new Tone.Compressor({
+  threshold: -10,  // dB value where compression starts
+  ratio: 4,        // Input/output ratio for signals above the threshold
+  attack: 0.003,   // Time taken to apply compression
+  release: 0.25    // Time taken to release compression
+});
 
-// // Function to calculate and apply the interpolated presets based on distance
-// function updateFMSynthParameters(uniqueId, length) {
-//   const synth = getOrCreateSynthForId(uniqueId);
-//   if (!synth) return;
+// Connect the global volume to the compressor, then to the limiter
+globalVolume.chain(compressor, limiter);
 
-//   // Normalize the distance between the defined min and max values
-//   const distanceNormalized = Math.max(0, Math.min(1, (length - 0.001) / (1.0 - 0.001))); // Normalize length to range [0, 1]
-
-//   // Accessing the specific 'fmContours' presets
-//   const presetsForCode = synthPresets.presets.fmContoursSynth;
-//   const interpolatedPreset = interpolatePresets(presetsForCode['0'], presetsForCode['1'], distanceNormalized);
-//   synth.set({
-//     oscillator: interpolatedPreset.oscillator,
-//     envelope: interpolatedPreset.envelope
-//   });
-// }
+limiter.connect(meter);
 
 function calculateInterpolationFraction(distance, minDistance, maxDistance) {
   return (distance - minDistance) / (maxDistance - minDistance);
 }
 
+// Function to map VU meter values to colors
+function getColorFromVUMeter(vuMeterValue) {
+  // Define the start and end colors
+  const startColor = hexToRgb(0xff0000); // Red for low values
+  const endColor = hexToRgb(0x00ff00);   // Green for high values
+
+  // Check for -Infinity which is the case when there is no sound
+  if (vuMeterValue === -Infinity) {
+    return '#0000ff'; // Default color when there is no sound
+  }
+  
+  // Normalize the VU meter value to a 0-1 range for interpolation
+  const minVUMeterValue = -70;
+  const maxVUMeterValue = -1;
+  const factor = (vuMeterValue - minVUMeterValue) / (maxVUMeterValue - minVUMeterValue);
+
+  // Interpolate between start and end colors based on the normalized VU meter value
+  const interpolatedColor = interpolateColor(startColor, endColor, factor);
+  return rgbToHex(...interpolatedColor);
+}
+
+// Set the interval to update the color based on VU meter readings
+setInterval(() => {
+  const vuMeterValue = Math.round(meter.getValue(), 4);
+  const newColor = getColorFromVUMeter(vuMeterValue);
+  raycasterReticule.material.color.set(newColor);
+  cellRayMaterial.color.set(newColor);  
+  fmRayMaterial.color.set(newColor);   
+  console.log(Math.round(meter.getValue(),4))
+}, 100);
 
 
 function monitorSynths() {
@@ -1021,7 +1045,7 @@ function raycastFMpolygon(intersections) {
 
 function updateDroneSynthBasedOnShortestRay() {
   let shortestDistance = Infinity;
-  let avgRadius = 0.5; // Default radius
+  let avgRadius = 1; // Default radius
   let shouldAdjust = false;
 
   fmRayLinesByUniqueId.forEach(line => {
@@ -1038,17 +1062,19 @@ function updateDroneSynthBasedOnShortestRay() {
 
   if (shouldAdjust) {
       const normalizedDistance = Math.max(0, Math.min(1, (shortestDistance / avgRadius - 0.01) / (2 - 0.01)));
-      console.log(`normalized dist: ${normalizedDistance}`)
       const targetVolume = Tone.gainToDb(1 - normalizedDistance);
-      const targetCutoff = 500 * (1 - normalizedDistance);  // Decrease cutoff with distance
+      const targetCutoff = 1000 * (1 - normalizedDistance);  // Decrease cutoff with distance
+      // console.log(`cutoff target: ${targetCutoff}`)
+      // console.log(`volume target: ${targetVolume}`)
 
       droneSynth.harmonicity.rampTo(1.0 - normalizedDistance, 0.1);
       droneSynth.volume.rampTo(targetVolume, 0.1);
       droneFilter.frequency.rampTo(targetCutoff, 0.1); // Adjust filter cutoff based on distance
+      
   } else {
-      droneSynth.harmonicity.rampTo(0.1, 3);
+      droneSynth.harmonicity.rampTo(1, 3);
       droneSynth.volume.rampTo(Tone.gainToDb(0.1), 3);
-      droneFilter.frequency.rampTo(5, 3); // Low cutoff for a subdued sound
+      droneFilter.frequency.rampTo(50, 2); // Low cutoff for a subdued sound
   }
 }
 
@@ -1123,7 +1149,7 @@ function clearFMrays(currentActiveIds) {
       fmRayLinesByUniqueId.delete(uniqueId);
       // synth.triggerRelease([Tone.now() + 0.1]); 
 });
-      console.error("Invalid or undefined currentActiveIds passed to clearFMrays");
+      // console.error("Invalid or undefined currentActiveIds passed to clearFMrays");
       return;  // Exit the function if currentActiveIds is not valid
   }
 }
@@ -1286,7 +1312,7 @@ function handleRaycasters(camera, scene) {
 
           if (intersections.length > 0) {
               if (key === 'fmTransmitterPoints') {
-                  updateDroneSynthParams(intersections); // Ensure this updates based on current intersections
+                  // updateDroneSynthParams(intersections); // Ensure this updates based on current intersections
                   onIntersect(intersections);
               } else {
                   onIntersect(intersections[0]);
@@ -1301,13 +1327,13 @@ function handleRaycasters(camera, scene) {
               });
           } else {
               if (key === 'fmTransmitterPoints') {
-                  updateDroneSynthParams([]); // Ensure the drone maintains a low-volume state
+                  // updateDroneSynthParams([]); // Ensure the drone maintains a low-volume state
               }
               clearFMrays();
               if (raycasterReticule.parent) {
                   scene.remove(raycasterReticule);
               }
-              console.log("NO INTERSECTIONS");
+              // console.log("NO INTERSECTIONS");
           }
       }
   });
