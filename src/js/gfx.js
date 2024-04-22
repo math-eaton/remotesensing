@@ -194,6 +194,7 @@ let synth;
 const synths = {};
 // const maxVoices = 3; // Maximum number of voices your application might need
 
+
 let lastEventTime = Tone.now();
 const timeIncrement = 0.1;
 const randomBuffer = 0.01; // Adding a small random buffer to avoid collisions
@@ -221,7 +222,9 @@ let sharedReverb = new Tone.Reverb({
   preDelay: 0.25 // Delay before the reverb effect kicks in
 }).toDestination();
 
+
 sharedReverb.wet.value = 0.1; // Mixing ratio of the wet (processed) signal
+
 
 function calculateReverbWetLevel(cameraZoom) {
   // Define the zoom range and corresponding wet levels
@@ -286,7 +289,7 @@ function setupDroneSynth() {
   // Connect the synth to the filter
   droneSynth.connect(droneFilter);
 
-  // Then connect the filter to the reverb
+  // // Then connect the filter to the reverb
   droneFilter.connect(sharedReverb);
 
   // Trigger continuous note
@@ -410,27 +413,38 @@ function lerp(value1, value2, fraction) {
 
 function updateDroneSynthParams(intersections, minDistance = 0.001, maxDistance = 1.0) {
   if (intersections.length > 0) {
-      let closestDistance = intersections.reduce((min, { distance }) => Math.min(min, distance), Infinity);
-      const normalizedDistance = Math.max(0, Math.min(1, (closestDistance - minDistance) / (maxDistance - minDistance)));
+      // Find the intersection with the closest distance
+      let closest = intersections.reduce((min, intersection) => {
+          return intersection.distance < min.distance ? intersection : min;
+      }, { distance: Infinity, object: null });
+
+      // Retrieve the average radius from the closest intersected object's userData
+      let avgRadius = closest.object.userData.avgRadius || 1; // Use default of 1 if not defined
+
+      // Normalize the closest distance using the average radius
+      let normalizedDistance = Math.max(0, Math.min(1, (closest.distance / avgRadius - minDistance) / (maxDistance - minDistance)));
+
+      // Interpolate synth presets based on the normalized distance
       const interpolatedPreset = interpolatePresets(synthPresets.presets.fmContoursSynth['0'], synthPresets.presets.fmContoursSynth['1'], normalizedDistance);
       
+      // Update the synthesizer's oscillator and envelope settings based on the interpolated preset
       droneSynth.set({
           oscillator: interpolatedPreset.oscillator,
           envelope: interpolatedPreset.envelope,
-          // envelope: interpolatedPreset.envelope,
-          
       });
-      droneSynth.volume.value = Tone.gainToDb(1 - normalizedDistance); // Adjust volume based on distance
-      droneSynth.detune.value = (1.0 - normalizedDistance) * 2;
 
+      // Detune the synthesizer based on the normalized distance
+      droneSynth.detune.value = (1.0 - normalizedDistance) * 200;  // Adjust detune multiplier as needed for desired effect
 
   } else {
-      // Set to a base "idle" state with low volume or subtle modulation
+      // Set to a base "idle" state with low volume or subtle modulation if no intersections are present
       droneSynth.set({
-          oscillator: { type: "sine", frequency: 220 }, // Lower frequency or any idle state config
+          oscillator: { type: "sine", frequency: 220 }, // Example idle state configuration
           envelope: { attack: 1, decay: 1, sustain: 1, release: 1 }
       });
-      droneSynth.harmonicity.rampTo(0.1, 2); // Slower ramp for a subtle effect
+
+      // Additional idle state adjustments can be made here
+      droneSynth.harmonicity.rampTo(0.1, 2); // Slow ramp for a subtle effect
       droneSynth.volume.rampTo(Tone.gainToDb(0.1), 2); // Extended time for a smoother fade-out
   }
 }
@@ -584,7 +598,7 @@ function monitorSynths() {
     stats = new Stats();
     stats.showPanel(2); 
     stats.domElement.style.cssText = 'position:absolute;bottom:0px;left:0px;';
-    document.getElementById('stats').appendChild(stats.domElement);
+    // document.getElementById('stats').appendChild(stats.domElement);
 
     // scaleBar = createScaleBar(scene);  // Ensure this is called after scene is defined
 
@@ -983,12 +997,13 @@ function raycastFMpolygon(intersections) {
   // Process all intersections
   intersections.forEach(intersection => {
       const uniqueId = intersection.object.userData.uniqueId;
+      const avgRadius = intersection.object.userData.avgRadius || 1; // Default to 1 if undefined
       currentActiveIds.add(uniqueId);
 
       const matchingTowers = findAllMatchingFMTowers(uniqueId);
       matchingTowers.forEach(tower => {
           if (tower) {
-              drawFMLine(intersection.point, tower.position, uniqueId);
+              drawFMLine(intersection.point, tower.position, uniqueId, avgRadius);
           }
       });
   });
@@ -1006,21 +1021,24 @@ function raycastFMpolygon(intersections) {
 
 function updateDroneSynthBasedOnShortestRay() {
   let shortestDistance = Infinity;
+  let avgRadius = 0.5; // Default radius
   let shouldAdjust = false;
 
   fmRayLinesByUniqueId.forEach(line => {
-      const positions = line.geometry.attributes.position.array;
-      const start = new THREE.Vector3(positions[0], positions[1], positions[2]);
-      const end = new THREE.Vector3(positions[3], positions[4], positions[5]);
-      const length = start.distanceTo(end);
-      if (length < shortestDistance) {
-          shortestDistance = length;
-          shouldAdjust = true;
-      }
-  });
+    const positions = line.geometry.attributes.position.array;
+    const start = new THREE.Vector3(positions[0], positions[1], positions[2]);
+    const end = new THREE.Vector3(positions[3], positions[4], positions[5]);
+    const length = start.distanceTo(end);
+    if (length < shortestDistance) {
+        shortestDistance = length;
+        avgRadius = line.userData.avgRadius || 1; // Get avgRadius from line's userData
+        shouldAdjust = true;
+    }
+});
 
   if (shouldAdjust) {
-      const normalizedDistance = Math.max(0, Math.min(1, (shortestDistance - 0.01) / (2 - 0.01)));
+      const normalizedDistance = Math.max(0, Math.min(1, (shortestDistance / avgRadius - 0.01) / (2 - 0.01)));
+      console.log(`normalized dist: ${normalizedDistance}`)
       const targetVolume = Tone.gainToDb(1 - normalizedDistance);
       const targetCutoff = 500 * (1 - normalizedDistance);  // Decrease cutoff with distance
 
@@ -1076,6 +1094,7 @@ function findAllMatchingFMTowers(uniqueId) {
 let fmRayLines = [];
 
 let fmRayLinesByUniqueId = new Map();
+let avgRadius;
 
 function drawFMLine(intersectPoint, end, uniqueId) {
   let line = fmRayLinesByUniqueId.get(uniqueId);
@@ -1088,6 +1107,7 @@ function drawFMLine(intersectPoint, end, uniqueId) {
 
   const fmRayMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
   line = new THREE.Line(lineGeometry, fmRayMaterial);
+  line.userData.avgRadius = avgRadius; // Store avgRadius in userData for use in distance calculations
   scene.add(line);
   fmRayLinesByUniqueId.set(uniqueId, line);
 }
@@ -2567,6 +2587,26 @@ function updatefmContourGroups() {
   });
 }
 
+// Helper function to calculate the centroid of a polygon
+function computeCentroid(vertices) {
+  let centroid = new THREE.Vector3(0, 0, 0);
+  vertices.forEach(vertex => {
+      centroid.add(vertex);
+  });
+  centroid.divideScalar(vertices.length);
+  return centroid;
+}
+
+// Helper function to calculate the average radius from the centroid
+function computeAverageRadius(vertices, centroid) {
+  let totalDistance = 0;
+  vertices.forEach(vertex => {
+      totalDistance += vertex.distanceTo(new THREE.Vector3(centroid.x, centroid.y, vertex.z));
+  });
+  return totalDistance / vertices.length;
+}
+
+
 // Function to add FM propagation 3D line loops
 function addFMpropagation3D(geojson, channelFilter, fmPropagationContours, stride = 1) {
   return new Promise((resolve, reject) => {
@@ -2656,6 +2696,9 @@ function addFMpropagation3D(geojson, channelFilter, fmPropagationContours, strid
           });
           const triangles = Earcut.triangulate(flatVertices, null, 2); // Second argument for holes, third for dimensions
 
+          // Compute the centroid and average radius property
+          const centroid = computeCentroid(vertices);
+          const avgRadius = computeAverageRadius(vertices, centroid);
       
           const meshGeometry = new THREE.BufferGeometry();
           const positionArray = new Float32Array(triangles.length * 3); // 3 vertices per triangle
@@ -2681,6 +2724,7 @@ function addFMpropagation3D(geojson, channelFilter, fmPropagationContours, strid
             channelFilter: feature.properties.channel, 
             uniqueId: uniqueId,
             contourIndex: contourIndex,
+            avgRadius: avgRadius
             // vertices: vertices,
           };
                   
