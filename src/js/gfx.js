@@ -188,87 +188,49 @@ export function gfx() {
 
 
   // synth init
-  let synth;
+  let synth, synths;
   let synthPresets = {};
   let droneSynth, droneFilter; 
   let membraneSynth, membraneFilter;
   let noiseSynth, noiseFilter;
-
-  // fx init
-  let globalVolume = new Tone.Volume().toDestination();
-  let limiter = new Tone.Limiter(-1).toDestination();
+  let globalVolume, reverbSend
   let meter = new Tone.Meter();
 
-  // setup effects
-let reverbSend = new Tone.Reverb({
-  decay: 4,    // Decay time of the reverb in seconds
-  preDelay: 0.25 // Delay before the reverb effect kicks in
-}).toDestination();
+  // fx init
+  function setupFx() {
+    // Initialize volume and dynamic range processors
+    globalVolume = new Tone.Volume().toDestination();
+    let limiter = new Tone.Limiter(-1);
 
+    // Setup compressor
+    let compressor = new Tone.Compressor({
+        threshold: -10,  // dB value where compression starts
+        ratio: 4,        // Input/output ratio for signals above the threshold
+        attack: 0.003,   // Time taken to apply compression
+        release: 0.25    // Time taken to release compression
+    });
 
-reverbSend.wet.value = 0.1; // Mixing ratio of the wet (processed) signal
+    // Setup reverb
+    reverbSend = new Tone.Reverb({ 
+        decay: 10,
+        preDelay: 0.05
+    }).toDestination();
+    reverbSend.wet.value = 0.1;
 
-// Connect reverb to the global volume
-reverbSend.connect(globalVolume);
+    // Routing audio signals through effects
+    globalVolume.chain(compressor, limiter, meter); // Connect the global volume to the compressor, then to the limiter
+    limiter.toDestination(); // Ensure limiter is connected to the final audio output
 
-let synths = {
-  droneSynth: setupDroneSynth(),
-  membraneSynth: setupMembraneSynth(),
-  noiseSynth: setupNoiseSynth()
-};  
-
-
-let lastEventTime = Tone.now();
-const timeIncrement = 0.1;
-const randomBuffer = 0.01; // Adding a small random buffer to avoid collisions
-
-// transport stuff
-function getNextEventTime() {
-  const now = Tone.now();
-  lastEventTime = Math.max(lastEventTime + timeIncrement, now) + (Math.random() * randomBuffer);
-  return lastEventTime;
+    // Connect reverb to the global volume
+    reverbSend.connect(globalVolume);
 }
 
-// ensure linear time / consecutive events
-function safeTriggerSynth(synth, note, duration) {
-if (!synth) {
-  console.error("Attempted to trigger a synth that does not exist");
-  return;
-}
-const time = getNextEventTime();
-synth.triggerAttackRelease(note, duration, time);
-}
-
-
-function updateReverbBasedOnCameraZoom(camera) {
-  const wetLevel = calculateReverbWetLevel(camera.zoom);
-  reverbSend.wet.rampTo(wetLevel, 0.5);  // Ramp the wet level to smooth transitions
-  adjustVolumeForReverb(wetLevel); // Adjust volume based on the new wet level
-}
-
-function calculateReverbWetLevel(cameraZoom) {
-  const minZoom = controls.minZoom;  
-  const maxZoom = controls.maxZoom; 
-  const minWetLevel = 0.05;
-  const maxWetLevel = 1.0;
-
-  // Ensure the camera zoom is clamped within expected range
-  const clampedZoom = Math.max(minZoom, Math.min(maxZoom, cameraZoom));
-  const normalized = (clampedZoom - minZoom) / (maxZoom - minZoom);
-  const wetLevel = maxWetLevel - normalized * (maxWetLevel - minWetLevel);
-
-  return wetLevel;
-}
-
-function adjustVolumeForReverb(wetLevel) {
-  // You might need to tweak these values based on testing to get the desired perceived loudness
-  const minVolume = -10; 
-  const maxVolume = -1;
-
-  // As wet level increases, decrease the volume (since wetLevel ranges from 0.05 to 1.0)
-  const volumeAdjustment = maxVolume - ((wetLevel - 0.05) / 0.95) * (minVolume - maxVolume);
-
-  globalVolume.volume.rampTo(volumeAdjustment, 0.5); // Smooth transition to the new volume level
+function setupSynths() {
+  synths = {
+      droneSynth: setupDroneSynth(),
+      membraneSynth: setupMembraneSynth(),
+      noiseSynth: setupNoiseSynth()
+  };
 }
 
 
@@ -327,10 +289,15 @@ function setupMembraneSynth() {
   membraneFilter.connect(reverbSend);
 
   // Optional: Connect directly to destination if you want a clearer sound in addition to reverb
-  membraneFilter.toDestination();
+  // membraneFilter.toDestination();
 
   return membraneSynth
 }
+
+///////////////////
+///////////
+// tone.js helper stuff /////
+//////////////////////
 
 function setupNoiseSynth() {
   noiseSynth = new Tone.NoiseSynth({
@@ -358,8 +325,6 @@ function setupNoiseSynth() {
   return noiseSynth
 }
 
-
-
 function switchSynth(activeSynthType) {
   // Mute all synths
   Object.values(synths).forEach(synth => {
@@ -377,6 +342,69 @@ function switchSynth(activeSynthType) {
       console.error(`Synth type ${activeSynthType} not initialized or not found`);
   }
 }
+
+let lastEventTime = Tone.now();
+const timeIncrement = 0.1;
+const randomBuffer = 0.01; // Adding a small random buffer to avoid collisions
+
+// transport stuff
+function getNextEventTime() {
+  const now = Tone.now();
+  lastEventTime = Math.max(lastEventTime + timeIncrement, now) + (Math.random() * randomBuffer);
+  return lastEventTime;
+}
+
+// ensure linear time / consecutive events
+function safeTriggerSynth(synth, note, duration) {
+if (!synth) {
+  console.error("Attempted to trigger a synth that does not exist");
+  return;
+}
+const time = getNextEventTime();
+synth.triggerAttackRelease(note, duration, time);
+}
+
+
+function updateReverbBasedOnCameraZoom(camera) {
+  const wetLevel = calculateReverbWetLevel(camera.zoom);
+  reverbSend.wet.rampTo(wetLevel, 0.5);  // Ramp the wet level to smooth transitions
+  adjustVolumeForReverb(wetLevel); // Adjust volume based on the new wet level
+}
+
+function calculateReverbWetLevel(cameraZoom) {
+  const minZoom = controls.minZoom;  
+  const maxZoom = controls.maxZoom; 
+  const minWetLevel = 0.05;
+  const maxWetLevel = 1.0;
+
+  // Ensure the camera zoom is clamped within the expected range
+  const clampedZoom = Math.max(minZoom, Math.min(maxZoom, cameraZoom));
+  
+  // Normalize the zoom value between 0 (min zoom) and 1 (max zoom)
+  const normalized = (clampedZoom - minZoom) / (maxZoom - minZoom);
+
+  // Apply an exponential curve to the normalized value
+  // A higher exponent results in a faster increase of reverb as you zoom out
+  const exponent = 3; // Adjust this value to tweak the curve
+  const exponentialFactor = Math.pow(1 - normalized, exponent);
+
+  // Calculate the wet level based on the exponential factor
+  const wetLevel = minWetLevel + exponentialFactor * (maxWetLevel - minWetLevel);
+
+  return wetLevel;
+}
+
+function adjustVolumeForReverb(wetLevel) {
+  const minVolume = -5; 
+  const maxVolume = -1;
+
+  // As wet level increases, decrease the volume (since wetLevel ranges from 0.05 to 1.0)
+  const volumeAdjustment = maxVolume - ((wetLevel - 0.05) / 0.95) * (minVolume - maxVolume);
+
+  globalVolume.volume.rampTo(volumeAdjustment, 0.5); // Smooth transition to the new volume level
+}
+
+
 
 function loadSynthPresets(data) {
   synthPresets = data;
@@ -484,20 +512,6 @@ function updateMembraneSynthParams(proximity) {
   let cutoffFrequency = mapProximityToMembraneFrequency(proximity);
   membraneFilter.frequency.rampTo(cutoffFrequency, 0.2);
 }
-
-globalVolume.connect(limiter);
-
-let compressor = new Tone.Compressor({
-  threshold: -10,  // dB value where compression starts
-  ratio: 4,        // Input/output ratio for signals above the threshold
-  attack: 0.003,   // Time taken to apply compression
-  release: 0.25    // Time taken to release compression
-});
-
-// Connect the global volume to the compressor, then to the limiter
-globalVolume.chain(compressor, limiter);
-
-limiter.connect(meter);
 
 function calculateInterpolationFraction(distance, minDistance, maxDistance) {
   return (distance - minDistance) / (maxDistance - minDistance);
@@ -689,6 +703,15 @@ function monitorSynths() {
     window.addEventListener('resize', onWindowResize, false);
     adjustCameraZoom();
   }
+
+  function initToneJS() {
+    // Initialize effects first
+    setupFx();
+
+    // Then initialize synths
+    setupSynths();
+}
+
 
   // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   // CAMERA CONTROLS /////////////////////////////
@@ -901,17 +924,17 @@ function monitorSynths() {
 };
 
 
-function raycastCellServiceVertex(intersection, maxCellTowerRays = 3) {
+function raycastCellServiceVertex(intersection, maxCellTowerRays = 1) {
   const intersectPoint = intersection.point;
   const nearestTowers = findNearestCellTowers(intersectPoint, maxCellTowerRays);
 
   if (nearestTowers.length > 0) {
       nearestTowers.forEach(tower => {
-          drawcellRayLine(intersectPoint, tower.position, maxCellTowerRays, tower.gridCode, tower.distance, currentColor); // Passing distance as well
+          drawcellRayLine(intersectPoint, tower.position, maxCellTowerRays, tower.uniqSysId, tower.distance, currentColor);
       });
   } else {
       console.log('No cell towers found');
-      cellRayCleanup(maxCellTowerRays); // Cleanup when no towers are found
+      cellRayCleanup(maxCellTowerRays);
   }
 }
 
@@ -920,26 +943,24 @@ let lastTowerId = null; // tower focus init
 
 
 function drawcellRayLine(start, end, maxCellTowerRays, towerId, distance, color) {
-  // Create new geometry and line
   const lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
   const lineMaterial = new THREE.LineBasicMaterial({ color });
   const line = new THREE.Line(lineGeometry, lineMaterial);
-
-  // Add line to the scene and store it in the array
   scene.add(line);
   currentRayLines.push(line);
 
-  // Check if the tower ID has changed
+  console.log("tower ID: " + towerId)
+  console.log("last tower ID: " + lastTowerId)
+
   if (lastTowerId !== towerId) {
-      triggerMembraneSynth(distance); // Use the passed distance to trigger synth
-      lastTowerId = towerId; // Update the lastTowerId
+      triggerMembraneSynth(distance);
+      lastTowerId = towerId;
   }
 
-  // Ensure we do not exceed the number of maximum allowable lines
   while (currentRayLines.length > maxCellTowerRays) {
-      const oldLine = currentRayLines.shift(); // Remove the oldest line
+      const oldLine = currentRayLines.shift();
       scene.remove(oldLine);
-      if (oldLine.geometry) oldLine.geometry.dispose(); // Dispose of geometry to free resources
+      if (oldLine.geometry) oldLine.geometry.dispose();
   }
 }
 
@@ -963,7 +984,7 @@ currentRayLines = [];  // Reset the array after clearing
 
 
 
-function findNearestCellTowers(intersectPoint, maxCellTowerRays = 3) {
+function findNearestCellTowers(intersectPoint, maxCellTowerRays = 1) {
   let towers = [];
   
   // Convert intersection point from Three.js coordinates to geographic coordinates
@@ -973,11 +994,12 @@ function findNearestCellTowers(intersectPoint, maxCellTowerRays = 3) {
       const towerGeo = toGeographic(pyramid.position.x, pyramid.position.y);
       const distance = calculateGeodesicDistance(intersectGeo, towerGeo);
       towers.push({
-          distance: distance,
-          gridCode: pyramid.userData.gridCode,
-          position: pyramid.position.clone()
+        distance: distance,
+        // gridCode: pyramid.userData.gridCode, 
+        uniqSysId: pyramid.userData.UniqSysID, 
+        position: pyramid.position.clone()
       });
-  });
+    });
 
   // Sort towers by distance and return up to `maxCellTowerRays` towers
   return towers.sort((a, b) => a.distance - b.distance).slice(0, maxCellTowerRays);
@@ -993,8 +1015,8 @@ function findNearestCellTowers(intersectPoint, maxCellTowerRays = 3) {
 // }
 
 function triggerMembraneSynth(distance) {
-  let note = mapDistanceToPitch(distance);
-  safeTriggerSynth(membraneSynth, note, "16n"); 
+  // let note = mapDistanceToPitch(distance);
+  safeTriggerSynth(membraneSynth, "A1", "16n"); 
 }
 
 function mapDistanceToPitch(distance) {
@@ -1705,7 +1727,7 @@ function toggleMapScene(switchState, source) {
         raycasterDict.cellTransmitterPoints.enabled = false;
         scene.remove(cellRayLine);
         activeSynthType = 'droneSynth';
-        // switchSynth('droneSynth');
+        switchSynth(activeSynthType);
 
         // Redraw FM contours using the last used channel filter when switching back to analog
         if (lastChannelFilter !== null) {
@@ -1723,7 +1745,7 @@ function toggleMapScene(switchState, source) {
         raycasterDict.cellTransmitterPoints.enabled = true;
         raycasterDict.fmTransmitterPoints.enabled = false;
         activeSynthType = 'membraneSynth';
-        // switchSynth('');
+        switchSynth(activeSynthType);
 
         Object.keys(fmContourGroups).forEach(groupId => {
           fmContourGroups[groupId].isDecaying = true;
@@ -1738,7 +1760,7 @@ function toggleMapScene(switchState, source) {
 
   } else if (source === 'switch2') {
 
-    let activeSynthType2;
+    let activeSynthType;
 
 
     switch (switchState) {
@@ -1756,7 +1778,7 @@ function toggleMapScene(switchState, source) {
         // switchSynth('AccessSynth'); // Hypothetical synthesizer for this mode
         break;
     }
-    switchSynth(activeSynthType2);
+    switchSynth(activeSynthType);
 
   }
 }
@@ -1765,6 +1787,7 @@ function toggleMapScene(switchState, source) {
   // Function to initialize the scene and other components
   async function initialize() {
     initThreeJS(); // Initialize Three.js
+    initToneJS();
 
     // Initialize pixelationFactor
     pixelationFactor = null;
@@ -2956,8 +2979,8 @@ function addCellTowerPts(geojson) {
 
             pyramid.userData = {
               position: new THREE.Vector3(x, y, z),
-              gridCode: feature.properties.gridCode || 'unknown' // todo: attach a sound preset key json ..
-                                                                      // ..prop where 'gridcode' is here
+              gridCode: feature.properties.gridCode || 'unknown', // todo: attach a sound preset key json in lieu of gridcode
+              UniqSysID: feature.properties.UniqSysID || 'unknown',
             };
   
             // Add the pyramid to the cellTransmitterPoints group
