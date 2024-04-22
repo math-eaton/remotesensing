@@ -88,9 +88,10 @@ export function gfx() {
   let audioContext;
 
   // geometry for raycast testing
-  const reticuleSize = 0.025;
-  const reticuleGeometry = new THREE.RingGeometry( reticuleSize,reticuleSize, 8)
-  const reticuleMaterial = new THREE.MeshBasicMaterial({ color: '#0000ff', wireframe: false, });
+  const reticuleSize = 0.0075;
+  // const reticuleGeometry = new THREE.RingGeometry( reticuleSize,reticuleSize, 8)
+  const reticuleGeometry = new THREE.CircleGeometry( reticuleSize, 48)
+  const reticuleMaterial = new THREE.MeshBasicMaterial({ color: '#0000ff', wireframe: true, });
   let raycasterReticule = new THREE.LineSegments(reticuleGeometry, reticuleMaterial);
   
   // Define color scheme variables
@@ -117,7 +118,10 @@ export function gfx() {
     accessibilityHexColor: '#310057',
     // cellServiceNo: '#00E661',
     cellServiceNo: '#ff00ff',
-    cellServiceYes: '#3b3b3b'
+    cellServiceYes: '#3b3b3b',
+    fmRayColor: '#3b3b3b',
+    cellRayColor: '#3b3b3b',
+
   };
 
 
@@ -183,15 +187,15 @@ export function gfx() {
   //////////////
 
 
-  // synth inits
+  // synth global inits
   let synth;
   const synths = {};
   let synthPresets = {};
-  let droneSynth, droneFilter; // Global 
+  let droneSynth, droneFilter; 
   let membraneSynth, membraneFilter;
-  // Global volume control
+  let noiseSynth, noiseFilter;
   let globalVolume = new Tone.Volume().toDestination();
-  let limiter = new Tone.Limiter(-0.1).toDestination();
+  let limiter = new Tone.Limiter(-1).toDestination();
   let meter = new Tone.Meter();
 
 
@@ -220,21 +224,21 @@ synth.triggerAttackRelease(note, duration, time);
 }
 
 // setup effects
-let sharedReverb = new Tone.Reverb({
+let reverbSend = new Tone.Reverb({
   decay: 4,    // Decay time of the reverb in seconds
   preDelay: 0.25 // Delay before the reverb effect kicks in
 }).toDestination();
 
 
-sharedReverb.wet.value = 0.1; // Mixing ratio of the wet (processed) signal
+reverbSend.wet.value = 0.1; // Mixing ratio of the wet (processed) signal
 
 // Connect reverb to the global volume
-sharedReverb.connect(globalVolume);
+reverbSend.connect(globalVolume);
 
 
 function updateReverbBasedOnCameraZoom(camera) {
   const wetLevel = calculateReverbWetLevel(camera.zoom);
-  sharedReverb.wet.rampTo(wetLevel, 0.5);  // Ramp the wet level to smooth transitions
+  reverbSend.wet.rampTo(wetLevel, 0.5);  // Ramp the wet level to smooth transitions
   adjustVolumeForReverb(wetLevel); // Adjust volume based on the new wet level
 }
 
@@ -270,7 +274,7 @@ function setupDroneSynth() {
       envelope: {
           attack: 10,   // Long attack time of 10 seconds
           decay: 0.4,
-          sustain: 0.1,
+          sustain: 1,
           release: 1
       },
       detune: 100,
@@ -286,14 +290,12 @@ function setupDroneSynth() {
       Q: 2,
   });
 
-  // Connect the synth to the filter
+  // Connect the synth to the filter then reverb
   droneSynth.connect(droneFilter);
-
-  // // Then connect the filter to the reverb
-  droneFilter.connect(sharedReverb);
+  droneFilter.connect(reverbSend);
 
   // Trigger continuous note
-  droneSynth.triggerAttack("F2");
+  droneSynth.triggerAttack("A1");
 }
 
 function setupMembraneSynth() {
@@ -302,7 +304,7 @@ function setupMembraneSynth() {
           attack: 0.005, // Quick attack for a sharp percussive sound
           decay: 0.4,
           sustain: 0.01,
-          release: 1.4
+          release: 0.01
       },
       volume: -10 // Start at a reasonable volume
   });
@@ -316,12 +318,36 @@ function setupMembraneSynth() {
 
   // Connect the synth to the filter and then to the shared reverb
   membraneSynth.connect(membraneFilter);
-  membraneFilter.connect(sharedReverb);
+  membraneFilter.connect(reverbSend);
 
   // Optional: Connect directly to destination if you want a clearer sound in addition to reverb
   membraneFilter.toDestination();
 }
 
+function setupNoiseSynth() {
+  noiseSynth = new Tone.NoiseSynth({
+      envelope: {
+          attack: 1, // Quick attack for a sharp percussive sound
+          decay: 0.4,
+          sustain: 0.01,
+          release: 1.4
+      },
+      volume: -10 // Start at a reasonable volume
+  });
+
+  // Initialize the filter specifically for the membrane synth
+  noiseFilter = new Tone.Filter({
+      type: 'highpass', // High-pass filter might suit percussive elements better
+      frequency: 500, // Starting cutoff frequency
+      Q: 2
+  });
+
+  // Connect the synth to the filter and then to the shared reverb
+  noiseSynth.connect(membraneFilter);
+  noiseFilter.connect(reverbSend);
+
+  // noiseFilter.toDestination();
+}
 
 
 function createSynth(type) {
@@ -333,36 +359,36 @@ function createSynth(type) {
   console.log(`Creating new synth of type: ${type}`);
   let newSynth;
   switch (type) {
-    case 'fmContoursSynth':
-      newSynth = new Tone.FMSynth().toDestination();
+    case 'droneSynth':
+      newSynth = droneSynth;
       break;
-    case 'NoiseSynth':
-      newSynth = new Tone.NoiseSynth().toDestination();
+    case 'membraneSynth':
+      newSynth = membraneSynth
       break;
-    case 'CellSynth':
-      newSynth = new Tone.MonoSynth().toDestination();
+    case 'noiseSynth':
+      newSynth = noiseSynth
       break;
-    case 'AccessSynth':
-      newSynth = new Tone.MetalSynth().toDestination();
-      break;
+    // case 'AccessSynth':
+    //   newSynth = new Tone.MetalSynth().toDestination();
+    //   break;
     default:
       console.error(`Unknown synth type: ${type}`);
       newSynth = new Tone.Synth().toDestination(); // Fallback synth if type is not recognized
       break;
   }
   
-  newSynth.volume.value = -Infinity; // Mute newly created synths initially
-  synths[type] = newSynth;
+  // newSynth.volume.value = -Infinity; // Mute newly created synths initially
+  // synths[type] = newSynth;
   return newSynth;
 }
 
 
-function switchSynth(activeSynthType) {
+function switchSynth(activeSynthType1) {
   Object.values(synths).forEach(synth => synth.volume.value = -Infinity); // Mute all synths
-  if (activeSynthType === 'fmContoursSynth') {
-    synth = droneSynth; // Use the global drone synth for FMSynth
+  if (activeSynthType1 === 'droneSynth') {
+    synth = droneSynth;
   } else {
-    synth = createSynth(activeSynthType); // This will reuse or create a new synth
+    synth = createSynth(activeSynthType1); // This will reuse or create a new synth
   }
   synth.volume.value = 0; // Unmute the selected synth
   return synth;
@@ -425,7 +451,7 @@ function lerp(value1, value2, fraction) {
 //       let normalizedDistance = Math.max(0, Math.min(1, (closest.distance / avgRadius - minDistance) / (maxDistance - minDistance)));
 
 //       // Interpolate synth presets based on the normalized distance
-//       const interpolatedPreset = interpolatePresets(synthPresets.presets.fmContoursSynth['0'], synthPresets.presets.fmContoursSynth['1'], normalizedDistance);
+//       const interpolatedPreset = interpolatePresets(synthPresets.presets.droneSynth['0'], synthPresets.presets.droneSynth['1'], normalizedDistance);
       
 //       // Update the synthesizer's oscillator and envelope settings based on the interpolated preset
 //       droneSynth.set({
@@ -456,7 +482,7 @@ function adjustDroneSynthParametersForSwitch(switchState) {
       envelope: {
           attack: 5,   // Smooth, slow attack to fade in the synth sound
           decay: 0.4,
-          sustain: 0.1,
+          sustain: 1,
           release: 1
       },
       volume: -20  // Start at a lower volume and ramp up if needed
@@ -496,8 +522,8 @@ function calculateInterpolationFraction(distance, minDistance, maxDistance) {
 // Function to map VU meter values to colors
 function getColorFromVUMeter(vuMeterValue) {
   // Define the start and end colors
-  const startColor = hexToRgb(0xff0000); // Red for low values
-  const endColor = hexToRgb(0x00ff00);   // Green for high values
+  const startColor = hexToRgb(0xff0000); //  low values
+  const endColor = hexToRgb(0xff00ff);   //  high values
 
   // Check for -Infinity which is the case when there is no sound
   if (vuMeterValue === -Infinity) {
@@ -505,24 +531,32 @@ function getColorFromVUMeter(vuMeterValue) {
   }
   
   // Normalize the VU meter value to a 0-1 range for interpolation
-  const minVUMeterValue = -70;
-  const maxVUMeterValue = -1;
-  const factor = (vuMeterValue - minVUMeterValue) / (maxVUMeterValue - minVUMeterValue);
+  const minVUMeterValue = -30;
+  const maxVUMeterValue = -15;
+  const normalizedFactor = (vuMeterValue - minVUMeterValue) / (maxVUMeterValue - minVUMeterValue);
+  
+  // Apply an exponential curve to the factor (e.g., square the normalized factor)
+  const factor = normalizedFactor * normalizedFactor; // Change this to adjust the curve shape
 
   // Interpolate between start and end colors based on the normalized VU meter value
   const interpolatedColor = interpolateColor(startColor, endColor, factor);
   return rgbToHex(...interpolatedColor);
 }
 
+let currentColor = 0x00ff00;  // Default color, will be updated dynamically
+
+function updateColorFromVUMeter() {
+  const vuMeterValue = Math.round(meter.getValue(), 1);
+  currentColor = getColorFromVUMeter(vuMeterValue);
+  updateAllLinesWithNewColor(currentColor);  // Update all lines with the new color
+}
+
+
 // Set the interval to update the color based on VU meter readings
 setInterval(() => {
-  const vuMeterValue = Math.round(meter.getValue(), 4);
-  const newColor = getColorFromVUMeter(vuMeterValue);
-  raycasterReticule.material.color.set(newColor);
-  cellRayMaterial.color.set(newColor);  
-  fmRayMaterial.color.set(newColor);   
-  console.log(Math.round(meter.getValue(),4))
-}, 100);
+  updateColorFromVUMeter();  // This function will internally calculate and update the color
+  // console.log(Math.round(meter.getValue(), 1))
+}, 10);
 
 
 function monitorSynths() {
@@ -566,8 +600,8 @@ function monitorSynths() {
   const rotationSpeed = 0.00001; // Define the speed of rotation
 
   // stuff for raycaster visuals, need to compartmentalize
-  const cellRayMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
-  const fmRayMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff });
+  let cellRayMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
+  let fmRayMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff });
   let cellRayGeometry = new THREE.BufferGeometry();
   let fmRayGeometry = new THREE.BufferGeometry();
   let cellRayLine = new THREE.Line(cellRayGeometry, cellRayMaterial);
@@ -621,8 +655,8 @@ function monitorSynths() {
 
     stats = new Stats();
     stats.showPanel(2); 
-    stats.domElement.style.cssText = 'position:absolute;bottom:0px;left:0px;';
-    // document.getElementById('stats').appendChild(stats.domElement);
+    stats.domElement.style.cssText = 'position:absolute;bottom:0px;left:0px;scale:70%;';
+    document.getElementById('stats').appendChild(stats.domElement);
 
     // scaleBar = createScaleBar(scene);  // Ensure this is called after scene is defined
 
@@ -883,7 +917,7 @@ function monitorSynths() {
 };
 
 
-function raycastCellServiceVertex(intersection, maxCellTowerRays = 5) {
+function raycastCellServiceVertex(intersection, maxCellTowerRays = 1) {
   const intersectPoint = intersection.point;
   const nearestTowers = findNearestCellTowers(intersectPoint, maxCellTowerRays);
 
@@ -894,18 +928,45 @@ function raycastCellServiceVertex(intersection, maxCellTowerRays = 5) {
               activeTowerPositions.add(tower.positionKey);  // Mark this tower position as active
               triggerMembraneSynth(tower.distance);  // Trigger synth based on distance
           }
-          drawcellRayLine(intersectPoint, tower.position, maxCellTowerRays);
+          drawcellRayLine(intersectPoint, tower.position, maxCellTowerRays, currentColor);
       });
   } else {
       console.log('No cell towers found');
-      cellRayCleanup(maxCellTowerRays);
+      clearCellRays(maxCellTowerRays);
   }
 }
 
+
+function getSortedCellRayDistances() {
+  // Calculate distances and store them with indices
+  const rayDistances = currentRayLines.map((line, index) => {
+      const start = line.geometry.attributes.position.array.slice(0, 3);
+      const end = line.geometry.attributes.position.array.slice(3, 6);
+      const distance = Math.abs(Math.sqrt(
+          Math.pow(end[0] - start[0], 2) +
+          Math.pow(end[1] - start[1], 2) +
+          Math.pow(end[2] - start[2], 2)
+      ));
+      return { index, distance };
+  });
+
+  // Sort rays by distance
+  rayDistances.sort((a, b) => a.distance - b.distance);
+
+  // Assign unique indices from shortest to longest
+  const sortedRaysWithIndices = rayDistances.map((ray, newIdx) => ({
+      originalIndex: ray.index,
+      sortedIndex: newIdx,
+      distance: ray.distance
+  }));
+
+  return sortedRaysWithIndices;
+}
+
+
 function triggerMembraneSynth(distance) {
   let note = mapDistanceToPitch(distance);
-  // Using safeTriggerSynth to trigger the membrane synth with correct timing
-  safeTriggerSynth(membraneSynth, note, "8n");  // "8n" stands for an eighth note
+  safeTriggerSynth(membraneSynth, note, "16n"); 
 }
 
 function mapDistanceToPitch(distance) {
@@ -918,17 +979,6 @@ function mapDistanceToPitch(distance) {
   return `C${Math.floor(pitch / 12)}`;  // C is the note, and the octave is calculated
 }
 
-function cellRayCleanup(maxCellTowerRays) {
-  while (currentRayLines.length > maxCellTowerRays) {
-      const oldLine = currentRayLines.shift();
-      if (oldLine) {
-          const oldPositionKey = generatePositionKeyFromLine(oldLine);
-          activeTowerPositions.delete(oldPositionKey);  // Clean up active positions
-          scene.remove(oldLine);
-          if (oldLine.geometry) oldLine.geometry.dispose();
-      }
-  }
-}
 
 function generatePositionKeyFromLine(line) {
   const positions = line.geometry.attributes.position.array;
@@ -938,45 +988,6 @@ function generatePositionKeyFromLine(line) {
   return `${endX},${endY},${endZ}`;
 }
 
-
-let currentRayLines = [];
-
-function drawcellRayLine(start, end, maxCellTowerRays) {
-  // Create new geometry and line
-  const lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-  const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });  // Example color
-  const line = new THREE.Line(lineGeometry, lineMaterial);
-
-  // Add line to the scene and store it in the array
-  scene.add(line);
-  currentRayLines.push(line);
-
-  // Ensure we do not exceed the number of maximum allowable lines
-  while (currentRayLines.length > maxCellTowerRays) {
-      const oldLine = currentRayLines.shift();  // Remove the oldest line
-      scene.remove(oldLine);
-      if (oldLine.geometry) oldLine.geometry.dispose();  // Dispose of geometry to free resources
-  }
-}
-
-
-function cellRayCleanup(maxCellTowerRays) {
-  while (currentRayLines.length > maxCellTowerRays) {
-      const oldLine = currentRayLines.shift();
-      if (oldLine) {
-          scene.remove(oldLine);
-          if (oldLine.geometry) oldLine.geometry.dispose();
-      }
-  }
-}
-
-function clearCellRays() {
-  currentRayLines.forEach(line => {
-      scene.remove(line);
-      if (line.geometry) line.geometry.dispose();
-  });
-  currentRayLines = [];  // Reset the array after clearing
-}
 
 
 
@@ -1006,12 +1017,46 @@ function findNearestCellTowers(intersectPoint, maxCellTowerRays = 5) {
     return towers.sort((a, b) => a.distance - b.distance).slice(0, maxCellTowerRays);
 }
 
+
+let currentRayLines = [];
+
+function drawcellRayLine(start, end, maxCellTowerRays, color) {
+  // Create new geometry and line
+  const lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+  const lineMaterial = new THREE.LineBasicMaterial({ color });
+  const line = new THREE.Line(lineGeometry, lineMaterial);
+
+  // Add line to the scene and store it in the array
+  scene.add(line);
+  currentRayLines.push(line);
+
+  // Ensure we do not exceed the number of maximum allowable lines
+  while (currentRayLines.length > maxCellTowerRays) {
+      const oldLine = currentRayLines.shift();  // Remove the oldest line
+      scene.remove(oldLine);
+      if (oldLine.geometry) oldLine.geometry.dispose();  // Dispose of geometry to free resources
+  }
+}
+
+
 function mapProximityToMembraneFrequency(proximity) {
   // Assuming proximity ranges from 0 (close) to 1 (far)
   // Map this range to a suitable frequency range for the high-pass filter
   const minFreq = 500; // Minimum frequency
   const maxFreq = 5000; // Maximum frequency
   return minFreq + (maxFreq - minFreq) * proximity;
+}
+
+function clearCellRays(maxCellTowerRays) {
+  while (currentRayLines.length > maxCellTowerRays) {
+      const oldLine = currentRayLines.shift();
+      if (oldLine) {
+          const oldPositionKey = generatePositionKeyFromLine(oldLine);
+          activeTowerPositions.delete(oldPositionKey);  // Clean up active positions
+          scene.remove(oldLine);
+          if (oldLine.geometry) oldLine.geometry.dispose();
+      }
+  }
 }
 
 
@@ -1027,7 +1072,7 @@ function raycastFMpolygon(intersections) {
       const matchingTowers = findAllMatchingFMTowers(uniqueId);
       matchingTowers.forEach(tower => {
           if (tower) {
-              drawFMLine(intersection.point, tower.position, uniqueId, avgRadius);
+              drawFMLine(intersection.point, tower.position, uniqueId, avgRadius, currentColor);
           }
       });
   });
@@ -1045,7 +1090,7 @@ function raycastFMpolygon(intersections) {
 
 function updateDroneSynthBasedOnShortestRay() {
   let shortestDistance = Infinity;
-  let avgRadius = 1; // Default radius
+  let avgRadius = 1;
   let shouldAdjust = false;
 
   fmRayLinesByUniqueId.forEach(line => {
@@ -1058,24 +1103,23 @@ function updateDroneSynthBasedOnShortestRay() {
         avgRadius = line.userData.avgRadius || 1; // Get avgRadius from line's userData
         shouldAdjust = true;
     }
-});
+  });
 
   if (shouldAdjust) {
       const normalizedDistance = Math.max(0, Math.min(1, (shortestDistance / avgRadius - 0.01) / (2 - 0.01)));
       const targetVolume = Tone.gainToDb(1 - normalizedDistance);
-      const targetCutoff = 1000 * (1 - normalizedDistance);  // Decrease cutoff with distance
-      // console.log(`cutoff target: ${targetCutoff}`)
-      // console.log(`volume target: ${targetVolume}`)
+      const targetCutoff = 2000 * (1 - normalizedDistance);  // Adjust filter cutoff based on distance
+      console.log(targetCutoff)
 
-      droneSynth.harmonicity.rampTo(1.0 - normalizedDistance, 0.1);
-      droneSynth.volume.rampTo(targetVolume, 0.1);
-      droneFilter.frequency.rampTo(targetCutoff, 0.1); // Adjust filter cutoff based on distance
-      
+      // Smoothly ramp parameters to reflect the transition from rest to dynamic state
+      droneSynth.harmonicity.rampTo(1.0 - normalizedDistance, 0.5);
+      droneSynth.volume.rampTo(targetVolume, 0.5);
+      droneFilter.frequency.rampTo(targetCutoff, 0.5);
+      droneFilter.Q.rampTo(2, 0.5);
   } else {
-      droneSynth.harmonicity.rampTo(1, 3);
-      droneSynth.volume.rampTo(Tone.gainToDb(0.1), 3);
-      droneFilter.frequency.rampTo(50, 2); // Low cutoff for a subdued sound
-  }
+      // Transition to resting state if no intersections are detected
+      transitionToRestingState();
+    }
 }
 
 function removeRayLine(uniqueId) {
@@ -1089,6 +1133,19 @@ function removeRayLine(uniqueId) {
     }
   }
 }
+
+// Helper function to update all lines with new color
+function updateAllLinesWithNewColor(newColor) {
+  fmRayLinesByUniqueId.forEach((line, uniqueId) => {
+      line.material.color.set(newColor);  // Update the existing line's material color
+  });
+
+  currentRayLines.forEach((line) => {
+      line.material.color.set(newColor);  // Update each cell ray line's color
+  });
+
+}
+
 
 function findAllMatchingFMTowers(uniqueId) {
   let matchingTowers = [];
@@ -1122,7 +1179,7 @@ let fmRayLines = [];
 let fmRayLinesByUniqueId = new Map();
 let avgRadius;
 
-function drawFMLine(intersectPoint, end, uniqueId) {
+function drawFMLine(intersectPoint, end, uniqueId, avgRadius, color) {
   let line = fmRayLinesByUniqueId.get(uniqueId);
   let lineGeometry = new THREE.BufferGeometry().setFromPoints([intersectPoint, end]);
 
@@ -1131,9 +1188,10 @@ function drawFMLine(intersectPoint, end, uniqueId) {
       line.geometry.dispose();  // Dispose of the old geometry
   }
 
-  const fmRayMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+  let fmRayMaterial = new THREE.LineBasicMaterial({ color });
   line = new THREE.Line(lineGeometry, fmRayMaterial);
   line.userData.avgRadius = avgRadius; // Store avgRadius in userData for use in distance calculations
+  console.log("avg radius: " + avgRadius)
   scene.add(line);
   fmRayLinesByUniqueId.set(uniqueId, line);
 }
@@ -1154,32 +1212,6 @@ function clearFMrays(currentActiveIds) {
   }
 }
 
-
-function getSortedCellRayDistances() {
-  // Calculate distances and store them with indices
-  const rayDistances = currentRayLines.map((line, index) => {
-      const start = line.geometry.attributes.position.array.slice(0, 3);
-      const end = line.geometry.attributes.position.array.slice(3, 6);
-      const distance = Math.abs(Math.sqrt(
-          Math.pow(end[0] - start[0], 2) +
-          Math.pow(end[1] - start[1], 2) +
-          Math.pow(end[2] - start[2], 2)
-      ));
-      return { index, distance };
-  });
-
-  // Sort rays by distance
-  rayDistances.sort((a, b) => a.distance - b.distance);
-
-  // Assign unique indices from shortest to longest
-  const sortedRaysWithIndices = rayDistances.map((ray, newIdx) => ({
-      originalIndex: ray.index,
-      sortedIndex: newIdx,
-      distance: ray.distance
-  }));
-
-  return sortedRaysWithIndices;
-}
 
 // Function to access and use the sorted rays outside
 function processSortedCellRays() {
@@ -1321,15 +1353,20 @@ function handleRaycasters(camera, scene) {
               intersections.forEach(intersection => {
                   printCameraCenterCoordinates(intersection.point);
                   raycasterReticule.position.set(intersection.point.x, intersection.point.y, intersection.point.z);
+                  raycasterReticule.material.color.set(currentColor);
                   if (!raycasterReticule.parent) {
                       scene.add(raycasterReticule);
                   }
               });
           } else {
               if (key === 'fmTransmitterPoints') {
-                  // updateDroneSynthParams([]); // Ensure the drone maintains a low-volume state
+
+                // drone to resting state
+                transitionToRestingState();
+
+                // remove rays
+                clearFMrays();
               }
-              clearFMrays();
               if (raycasterReticule.parent) {
                   scene.remove(raycasterReticule);
               }
@@ -1337,6 +1374,14 @@ function handleRaycasters(camera, scene) {
           }
       }
   });
+}
+
+function transitionToRestingState() {
+  // Ensure to ramp back to a resting state smoothly
+  droneSynth.harmonicity.rampTo(1, 1);
+  droneSynth.volume.rampTo(Tone.gainToDb(0.666), 1.5);
+  droneFilter.frequency.rampTo(200, 1);
+  droneFilter.Q.rampTo(4, 1);
 }
 
 // Simple geodesic distance calculation (Haversine formula)
@@ -1647,7 +1692,7 @@ function toggleMapScene(switchState, source) {
   const canvas = document.getElementById('gfx');
 
   if (source === 'switch1') {
-    let activeSynthType;
+    let activeSynthType1;
     analogGroup.visible = false;
     digitalGroup.visible = false;
 
@@ -1655,7 +1700,6 @@ function toggleMapScene(switchState, source) {
     raycasterDict.cellTransmitterPoints.enabled = false;
     raycasterDict.fmTransmitterPoints.enabled = false;
 
-    // let raycasterReticule;
 
     adjustDroneSynthParametersForSwitch(switchState);
 
@@ -1679,7 +1723,8 @@ function toggleMapScene(switchState, source) {
         raycasterDict.fmTransmitterPoints.enabled = true;
         raycasterDict.cellTransmitterPoints.enabled = false;
         scene.remove(cellRayLine);
-        activeSynthType = 'fmContoursSynth';
+        activeSynthType1 = 'droneSynth';
+        // switchSynth('droneSynth');
 
         // Redraw FM contours using the last used channel filter when switching back to analog
         if (lastChannelFilter !== null) {
@@ -1696,7 +1741,8 @@ function toggleMapScene(switchState, source) {
         raycasterDict.cellServiceMesh.enabled = true;
         raycasterDict.cellTransmitterPoints.enabled = true;
         raycasterDict.fmTransmitterPoints.enabled = false;
-        activeSynthType = 'NoiseSynth';
+        activeSynthType1 = 'membraneSynth';
+        // switchSynth('');
 
         Object.keys(fmContourGroups).forEach(groupId => {
           fmContourGroups[groupId].isDecaying = true;
@@ -1707,9 +1753,13 @@ function toggleMapScene(switchState, source) {
         break;
     }
     // canvas.style.filter = switchState === 2 ? 'hue-rotate(200deg)' : '';
-    switchSynth(activeSynthType);
+    switchSynth(activeSynthType1);
 
   } else if (source === 'switch2') {
+
+    let activeSynthType2;
+
+
     switch (switchState) {
       case 1: // Elevation Contours
         elevContourLines.visible = true;
@@ -1725,6 +1775,8 @@ function toggleMapScene(switchState, source) {
         // switchSynth('AccessSynth'); // Hypothetical synthesizer for this mode
         break;
     }
+    switchSynth(activeSynthType2);
+
   }
 }
 
@@ -3704,6 +3756,7 @@ function addCellTowerPts(geojson) {
     // set up synths
     setupDroneSynth();
     setupMembraneSynth();
+    setupNoiseSynth();
 
     // init switch settings
     toggleMapScene(1, 'switch1'); // init fm on pageload
