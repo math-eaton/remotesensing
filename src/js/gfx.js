@@ -917,50 +917,86 @@ function monitorSynths() {
 };
 
 
-function raycastCellServiceVertex(intersection, maxCellTowerRays = 1) {
+function raycastCellServiceVertex(intersection, maxCellTowerRays = 10) {
   const intersectPoint = intersection.point;
+
+  // console.log(`Intersected object type: ${intersection.object.type}`);
+  // console.log(`Intersected object userData: `, intersection.object.userData);
+
+  // Find the nearest cell towers
   const nearestTowers = findNearestCellTowers(intersectPoint, maxCellTowerRays);
 
   if (nearestTowers.length > 0) {
       nearestTowers.forEach(tower => {
-          const isNewTower = !activeTowerPositions.has(tower.positionKey);
-          if (isNewTower) {
-              activeTowerPositions.add(tower.positionKey);  // Mark this tower position as active
-              triggerMembraneSynth(tower.distance);  // Trigger synth based on distance
-          }
-          drawcellRayLine(intersectPoint, tower.position, maxCellTowerRays, currentColor);
+          // console.log(`Nearest Cell Tower is ${tower.distance.toFixed(2)} units away, Grid Code: ${tower.gridCode}`);
+          drawcellRayLine(intersectPoint, tower.position, maxCellTowerRays);  // Pass maxCellTowerRays for cleanup
       });
   } else {
       console.log('No cell towers found');
-      clearCellRays(maxCellTowerRays);
+      cellRayCleanup(maxCellTowerRays);  // Cleanup when no towers are found
   }
 }
 
+let currentRayLines = [];
 
-function getSortedCellRayDistances() {
-  // Calculate distances and store them with indices
-  const rayDistances = currentRayLines.map((line, index) => {
-      const start = line.geometry.attributes.position.array.slice(0, 3);
-      const end = line.geometry.attributes.position.array.slice(3, 6);
-      const distance = Math.abs(Math.sqrt(
-          Math.pow(end[0] - start[0], 2) +
-          Math.pow(end[1] - start[1], 2) +
-          Math.pow(end[2] - start[2], 2)
-      ));
-      return { index, distance };
+
+function drawcellRayLine(start, end, maxCellTowerRays) {
+// Create new geometry and line
+const lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });  // Example color
+const line = new THREE.Line(lineGeometry, lineMaterial);
+
+// Add line to the scene and store it in the array
+scene.add(line);
+currentRayLines.push(line);
+
+// Ensure we do not exceed the number of maximum allowable lines
+while (currentRayLines.length > maxCellTowerRays) {
+    const oldLine = currentRayLines.shift();  // Remove the oldest line
+    scene.remove(oldLine);
+    if (oldLine.geometry) oldLine.geometry.dispose();  // Dispose of geometry to free resources
+}
+}
+
+
+function cellRayCleanup(maxCellTowerRays) {
+while (currentRayLines.length > maxCellTowerRays) {
+    const oldLine = currentRayLines.shift();
+    if (oldLine) {
+        scene.remove(oldLine);
+        if (oldLine.geometry) oldLine.geometry.dispose();
+    }
+}
+}
+
+function clearCellRays() {
+currentRayLines.forEach(line => {
+    scene.remove(line);
+    if (line.geometry) line.geometry.dispose();
+});
+currentRayLines = [];  // Reset the array after clearing
+}
+
+
+
+function findNearestCellTowers(intersectPoint, maxCellTowerRays = 10) {
+  let towers = [];
+  
+  // Convert intersection point from Three.js coordinates to geographic coordinates
+  const intersectGeo = toGeographic(intersectPoint.x, intersectPoint.y);
+
+  cellTransmitterPoints.children.forEach(pyramid => {
+      const towerGeo = toGeographic(pyramid.position.x, pyramid.position.y);
+      const distance = calculateGeodesicDistance(intersectGeo, towerGeo);
+      towers.push({
+          distance: distance,
+          gridCode: pyramid.userData.gridCode,
+          position: pyramid.position.clone()
+      });
   });
 
-  // Sort rays by distance
-  rayDistances.sort((a, b) => a.distance - b.distance);
-
-  // Assign unique indices from shortest to longest
-  const sortedRaysWithIndices = rayDistances.map((ray, newIdx) => ({
-      originalIndex: ray.index,
-      sortedIndex: newIdx,
-      distance: ray.distance
-  }));
-
-  return sortedRaysWithIndices;
+  // Sort towers by distance and return up to `maxCellTowerRays` towers
+  return towers.sort((a, b) => a.distance - b.distance).slice(0, maxCellTowerRays);
 }
 
 
@@ -980,65 +1016,6 @@ function mapDistanceToPitch(distance) {
 }
 
 
-function generatePositionKeyFromLine(line) {
-  const positions = line.geometry.attributes.position.array;
-  const endX = positions[3].toFixed(3);
-  const endY = positions[4].toFixed(3);
-  const endZ = positions[5].toFixed(3);
-  return `${endX},${endY},${endZ}`;
-}
-
-
-
-
-let activeTowerPositions = new Set();  // Tracks the positions of towers currently targeted by rays
-
-function findNearestCellTowers(intersectPoint, maxCellTowerRays = 5) {
-    let towers = [];
-
-    // Convert intersection point from Three.js coordinates to geographic coordinates
-    const intersectGeo = toGeographic(intersectPoint.x, intersectPoint.y);
-
-    cellTransmitterPoints.children.forEach(pyramid => {
-        const towerGeo = toGeographic(pyramid.position.x, pyramid.position.y);
-        const distance = calculateGeodesicDistance(intersectGeo, towerGeo);
-        const positionKey = `${pyramid.position.x.toFixed(3)},${pyramid.position.y.toFixed(3)},${pyramid.position.z.toFixed(3)}`;
-        if (!activeTowerPositions.has(positionKey)) {
-            towers.push({
-                distance: distance,
-                gridCode: pyramid.userData.gridCode,
-                position: pyramid.position.clone(),
-                positionKey: positionKey
-            });
-        }
-    });
-
-    // Sort towers by distance and return up to `maxCellTowerRays` towers
-    return towers.sort((a, b) => a.distance - b.distance).slice(0, maxCellTowerRays);
-}
-
-
-let currentRayLines = [];
-
-function drawcellRayLine(start, end, maxCellTowerRays, color) {
-  // Create new geometry and line
-  const lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-  const lineMaterial = new THREE.LineBasicMaterial({ color });
-  const line = new THREE.Line(lineGeometry, lineMaterial);
-
-  // Add line to the scene and store it in the array
-  scene.add(line);
-  currentRayLines.push(line);
-
-  // Ensure we do not exceed the number of maximum allowable lines
-  while (currentRayLines.length > maxCellTowerRays) {
-      const oldLine = currentRayLines.shift();  // Remove the oldest line
-      scene.remove(oldLine);
-      if (oldLine.geometry) oldLine.geometry.dispose();  // Dispose of geometry to free resources
-  }
-}
-
-
 function mapProximityToMembraneFrequency(proximity) {
   // Assuming proximity ranges from 0 (close) to 1 (far)
   // Map this range to a suitable frequency range for the high-pass filter
@@ -1047,16 +1024,39 @@ function mapProximityToMembraneFrequency(proximity) {
   return minFreq + (maxFreq - minFreq) * proximity;
 }
 
-function clearCellRays(maxCellTowerRays) {
-  while (currentRayLines.length > maxCellTowerRays) {
-      const oldLine = currentRayLines.shift();
-      if (oldLine) {
-          const oldPositionKey = generatePositionKeyFromLine(oldLine);
-          activeTowerPositions.delete(oldPositionKey);  // Clean up active positions
-          scene.remove(oldLine);
-          if (oldLine.geometry) oldLine.geometry.dispose();
-      }
-  }
+
+function getSortedCellRayDistances() {
+  // Calculate distances and store them with indices
+  const rayDistances = currentRayLines.map((line, index) => {
+      const start = line.geometry.attributes.position.array.slice(0, 3);
+      const end = line.geometry.attributes.position.array.slice(3, 6);
+      const distance = Math.sqrt(
+          Math.pow(end[0] - start[0], 2) +
+          Math.pow(end[1] - start[1], 2) +
+          Math.pow(end[2] - start[2], 2)
+      );
+      return { index, distance };
+  });
+
+  // Sort rays by distance
+  rayDistances.sort((a, b) => a.distance - b.distance);
+
+  // Assign unique indices from shortest to longest
+  const sortedRaysWithIndices = rayDistances.map((ray, newIdx) => ({
+      originalIndex: ray.index,
+      sortedIndex: newIdx,
+      distance: ray.distance
+  }));
+
+  return sortedRaysWithIndices;
+}
+
+// Function to access and use the sorted rays outside
+function processSortedCellRays() {
+  const sortedRays = getSortedCellRayDistances();
+  sortedRays.forEach(ray => {
+      console.log(`Ray ${ray.originalIndex} is sorted at index ${ray.sortedIndex} with distance ${ray.distance.toFixed(2)}`);
+  });
 }
 
 
@@ -1212,17 +1212,6 @@ function clearFMrays(currentActiveIds) {
   }
 }
 
-
-// Function to access and use the sorted rays outside
-function processSortedCellRays() {
-  const sortedRays = getSortedCellRayDistances();
-  sortedRays.forEach(ray => {
-      // console.log(`Ray ${ray.originalIndex} is sorted at index ${ray.sortedIndex} with distance ${ray.distance.toFixed(4)}`);
-  });
-
-  // Example of passing to another function
-  // otherFunction(sortedRays);
-}
 
 
 // optimizing ray redrawing
