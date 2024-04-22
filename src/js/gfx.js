@@ -200,12 +200,12 @@ export function gfx() {
   function setupFx() {
     // Initialize volume and dynamic range processors
     globalVolume = new Tone.Volume().toDestination();
-    let limiter = new Tone.Limiter(-1);
+    let limiter = new Tone.Limiter(-5);
 
     // Setup compressor
     let compressor = new Tone.Compressor({
         threshold: -10,  // dB value where compression starts
-        ratio: 4,        // Input/output ratio for signals above the threshold
+        ratio: 6,        // Input/output ratio for signals above the threshold
         attack: 0.003,   // Time taken to apply compression
         release: 0.25    // Time taken to release compression
     });
@@ -269,14 +269,29 @@ function setupDroneSynth() {
 }
 
 function setupRadioTuner() {
-  const radioTuner = new Tone.Player({
+  const radioTuner = new Tone.GrainPlayer({
       url: "src/assets/sounds/iddqd_loopy.WAV",
       loop: true,
-      volume: -10
+      grainSize: 0.1, // Set grain size in seconds
+      overlap: 0.05, // Set overlap between grains
+      drift: 0.1, // Random timing variations between grains
+      playbackRate: 0.5, // Normal speed
+      detune: 0, // Set this value if you want to adjust the pitch
+      volume: -20 // Lower volume as requested
   }).toDestination();
 
-  // Initialize default playback position
-  radioTuner.playbackRate = 1; // Normal speed
+  radioTuner.onload = () => {
+      console.log('radioTuner sample loaded successfully');
+      // Optionally, attempt to play immediately if a valid channelValue is already set
+      if (typeof lastChannelValue === 'number') {
+          updatePlaybackPosition(lastChannelValue);
+      }
+  };
+
+  radioTuner.onerror = (e) => {
+      console.error('Failed to load the radioTuner sample:', e);
+  };
+
   radioTuner.fadeIn = 0.1;
   radioTuner.fadeOut = 0.1;
 
@@ -409,7 +424,7 @@ function calculateReverbWetLevel(cameraZoom) {
   const minZoom = controls.minZoom;  
   const maxZoom = controls.maxZoom; 
   const minWetLevel = 0.05;
-  const maxWetLevel = 0.9;
+  const maxWetLevel = 1.0;
 
   // Ensure the camera zoom is clamped within the expected range
   const clampedZoom = Math.max(minZoom, Math.min(maxZoom, cameraZoom));
@@ -1142,39 +1157,79 @@ function raycastFMpolygon(intersections) {
   });
 }
 
+
 function updateDroneSynthBasedOnShortestRay() {
   let shortestDistance = Infinity;
   let avgRadius = 1;
   let shouldAdjust = false;
 
   fmRayLinesByUniqueId.forEach(line => {
-    const positions = line.geometry.attributes.position.array;
-    const start = new THREE.Vector3(positions[0], positions[1], positions[2]);
-    const end = new THREE.Vector3(positions[3], positions[4], positions[5]);
-    const length = start.distanceTo(end);
-    if (length < shortestDistance) {
-        shortestDistance = length;
-        avgRadius = line.userData.avgRadius || 1; // Get avgRadius from line's userData
-        shouldAdjust = true;
-    }
+      const positions = line.geometry.attributes.position.array;
+      const start = new THREE.Vector3(positions[0], positions[1], positions[2]);
+      const end = new THREE.Vector3(positions[3], positions[4], positions[5]);
+      const length = start.distanceTo(end);
+      if (length < shortestDistance) {
+          shortestDistance = length;
+          avgRadius = line.userData.avgRadius || 1; // Get avgRadius from line's userData
+          shouldAdjust = true;
+      }
   });
 
   if (shouldAdjust) {
-      const normalizedDistance = Math.max(0, Math.min(1, (shortestDistance / avgRadius - 0.01) / (2 - 0.01)));
-      const targetVolume = Tone.gainToDb(1 - normalizedDistance);
-      const targetCutoff = 2000 * (1 - normalizedDistance);  // Adjust filter cutoff based on distance
-      console.log(targetCutoff)
-
-      // Smoothly ramp parameters to reflect the transition from rest to dynamic state
-      droneSynth.harmonicity.rampTo(1.0 - normalizedDistance, 0.5);
-      droneSynth.volume.rampTo(targetVolume, 0.5);
-      droneFilter.frequency.rampTo(targetCutoff, 0.5);
-      droneFilter.Q.rampTo(2, 0.5);
+      // Update droneSynth volume and filter based on distance
+      updateVolumeBasedOnDistance(droneSynth, droneFilter, shortestDistance, avgRadius);
+      // Optionally update radioTuner volume, assuming no filter is used
+      updateVolumeBasedOnDistance(synths.radioTuner, null, shortestDistance, avgRadius);
   } else {
       // Transition to resting state if no intersections are detected
       transitionToRestingState();
-    }
+  }
 }
+
+function updateVolumeBasedOnDistance(audioComponent, filterComponent, shortestDistance, avgRadius, type) {
+  const normalizedDistance = Math.max(0, Math.min(1, (shortestDistance / avgRadius - 0.01) / (2 - 0.01)));
+  const targetVolume = Tone.gainToDb(1 - normalizedDistance);
+  const targetCutoff = 2000 * (1 - normalizedDistance);  // Adjust filter cutoff based on distance
+
+  audioComponent.volume.rampTo(targetVolume, 0.5);
+  
+  if (type === "droneSynth") {
+      // Specific adjustments for droneSynth to maintain its sonic character
+      audioComponent.harmonicity.rampTo(1.0 - normalizedDistance, 0.5);
+      if (filterComponent) {
+          filterComponent.frequency.rampTo(targetCutoff, 0.5);
+          filterComponent.Q.rampTo(2, 0.5);
+      }
+  } else if (type === "radioTuner") {
+      // Specific logic for radioTuner if needed, here just example to set a volume
+      // No filter adjustments for radioTuner in this example
+  }
+}
+
+
+function updateVolumeBasedOnDistance(audioComponent, filterComponent, shortestDistance, avgRadius) {
+  const normalizedDistance = Math.max(0, Math.min(1, (shortestDistance / avgRadius - 0.01) / (2 - 0.01)));
+  const targetVolume = Tone.gainToDb(1 - normalizedDistance);
+  const targetCutoff = 2000 * (1 - normalizedDistance);  // Adjust filter cutoff based on distance
+
+
+
+  audioComponent.volume.rampTo(targetVolume, 0.5);
+  if (filterComponent) {
+      filterComponent.frequency.rampTo(targetCutoff, 0.5);
+      filterComponent.Q.rampTo(2, 0.5);
+  }
+  if (type === "droneSynth") {
+    // Specific adjustments for droneSynth to maintain its sonic character
+    audioComponent.harmonicity.rampTo(1.0 - normalizedDistance, 0.5);
+    if (filterComponent) {
+        filterComponent.frequency.rampTo(targetCutoff, 0.5);
+        filterComponent.Q.rampTo(2, 0.5);
+    }
+} else if (type === "radioTuner") {
+}
+}
+
 
 function removeRayLine(uniqueId) {
   let line = fmRayLinesByUniqueId.get(uniqueId);
@@ -1420,12 +1475,23 @@ function handleRaycasters(camera, scene) {
 }
 
 function transitionToRestingState() {
+  // Define the logic to transition to a resting state
+  droneSynth.volume.rampTo(-Infinity, 0.5);  // Mute the droneSynth
+  droneFilter.frequency.rampTo(500, 0.5);   // Set filter to a default state
+
+
+function transitionToRestingState() {
   // Ensure to ramp back to a resting state smoothly
   droneSynth.harmonicity.rampTo(1, 1);
   droneSynth.volume.rampTo(Tone.gainToDb(0.666), 1.5);
   droneFilter.frequency.rampTo(200, 1);
   droneFilter.Q.rampTo(4, 1);
+
+  if (synths.radioTuner) {
+    synths.radioTuner.volume.rampTo(-Infinity, 0.5);  // Mute the radioTuner
 }
+}}
+
 
 // Simple geodesic distance calculation (Haversine formula)
 function calculateGeodesicDistance(p1, p2) {
