@@ -917,47 +917,47 @@ function monitorSynths() {
 };
 
 
-function raycastCellServiceVertex(intersection, maxCellTowerRays = 10) {
+function raycastCellServiceVertex(intersection, maxCellTowerRays = 3) {
   const intersectPoint = intersection.point;
-
-  // console.log(`Intersected object type: ${intersection.object.type}`);
-  // console.log(`Intersected object userData: `, intersection.object.userData);
-
-  // Find the nearest cell towers
   const nearestTowers = findNearestCellTowers(intersectPoint, maxCellTowerRays);
 
   if (nearestTowers.length > 0) {
       nearestTowers.forEach(tower => {
-          // console.log(`Nearest Cell Tower is ${tower.distance.toFixed(2)} units away, Grid Code: ${tower.gridCode}`);
-          drawcellRayLine(intersectPoint, tower.position, maxCellTowerRays);  // Pass maxCellTowerRays for cleanup
+          drawcellRayLine(intersectPoint, tower.position, maxCellTowerRays, tower.gridCode, tower.distance, currentColor); // Passing distance as well
       });
   } else {
       console.log('No cell towers found');
-      cellRayCleanup(maxCellTowerRays);  // Cleanup when no towers are found
+      cellRayCleanup(maxCellTowerRays); // Cleanup when no towers are found
   }
 }
 
 let currentRayLines = [];
+let lastTowerId = null; // tower focus init
 
 
-function drawcellRayLine(start, end, maxCellTowerRays) {
-// Create new geometry and line
-const lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });  // Example color
-const line = new THREE.Line(lineGeometry, lineMaterial);
+function drawcellRayLine(start, end, maxCellTowerRays, towerId, distance, color) {
+  // Create new geometry and line
+  const lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+  const lineMaterial = new THREE.LineBasicMaterial({ color });
+  const line = new THREE.Line(lineGeometry, lineMaterial);
 
-// Add line to the scene and store it in the array
-scene.add(line);
-currentRayLines.push(line);
+  // Add line to the scene and store it in the array
+  scene.add(line);
+  currentRayLines.push(line);
 
-// Ensure we do not exceed the number of maximum allowable lines
-while (currentRayLines.length > maxCellTowerRays) {
-    const oldLine = currentRayLines.shift();  // Remove the oldest line
-    scene.remove(oldLine);
-    if (oldLine.geometry) oldLine.geometry.dispose();  // Dispose of geometry to free resources
+  // Check if the tower ID has changed
+  if (lastTowerId !== towerId) {
+      triggerMembraneSynth(distance); // Use the passed distance to trigger synth
+      lastTowerId = towerId; // Update the lastTowerId
+  }
+
+  // Ensure we do not exceed the number of maximum allowable lines
+  while (currentRayLines.length > maxCellTowerRays) {
+      const oldLine = currentRayLines.shift(); // Remove the oldest line
+      scene.remove(oldLine);
+      if (oldLine.geometry) oldLine.geometry.dispose(); // Dispose of geometry to free resources
+  }
 }
-}
-
 
 function cellRayCleanup(maxCellTowerRays) {
 while (currentRayLines.length > maxCellTowerRays) {
@@ -979,7 +979,7 @@ currentRayLines = [];  // Reset the array after clearing
 
 
 
-function findNearestCellTowers(intersectPoint, maxCellTowerRays = 10) {
+function findNearestCellTowers(intersectPoint, maxCellTowerRays = 3) {
   let towers = [];
   
   // Convert intersection point from Three.js coordinates to geographic coordinates
@@ -999,6 +999,14 @@ function findNearestCellTowers(intersectPoint, maxCellTowerRays = 10) {
   return towers.sort((a, b) => a.distance - b.distance).slice(0, maxCellTowerRays);
 }
 
+
+
+// function triggerMembraneSynthBasedOnTowerChange() {
+//   // Determine the distance for the last focused tower or a default value
+//   let distance = lastTowerId ? calculateDistanceForTower(lastTowerId) : 100; // Example distance
+//   let note = mapDistanceToPitch(distance);
+//   safeTriggerSynth(membraneSynth, note, "16n");
+// }
 
 function triggerMembraneSynth(distance) {
   let note = mapDistanceToPitch(distance);
@@ -1055,7 +1063,7 @@ function getSortedCellRayDistances() {
 function processSortedCellRays() {
   const sortedRays = getSortedCellRayDistances();
   sortedRays.forEach(ray => {
-      console.log(`Ray ${ray.originalIndex} is sorted at index ${ray.sortedIndex} with distance ${ray.distance.toFixed(2)}`);
+      // console.log(`Ray ${ray.originalIndex} is sorted at index ${ray.sortedIndex} with distance ${ray.distance.toFixed(2)}`);
   });
 }
 
