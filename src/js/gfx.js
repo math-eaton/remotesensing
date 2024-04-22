@@ -1186,28 +1186,8 @@ function updateDroneSynthBasedOnShortestRay() {
   }
 }
 
+
 function updateVolumeBasedOnDistance(audioComponent, filterComponent, shortestDistance, avgRadius, type) {
-  const normalizedDistance = Math.max(0, Math.min(1, (shortestDistance / avgRadius - 0.01) / (2 - 0.01)));
-  const targetVolume = Tone.gainToDb(1 - normalizedDistance);
-  const targetCutoff = 2000 * (1 - normalizedDistance);  // Adjust filter cutoff based on distance
-
-  audioComponent.volume.rampTo(targetVolume, 0.5);
-  
-  if (type === "droneSynth") {
-      // Specific adjustments for droneSynth to maintain its sonic character
-      audioComponent.harmonicity.rampTo(1.0 - normalizedDistance, 0.5);
-      if (filterComponent) {
-          filterComponent.frequency.rampTo(targetCutoff, 0.5);
-          filterComponent.Q.rampTo(2, 0.5);
-      }
-  } else if (type === "radioTuner") {
-      // Specific logic for radioTuner if needed, here just example to set a volume
-      // No filter adjustments for radioTuner in this example
-  }
-}
-
-
-function updateVolumeBasedOnDistance(audioComponent, filterComponent, shortestDistance, avgRadius) {
   const normalizedDistance = Math.max(0, Math.min(1, (shortestDistance / avgRadius - 0.01) / (2 - 0.01)));
   const targetVolume = Tone.gainToDb(1 - normalizedDistance);
   const targetCutoff = 2000 * (1 - normalizedDistance);  // Adjust filter cutoff based on distance
