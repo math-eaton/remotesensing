@@ -187,19 +187,35 @@ export function gfx() {
   //////////////
 
 
-  // synth global inits
+  // synth init
   let synth;
-  const synths = {};
   let synthPresets = {};
   let droneSynth, droneFilter; 
   let membraneSynth, membraneFilter;
   let noiseSynth, noiseFilter;
+
+  // fx init
   let globalVolume = new Tone.Volume().toDestination();
   let limiter = new Tone.Limiter(-1).toDestination();
   let meter = new Tone.Meter();
 
+  // setup effects
+let reverbSend = new Tone.Reverb({
+  decay: 4,    // Decay time of the reverb in seconds
+  preDelay: 0.25 // Delay before the reverb effect kicks in
+}).toDestination();
 
-// const maxVoices = 3; // Maximum number of voices your application might need
+
+reverbSend.wet.value = 0.1; // Mixing ratio of the wet (processed) signal
+
+// Connect reverb to the global volume
+reverbSend.connect(globalVolume);
+
+let synths = {
+  droneSynth: setupDroneSynth(),
+  membraneSynth: setupMembraneSynth(),
+  noiseSynth: setupNoiseSynth()
+};  
 
 
 let lastEventTime = Tone.now();
@@ -222,18 +238,6 @@ if (!synth) {
 const time = getNextEventTime();
 synth.triggerAttackRelease(note, duration, time);
 }
-
-// setup effects
-let reverbSend = new Tone.Reverb({
-  decay: 4,    // Decay time of the reverb in seconds
-  preDelay: 0.25 // Delay before the reverb effect kicks in
-}).toDestination();
-
-
-reverbSend.wet.value = 0.1; // Mixing ratio of the wet (processed) signal
-
-// Connect reverb to the global volume
-reverbSend.connect(globalVolume);
 
 
 function updateReverbBasedOnCameraZoom(camera) {
@@ -296,6 +300,8 @@ function setupDroneSynth() {
 
   // Trigger continuous note
   droneSynth.triggerAttack("A1");
+
+  return droneSynth;
 }
 
 function setupMembraneSynth() {
@@ -322,6 +328,8 @@ function setupMembraneSynth() {
 
   // Optional: Connect directly to destination if you want a clearer sound in addition to reverb
   membraneFilter.toDestination();
+
+  return membraneSynth
 }
 
 function setupNoiseSynth() {
@@ -347,95 +355,70 @@ function setupNoiseSynth() {
   noiseFilter.connect(reverbSend);
 
   // noiseFilter.toDestination();
+  return noiseSynth
 }
 
 
-function createSynth(type) {
-  if (synths[type]) {
-    console.log(`Reusing existing synth of type: ${type}`);
-    return synths[type];
-  }
-  
-  console.log(`Creating new synth of type: ${type}`);
-  let newSynth;
-  switch (type) {
-    case 'droneSynth':
-      newSynth = droneSynth;
-      break;
-    case 'membraneSynth':
-      newSynth = membraneSynth
-      break;
-    case 'noiseSynth':
-      newSynth = noiseSynth
-      break;
-    // case 'AccessSynth':
-    //   newSynth = new Tone.MetalSynth().toDestination();
-    //   break;
-    default:
-      console.error(`Unknown synth type: ${type}`);
-      newSynth = new Tone.Synth().toDestination(); // Fallback synth if type is not recognized
-      break;
-  }
-  
-  // newSynth.volume.value = -Infinity; // Mute newly created synths initially
-  // synths[type] = newSynth;
-  return newSynth;
-}
 
+function switchSynth(activeSynthType) {
+  // Mute all synths
+  Object.values(synths).forEach(synth => {
+      if (synth && synth.volume) {
+          synth.volume.value = -Infinity;
+      }
+  });
 
-function switchSynth(activeSynthType1) {
-  Object.values(synths).forEach(synth => synth.volume.value = -Infinity); // Mute all synths
-  if (activeSynthType1 === 'droneSynth') {
-    synth = droneSynth;
+  // Activate the selected synth
+  let activeSynth = synths[activeSynthType];
+  if (activeSynth && activeSynth.volume) {
+      activeSynth.volume.value = 0;  // Unmute the selected synth
+      console.log(`Activated synth: ${activeSynthType}`);
   } else {
-    synth = createSynth(activeSynthType1); // This will reuse or create a new synth
+      console.error(`Synth type ${activeSynthType} not initialized or not found`);
   }
-  synth.volume.value = 0; // Unmute the selected synth
-  return synth;
 }
-
 
 function loadSynthPresets(data) {
   synthPresets = data;
   console.log("Synth presets loaded", synthPresets);
 }
 
-function applyPreset(preset) {
-  if (preset.type) {
-    synth = createSynth(preset.type); // This ensures the synth is properly initialized
-    synth.volume.value = 0; // Unmute this synth
-  }
-  if (synth && preset.settings) {
-    synth.set(preset.settings);
-    safeTriggerSynth(synth, "D4", "8n"); // Use the safe trigger function
-  }
-}
+// function applyPreset(preset) {
+//   if (preset.type) {
+//     synth = createSynth(preset.type); // This ensures the synth is properly initialized
+//     synth.volume.value = 0; // Unmute this synth
+//   }
+//   if (synth && preset.settings) {
+//     synth.set(preset.settings);
+//     safeTriggerSynth(synth, "D4", "8n"); // Use the safe trigger function
+//   }
+// }
 
 
 
-function interpolatePresets(presetMin, presetMax, fraction) {
-  let interpolatedPreset = {};
+// function interpolatePresets(presetMin, presetMax, fraction) {
+//   let interpolatedPreset = {};
 
-  Object.keys(presetMin.settings).forEach(key => {
-    interpolatedPreset[key] = {};
-    Object.keys(presetMin.settings[key]).forEach(subKey => {
-      const minVal = presetMin.settings[key][subKey];
-      const maxVal = presetMax.settings[key][subKey];
-      if (typeof minVal === 'number' && typeof maxVal === 'number') {
-        interpolatedPreset[key][subKey] = lerp(minVal, maxVal, fraction);
-      } else {
-        interpolatedPreset[key][subKey] = fraction > 0.5 ? maxVal : minVal;
-      }
-    });
-  });
+//   Object.keys(presetMin.settings).forEach(key => {
+//     interpolatedPreset[key] = {};
+//     Object.keys(presetMin.settings[key]).forEach(subKey => {
+//       const minVal = presetMin.settings[key][subKey];
+//       const maxVal = presetMax.settings[key][subKey];
+//       if (typeof minVal === 'number' && typeof maxVal === 'number') {
+//         interpolatedPreset[key][subKey] = lerp(minVal, maxVal, fraction);
+//       } else {
+//         interpolatedPreset[key][subKey] = fraction > 0.5 ? maxVal : minVal;
+//       }
+//     });
+//   });
 
-  return interpolatedPreset;
-}
+//   return interpolatedPreset;
+// }
 
-// Example LERP function for numeric values
-function lerp(value1, value2, fraction) {
-  return value1 + (value2 - value1) * fraction;
-}
+// // Example LERP function for numeric values
+// function lerp(value1, value2, fraction) {
+//   return value1 + (value2 - value1) * fraction;
+// }
 
 // function updateDroneSynthParams(intersections, minDistance = 0.001, maxDistance = 1.0) {
 //   if (intersections.length > 0) {
@@ -476,6 +459,7 @@ function lerp(value1, value2, fraction) {
 // }
 
 function adjustDroneSynthParametersForSwitch(switchState) {
+
   if (switchState === 1) {
 
     droneSynth.set({
@@ -556,7 +540,7 @@ function updateColorFromVUMeter() {
 setInterval(() => {
   updateColorFromVUMeter();  // This function will internally calculate and update the color
   // console.log(Math.round(meter.getValue(), 1))
-}, 10);
+}, 50);
 
 
 function monitorSynths() {
@@ -1689,7 +1673,7 @@ function toggleMapScene(switchState, source) {
   const canvas = document.getElementById('gfx');
 
   if (source === 'switch1') {
-    let activeSynthType1;
+    let activeSynthType;
     analogGroup.visible = false;
     digitalGroup.visible = false;
 
@@ -1720,7 +1704,7 @@ function toggleMapScene(switchState, source) {
         raycasterDict.fmTransmitterPoints.enabled = true;
         raycasterDict.cellTransmitterPoints.enabled = false;
         scene.remove(cellRayLine);
-        activeSynthType1 = 'droneSynth';
+        activeSynthType = 'droneSynth';
         // switchSynth('droneSynth');
 
         // Redraw FM contours using the last used channel filter when switching back to analog
@@ -1738,7 +1722,7 @@ function toggleMapScene(switchState, source) {
         raycasterDict.cellServiceMesh.enabled = true;
         raycasterDict.cellTransmitterPoints.enabled = true;
         raycasterDict.fmTransmitterPoints.enabled = false;
-        activeSynthType1 = 'membraneSynth';
+        activeSynthType = 'membraneSynth';
         // switchSynth('');
 
         Object.keys(fmContourGroups).forEach(groupId => {
@@ -1750,7 +1734,7 @@ function toggleMapScene(switchState, source) {
         break;
     }
     // canvas.style.filter = switchState === 2 ? 'hue-rotate(200deg)' : '';
-    switchSynth(activeSynthType1);
+    switchSynth(activeSynthType);
 
   } else if (source === 'switch2') {
 
