@@ -212,7 +212,7 @@ export function gfx() {
 
     // Setup reverb
     reverbSend = new Tone.Reverb({ 
-        decay: 10,
+        decay: 7,
         preDelay: 0.05
     }).toDestination();
     reverbSend.wet.value = 0.1;
@@ -229,7 +229,9 @@ function setupSynths() {
   synths = {
       droneSynth: setupDroneSynth(),
       membraneSynth: setupMembraneSynth(),
-      noiseSynth: setupNoiseSynth()
+      noiseSynth: setupNoiseSynth(),
+      radioTuner: setupRadioTuner(),
+      cellPing: setupCellPing()
   };
 }
 
@@ -266,6 +268,34 @@ function setupDroneSynth() {
   return droneSynth;
 }
 
+function setupRadioTuner() {
+  const radioTuner = new Tone.Player({
+      url: "src/assets/sounds/iddqd_loopy.WAV",
+      loop: true,
+      volume: -10
+  }).toDestination();
+
+  // Initialize default playback position
+  radioTuner.playbackRate = 1; // Normal speed
+  radioTuner.fadeIn = 0.1;
+  radioTuner.fadeOut = 0.1;
+
+  radioTuner.connect(reverbSend); // Optionally connect to the reverb if needed
+  return radioTuner;
+}
+
+function setupCellPing() {
+  const cellPing = new Tone.Player({
+      url: "path/to/your/cellPing/sample.wav",
+      loop: false,
+      volume: -10
+  }).toDestination();
+
+  cellPing.connect(reverbSend); // Optionally connect to the reverb if needed
+  return cellPing;
+}
+
+
 function setupMembraneSynth() {
   membraneSynth = new Tone.MembraneSynth({
       envelope: {
@@ -294,10 +324,6 @@ function setupMembraneSynth() {
   return membraneSynth
 }
 
-///////////////////
-///////////
-// tone.js helper stuff /////
-//////////////////////
 
 function setupNoiseSynth() {
   noiseSynth = new Tone.NoiseSynth({
@@ -324,6 +350,14 @@ function setupNoiseSynth() {
   // noiseFilter.toDestination();
   return noiseSynth
 }
+
+
+
+///////////////////
+///////////
+// tone.js helper stuff /////
+//////////////////////
+
 
 function switchSynth(activeSynthType) {
   // Mute all synths
@@ -375,7 +409,7 @@ function calculateReverbWetLevel(cameraZoom) {
   const minZoom = controls.minZoom;  
   const maxZoom = controls.maxZoom; 
   const minWetLevel = 0.05;
-  const maxWetLevel = 1.0;
+  const maxWetLevel = 0.9;
 
   // Ensure the camera zoom is clamped within the expected range
   const clampedZoom = Math.max(minZoom, Math.min(maxZoom, cameraZoom));
@@ -1005,7 +1039,7 @@ function findNearestCellTowers(intersectPoint, maxCellTowerRays = 1) {
   return towers.sort((a, b) => a.distance - b.distance).slice(0, maxCellTowerRays);
 }
 
-
+  
 
 // function triggerMembraneSynthBasedOnTowerChange() {
 //   // Determine the distance for the last focused tower or a default value
@@ -1018,6 +1052,12 @@ function triggerMembraneSynth(distance) {
   // let note = mapDistanceToPitch(distance);
   safeTriggerSynth(membraneSynth, "A1", "16n"); 
 }
+
+function triggerCellPing(distance) {
+  // let note = mapDistanceToPitch(distance);
+  safeTriggerSynth(cellPing, "A1", "16n"); 
+}
+
 
 function mapDistanceToPitch(distance) {
   // Example mapping: closer towers produce higher pitches
@@ -1727,6 +1767,7 @@ function toggleMapScene(switchState, source) {
         raycasterDict.cellTransmitterPoints.enabled = false;
         scene.remove(cellRayLine);
         activeSynthType = 'droneSynth';
+        activeSynthType = 'radioTuner';
         switchSynth(activeSynthType);
 
         // Redraw FM contours using the last used channel filter when switching back to analog
@@ -3129,6 +3170,15 @@ function addCellTowerPts(geojson) {
         display.textContent = `FM channel: ${Math.round(channelValue)}`;
         frequencyLabel.textContent = frequencyText;
 
+      // Calculate the new playback position in the sample
+      if (synths.radioTuner.loaded) {
+        const sampleDuration = synths.radioTuner.buffer.duration;
+        const newPosition = (channelValue / 100) * sampleDuration;
+        synths.radioTuner.start(0, newPosition);
+    } else {
+        console.log("radioTuner buffer is not loaded yet");
+    }
+
         if ( fmContoursGeojsonData && fmTransmitterGeojsonData) {
           updateVisualizationWithChannelFilter(fmContoursGeojsonData, fmTransmitterGeojsonData, channelValue);
           lastChannelValue = channelValue; // Update lastChannelValue
@@ -3136,6 +3186,8 @@ function addCellTowerPts(geojson) {
       }
     }, 20); // Delay for debouncing
   }
+  
+
   
   function initFMsliderAndContours(frequencyData) {
     channelFrequencies = frequencyData;
@@ -3145,6 +3197,8 @@ function addCellTowerPts(geojson) {
       const channelValue = Math.round(parseInt(this.value, 10));
       updateDisplays(channelValue);
     });
+
+    console.log("init value: " + slider.value)
     
     // Initial update based on the slider's default value
     const initialChannelValue = Math.round(parseInt(slider.value, 10));
@@ -3758,9 +3812,9 @@ function addCellTowerPts(geojson) {
     // console.log(`analog group: ${analogGroup}`)
 
     // set up synths
-    setupDroneSynth();
-    setupMembraneSynth();
-    setupNoiseSynth();
+    // setupDroneSynth();
+    // setupMembraneSynth();
+    // setupNoiseSynth();
 
     // init switch settings
     toggleMapScene(1, 'switch1'); // init fm on pageload
