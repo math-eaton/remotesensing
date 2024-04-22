@@ -191,6 +191,7 @@ export function gfx() {
   let synth, synths;
   let synthPresets = {};
   let droneSynth, droneFilter; 
+  let radioTuner;
   let membraneSynth, membraneFilter;
   let noiseSynth, noiseFilter;
   let globalVolume, reverbSend
@@ -210,6 +211,8 @@ export function gfx() {
         release: 0.25    // Time taken to release compression
     });
 
+    // let tremolo = new Tone.Tremolo(9, 0.75).connect(reverbSend).start()
+
     // Setup reverb
     reverbSend = new Tone.Reverb({ 
         decay: 7,
@@ -224,6 +227,10 @@ export function gfx() {
     // Connect reverb to the global volume
     reverbSend.connect(globalVolume);
 }
+
+/////////////////////////////////////////////
+/// init each sound source here /////////////
+////////////////////////////////////////////
 
 function setupSynths() {
   synths = {
@@ -247,7 +254,7 @@ function setupDroneSynth() {
       },
       detune: 100,
       harmonicity: 0.5,
-      volume: 2
+      volume: -1
   });
 
   // Initialize the filter
@@ -269,20 +276,19 @@ function setupDroneSynth() {
 }
 
 function setupRadioTuner() {
-  const radioTuner = new Tone.GrainPlayer({
+   radioTuner = new Tone.GrainPlayer({
       url: "src/assets/sounds/iddqd_loopy.WAV",
       loop: true,
-      grainSize: 0.1, // Set grain size in seconds
-      overlap: 0.05, // Set overlap between grains
-      drift: 0.1, // Random timing variations between grains
-      playbackRate: 0.5, // Normal speed
-      detune: 0, // Set this value if you want to adjust the pitch
-      volume: -20 // Lower volume as requested
-  }).toDestination();
+      grainSize: 0.01, 
+      overlap: 0.25,
+      drift: 0.5, // Random timing variations between grains
+      playbackRate: 0.5,
+      detune: 0,
+      volume: -10
+  }).connect(reverbSend);
 
   radioTuner.onload = () => {
       console.log('radioTuner sample loaded successfully');
-      // Optionally, attempt to play immediately if a valid channelValue is already set
       if (typeof lastChannelValue === 'number') {
           updatePlaybackPosition(lastChannelValue);
       }
@@ -366,35 +372,67 @@ function setupNoiseSynth() {
   return noiseSynth
 }
 
+// audio mixer !
+
+let audioChannels = {
+  analogChannel: {
+      synths: ['droneSynth', 'radioTuner'],
+      volume: 0,
+      muted: false
+  },
+  digitalChannel: {
+      synths: ['membraneSynth'],
+      volume: 0,
+      muted: false
+  }
+};
+
+// Function to update channel volume or mute state
+function updateAudioChannels(channelName, settings) {
+  const channel = audioChannels[channelName];
+  if (settings.volume !== undefined) {
+      channel.volume = settings.volume;
+      channel.synths.forEach(synthName => {
+          if (synths[synthName]) {
+              synths[synthName].volume.value = settings.volume;
+          }
+      });
+  }
+  if (settings.muted !== undefined) {
+      channel.muted = settings.muted;
+      channel.synths.forEach(synthName => {
+          if (synths[synthName]) {
+              synths[synthName].volume.value = settings.muted ? -Infinity : channel.volume;
+          }
+      });
+  }
+}
 
 
 ///////////////////
 ///////////
-// tone.js helper stuff /////
+// other tone.js helper function stuff /////
 //////////////////////
 
 
-function switchSynth(activeSynthType) {
-  // Mute all synths
-  Object.values(synths).forEach(synth => {
-      if (synth && synth.volume) {
-          synth.volume.value = -Infinity;
-      }
+function switchSynth(activeChannel) {
+  // Mute all audioChannels
+  Object.keys(audioChannels).forEach(channelName => {
+      updateAudioChannels(channelName, { muted: true });
   });
 
-  // Activate the selected synth
-  let activeSynth = synths[activeSynthType];
-  if (activeSynth && activeSynth.volume) {
-      activeSynth.volume.value = 0;  // Unmute the selected synth
-      console.log(`Activated synth: ${activeSynthType}`);
+  // Unmute the selected channel
+  if (audioChannels[activeChannel]) {
+      updateAudioChannels(activeChannel, { muted: false });
+      console.log(`Activated channel: ${activeChannel}`);
   } else {
-      console.error(`Synth type ${activeSynthType} not initialized or not found`);
+      console.error(`Channel ${activeChannel} not initialized or not found`);
   }
 }
 
 let lastEventTime = Tone.now();
-const timeIncrement = 0.1;
-const randomBuffer = 0.01; // Adding a small random buffer to avoid collisions
+const timeIncrement = 0.2;
+const randomBuffer = 0.03; // Adding a small random buffer to avoid collisions
 
 // transport stuff
 function getNextEventTime() {
@@ -454,7 +492,27 @@ function adjustVolumeForReverb(wetLevel) {
 }
 
 
+// update FM radio player based on freq tuning + safe triggering
+function updatePlaybackPosition(channelValue) {
+  if (synths.radioTuner.loaded) {
+      const sampleDuration = synths.radioTuner.buffer.duration;
+      const newPosition = (channelValue / 100) * sampleDuration;
+      const nextTime = getNextEventTime();
 
+      // Stop the player before starting if it's currently playing to avoid overlapping
+      if (synths.radioTuner.state === "started") {
+          synths.radioTuner.stop(nextTime);
+      }
+
+      // Use the calculated future time to start playing
+      synths.radioTuner.start(nextTime, newPosition);
+  } else {
+      console.log("radioTuner buffer is not loaded yet");
+  }
+}
+
+
+// presets if they happen
 function loadSynthPresets(data) {
   synthPresets = data;
   console.log("Synth presets loaded", synthPresets);
@@ -557,29 +615,29 @@ function adjustDroneSynthParametersForSwitch(switchState) {
   }
 }
 
-function updateMembraneSynthParams(proximity) {
-  let cutoffFrequency = mapProximityToMembraneFrequency(proximity);
-  membraneFilter.frequency.rampTo(cutoffFrequency, 0.2);
-}
+// function updateMembraneSynthParams(proximity) {
+//   let cutoffFrequency = mapProximityToMembraneFrequency(proximity);
+//   membraneFilter.frequency.rampTo(cutoffFrequency, 0.2);
+// }
 
-function calculateInterpolationFraction(distance, minDistance, maxDistance) {
-  return (distance - minDistance) / (maxDistance - minDistance);
-}
+// function calculateInterpolationFraction(distance, minDistance, maxDistance) {
+//   return (distance - minDistance) / (maxDistance - minDistance);
+// }
 
 // Function to map VU meter values to colors
 function getColorFromVUMeter(vuMeterValue) {
   // Define the start and end colors
-  const startColor = hexToRgb(0xff0000); //  low values
+  const startColor = hexToRgb(0x00ff00); //  low values
   const endColor = hexToRgb(0xff00ff);   //  high values
 
   // Check for -Infinity which is the case when there is no sound
-  if (vuMeterValue === -Infinity) {
-    return '#0000ff'; // Default color when there is no sound
+  if (vuMeterValue <= -60) {
+    return '#00ff00'; // Default color when there is no sound
   }
   
   // Normalize the VU meter value to a 0-1 range for interpolation
   const minVUMeterValue = -30;
-  const maxVUMeterValue = -15;
+  const maxVUMeterValue = -1;
   const normalizedFactor = (vuMeterValue - minVUMeterValue) / (maxVUMeterValue - minVUMeterValue);
   
   // Apply an exponential curve to the factor (e.g., square the normalized factor)
@@ -602,7 +660,7 @@ function updateColorFromVUMeter() {
 // Set the interval to update the color based on VU meter readings
 setInterval(() => {
   updateColorFromVUMeter();  // This function will internally calculate and update the color
-  // console.log(Math.round(meter.getValue(), 1))
+  console.log(Math.round(meter.getValue(), 1))
 }, 50);
 
 
@@ -754,11 +812,18 @@ function monitorSynths() {
   }
 
   function initToneJS() {
+
+    Tone.start();
+
     // Initialize effects first
     setupFx();
 
     // Then initialize synths
     setupSynths();
+
+    // Start Tone.Transport with a slight future offset to ensure all is ready
+    Tone.Transport.start("+0.1");
+
 }
 
 
@@ -1264,7 +1329,6 @@ function findAllMatchingFMTowers(uniqueId) {
 }
 
 let fmRayLines = [];
-
 let fmRayLinesByUniqueId = new Map();
 let avgRadius;
 
@@ -1280,7 +1344,7 @@ function drawFMLine(intersectPoint, end, uniqueId, avgRadius, color) {
   let fmRayMaterial = new THREE.LineBasicMaterial({ color });
   line = new THREE.Line(lineGeometry, fmRayMaterial);
   line.userData.avgRadius = avgRadius; // Store avgRadius in userData for use in distance calculations
-  console.log("avg radius: " + avgRadius)
+  // console.log("avg radius: " + avgRadius)
   scene.add(line);
   fmRayLinesByUniqueId.set(uniqueId, line);
 }
@@ -1455,12 +1519,6 @@ function handleRaycasters(camera, scene) {
 }
 
 function transitionToRestingState() {
-  // Define the logic to transition to a resting state
-  droneSynth.volume.rampTo(-Infinity, 0.5);  // Mute the droneSynth
-  droneFilter.frequency.rampTo(500, 0.5);   // Set filter to a default state
-
-
-function transitionToRestingState() {
   // Ensure to ramp back to a resting state smoothly
   droneSynth.harmonicity.rampTo(1, 1);
   droneSynth.volume.rampTo(Tone.gainToDb(0.666), 1.5);
@@ -1468,9 +1526,9 @@ function transitionToRestingState() {
   droneFilter.Q.rampTo(4, 1);
 
   if (synths.radioTuner) {
-    synths.radioTuner.volume.rampTo(-Infinity, 0.5);  // Mute the radioTuner
+    synths.radioTuner.volume.rampTo(0.05, 1.5);  // Mute the radioTuner
 }
-}}
+}
 
 
 // Simple geodesic distance calculation (Haversine formula)
@@ -1680,8 +1738,6 @@ function updateScaleBar(scaleBar, camera) {
       console.log('idk?')
     }
 console.log(audioContext.state)
-Tone.start(); // Necessary to start audio context in response to user interaction
-Tone.Transport.start("+0.1")  
   }
 
 
@@ -1779,19 +1835,15 @@ function onDocumentKeyDown(event) {
 // scene layer toggles
 function toggleMapScene(switchState, source) {
   const canvas = document.getElementById('gfx');
+  let activeSynthType;  // Declare variable at function scope
 
   if (source === 'switch1') {
-    let activeSynthType;
     analogGroup.visible = false;
     digitalGroup.visible = false;
 
     raycasterDict.cellServiceMesh.enabled = false;
     raycasterDict.cellTransmitterPoints.enabled = false;
     raycasterDict.fmTransmitterPoints.enabled = false;
-
-
-    adjustDroneSynthParametersForSwitch(switchState);
-
 
     // Clear existing ray lines from all groups
     clearFMrays();
@@ -1800,10 +1852,9 @@ function toggleMapScene(switchState, source) {
     // Set all FM propagation groups to decay immediately or hide them
     Object.keys(fmContourGroups).forEach(groupId => {
       fmContourGroups[groupId].isDecaying = true;
-      fmContourGroups[groupId].decayRate = 1.0; // Set decay rate for immediate effect
-      updatefmContourGroups(); // Call update function to process changes
-    });    
-
+      fmContourGroups[groupId].decayRate = 1.0;
+      updatefmContourGroups();
+    });
 
     switch (switchState) {
       case 1: // Analog mode
@@ -1811,16 +1862,7 @@ function toggleMapScene(switchState, source) {
         fmTransmitterPoints.visible = true;
         raycasterDict.fmTransmitterPoints.enabled = true;
         raycasterDict.cellTransmitterPoints.enabled = false;
-        scene.remove(cellRayLine);
-        activeSynthType = 'droneSynth';
-        activeSynthType = 'radioTuner';
-        switchSynth(activeSynthType);
-
-        // Redraw FM contours using the last used channel filter when switching back to analog
-        if (lastChannelFilter !== null) {
-          addFMpropagation3D(fmContoursGeojsonData, lastChannelFilter, fmPropagationContours);
-        }
-        
+        activeSynthType = 'analogChannel';
         break;
 
       case 2: // Digital mode
@@ -1831,42 +1873,40 @@ function toggleMapScene(switchState, source) {
         raycasterDict.cellServiceMesh.enabled = true;
         raycasterDict.cellTransmitterPoints.enabled = true;
         raycasterDict.fmTransmitterPoints.enabled = false;
-        activeSynthType = 'membraneSynth';
-        switchSynth(activeSynthType);
-
-        Object.keys(fmContourGroups).forEach(groupId => {
-          fmContourGroups[groupId].isDecaying = true;
-          fmContourGroups[groupId].decayRate = 1.0; // Set decay rate for immediate effect
-          updatefmContourGroups(); // Call update function to process changes
-        });
-
+        activeSynthType = 'digitalChannel';
         break;
     }
-    // canvas.style.filter = switchState === 2 ? 'hue-rotate(200deg)' : '';
-    switchSynth(activeSynthType);
+
+    // Use the activeSynthType determined by the switch
+    if (activeSynthType) {
+      switchSynth(activeSynthType);
+    } else {
+      console.error("No active synth type was set for switch1");
+    }
 
   } else if (source === 'switch2') {
-
-    let activeSynthType;
-
-
     switch (switchState) {
-      case 1: // Elevation Contours
+      case 1:
         elevContourLines.visible = true;
         accessGroup.visible = false;
         raycasterDict.accessibilityMesh.enabled = false;
-        // switchSynth('CellSynth'); // Hypothetical synthesizer for this mode
+        activeSynthType = 'CellSynth'; // This should match an existing channel or be defined similarly
         break;
 
-      case 2: // Accessibility mode
+      case 2:
         accessGroup.visible = true;
         elevContourLines.visible = false;
         raycasterDict.accessibilityMesh.enabled = true;
-        // switchSynth('AccessSynth'); // Hypothetical synthesizer for this mode
+        activeSynthType = 'AccessSynth'; // This should match an existing channel or be defined similarly
         break;
     }
-    switchSynth(activeSynthType);
 
+    // Use the activeSynthType determined by the switch
+    if (activeSynthType) {
+      switchSynth(activeSynthType);
+    } else {
+      console.error("No active synth type was set for switch2");
+    }
   }
 }
 
