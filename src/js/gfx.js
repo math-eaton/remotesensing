@@ -384,7 +384,18 @@ let audioChannels = {
       synths: ['membraneSynth'],
       volume: 0,
       muted: false
-  }
+  },
+  elevationChannel: {
+    synths: ['droneSynth', 'radioTuner'],
+    volume: 0,
+    muted: false
+},
+accessChannel: {
+    synths: ['membraneSynth'],
+    volume: 0,
+    muted: false
+}
+
 };
 
 // Function to update channel volume or mute state
@@ -442,9 +453,9 @@ function getNextEventTime() {
 }
 
 // ensure linear time / consecutive events
-function safeTriggerSynth(synth, note, duration) {
+function safeTriggerSound(synth, note, duration) {
 if (!synth) {
-  console.error("Attempted to trigger a synth that does not exist");
+  console.error("Attempted to trigger an instrument that does not exist");
   return;
 }
 const time = getNextEventTime();
@@ -525,7 +536,7 @@ function loadSynthPresets(data) {
 //   }
 //   if (synth && preset.settings) {
 //     synth.set(preset.settings);
-//     safeTriggerSynth(synth, "D4", "8n"); // Use the safe trigger function
+//     safeTriggerSound(synth, "D4", "8n"); // Use the safe trigger function
 //   }
 // }
 
@@ -1125,17 +1136,17 @@ function findNearestCellTowers(intersectPoint, maxCellTowerRays = 1) {
 //   // Determine the distance for the last focused tower or a default value
 //   let distance = lastTowerId ? calculateDistanceForTower(lastTowerId) : 100; // Example distance
 //   let note = mapDistanceToPitch(distance);
-//   safeTriggerSynth(membraneSynth, note, "16n");
+//   safeTriggerSound(membraneSynth, note, "16n");
 // }
 
 function triggerMembraneSynth(distance) {
   // let note = mapDistanceToPitch(distance);
-  safeTriggerSynth(membraneSynth, "A1", "16n"); 
+  safeTriggerSound(membraneSynth, "A1", "16n"); 
 }
 
 function triggerCellPing(distance) {
   // let note = mapDistanceToPitch(distance);
-  safeTriggerSynth(cellPing, "A1", "16n"); 
+  safeTriggerSound(cellPing, "A1", "16n"); 
 }
 
 
@@ -1836,6 +1847,7 @@ function onDocumentKeyDown(event) {
 function toggleMapScene(switchState, source) {
   const canvas = document.getElementById('gfx');
   let activeSynthType;  // Declare variable at function scope
+  let isDecaying;
 
   if (source === 'switch1') {
     analogGroup.visible = false;
@@ -1859,10 +1871,17 @@ function toggleMapScene(switchState, source) {
     switch (switchState) {
       case 1: // Analog mode
         analogGroup.visible = true;
-        fmTransmitterPoints.visible = true;
+        fmTransmitterPoints.visible = true;  
         raycasterDict.fmTransmitterPoints.enabled = true;
         raycasterDict.cellTransmitterPoints.enabled = false;
         activeSynthType = 'analogChannel';
+
+
+        if (lastChannelFilter !== null) {
+          addFMpropagation3D(fmContoursGeojsonData, lastChannelFilter, fmPropagationContours);
+        }
+
+
         break;
 
       case 2: // Digital mode
@@ -1874,6 +1893,14 @@ function toggleMapScene(switchState, source) {
         raycasterDict.cellTransmitterPoints.enabled = true;
         raycasterDict.fmTransmitterPoints.enabled = false;
         activeSynthType = 'digitalChannel';
+
+        Object.keys(fmContourGroups).forEach(groupId => {
+          fmContourGroups[groupId].isDecaying = true;
+          fmContourGroups[groupId].decayRate = 1.0; // Set decay rate for immediate effect
+          updatefmContourGroups(); // Call update function to process changes
+        });
+
+
         break;
     }
 
@@ -1890,14 +1917,14 @@ function toggleMapScene(switchState, source) {
         elevContourLines.visible = true;
         accessGroup.visible = false;
         raycasterDict.accessibilityMesh.enabled = false;
-        activeSynthType = 'CellSynth'; // This should match an existing channel or be defined similarly
+        activeSynthType = 'elevationChannel'; // This should match an existing channel or be defined similarly
         break;
 
       case 2:
         accessGroup.visible = true;
         elevContourLines.visible = false;
         raycasterDict.accessibilityMesh.enabled = true;
-        activeSynthType = 'AccessSynth'; // This should match an existing channel or be defined similarly
+        activeSynthType = 'accessChannel'; // This should match an existing channel or be defined similarly
         break;
     }
 
@@ -1913,7 +1940,7 @@ function toggleMapScene(switchState, source) {
   
   // Function to initialize the scene and other components
   async function initialize() {
-    initThreeJS(); // Initialize Three.js
+    initThreeJS();
     initToneJS();
 
     // Initialize pixelationFactor
@@ -3736,7 +3763,7 @@ function addCellTowerPts(geojson) {
   function isCriticalDataset(url) {
     // Define logic to determine if a dataset is critical for initial rendering
     // todo: this breaks if the contours aren't required up front but they take longest to load
-    return url.includes('elevation') || url.includes('contour') || url.includes('presets')
+    return url.includes('elevation') || url.includes('fm_contours') || url.includes('transmitter')
   }
   
 
