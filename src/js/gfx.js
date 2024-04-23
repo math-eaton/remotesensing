@@ -325,7 +325,7 @@ function setupMembraneSynth() {
           sustain: 0.01,
           release: 0.01
       },
-      volume: -10 // Start at a reasonable volume
+      volume: -10 
   });
 
   // Initialize the filter specifically for the membrane synth
@@ -354,13 +354,12 @@ function setupNoiseSynth() {
           sustain: 0.01,
           release: 1.4
       },
-      volume: -10 // Start at a reasonable volume
+      volume: -10 
   });
 
-  // Initialize the filter specifically for the membrane synth
   noiseFilter = new Tone.Filter({
       type: 'highpass', // High-pass filter might suit percussive elements better
-      frequency: 500, // Starting cutoff frequency
+      frequency: 6000, // Starting cutoff frequency
       Q: 2
   });
 
@@ -391,7 +390,7 @@ let audioChannels = {
     muted: false
 },
 accessChannel: {
-    synths: ['membraneSynth'],
+    synths: ['noiseSynth'],
     volume: 0,
     muted: false
 }
@@ -443,7 +442,7 @@ function switchSynth(activeChannel) {
 
 let lastEventTime = Tone.now();
 const timeIncrement = 0.2;
-const randomBuffer = 0.03; // Adding a small random buffer to avoid collisions
+const randomBuffer = 0.05; // Adding a small random buffer to avoid collisions
 
 // transport stuff
 function getNextEventTime() {
@@ -1852,6 +1851,9 @@ function toggleMapScene(switchState, source) {
   if (source === 'switch1') {
     analogGroup.visible = false;
     digitalGroup.visible = false;
+    // channelSlider.domElement.style.cssText = 'visible:false,';
+    let channelSlider = document.getElementById('fm-channel-controls');
+
 
     raycasterDict.cellServiceMesh.enabled = false;
     raycasterDict.cellTransmitterPoints.enabled = false;
@@ -1875,6 +1877,7 @@ function toggleMapScene(switchState, source) {
         raycasterDict.fmTransmitterPoints.enabled = true;
         raycasterDict.cellTransmitterPoints.enabled = false;
         activeSynthType = 'analogChannel';
+        channelSlider.style.visibility = "visible";
 
 
         if (lastChannelFilter !== null) {
@@ -1893,6 +1896,7 @@ function toggleMapScene(switchState, source) {
         raycasterDict.cellTransmitterPoints.enabled = true;
         raycasterDict.fmTransmitterPoints.enabled = false;
         activeSynthType = 'digitalChannel';
+        channelSlider.style.visibility = "hidden";
 
         Object.keys(fmContourGroups).forEach(groupId => {
           fmContourGroups[groupId].isDecaying = true;
