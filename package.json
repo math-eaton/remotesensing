@@ -44,7 +44,7 @@
     "postcss": "^8.4.35",
     "postcss-nesting": "^12.0.3",
     "prettier": "^3.2.5",
-    "vite": "5.1.4",
+    "vite": "^5.2.10",
     "vite-plugin-eslint": "^1.8.1"
   },
   "dependencies": {
@@ -60,6 +60,7 @@
     "the-new-css-reset": "^1.11.2",
     "three": "^0.162.0",
     "three-mesh-bvh": "^0.7.3",
+    "tonal": "^6.0.1",
     "tone": "^14.7.77",
     "websocket": "^1.0.34",
     "ws": "^8.16.0"

@@ -9,6 +9,7 @@ import { GeoJSON } from 'geojson';
 import { Earcut } from 'three/src/extras/Earcut.js'
 import Stats from 'three/addons/libs/stats.module.js'
 import * as Tone from 'tone';
+import { Chord, Interval, Note, Scale } from "tonal";
 // import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
 // import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 // import { GeoJSON } from 'geojson';
@@ -87,7 +88,8 @@ export function gfx() {
 
   let audioContext;
 
-  // geometry for raycast testing
+  // geometry for raycaster intersection point
+  let rayOrigin;
   const reticuleSize = 0.0075;
   // const reticuleGeometry = new THREE.RingGeometry( reticuleSize,reticuleSize, 8)
   const reticuleGeometry = new THREE.CircleGeometry( reticuleSize, 48)
@@ -186,6 +188,37 @@ export function gfx() {
   // tone.js ////////////////////////////
   //////////////
 
+  // scales init
+
+  // const range = Scale.rangeOf("F minor pentatonic");
+  // range("A1", "A4");
+
+  // console.log(range("A1", "A4"));
+
+  function createRandomNoteSelector(scaleRange, offsetPct = 10) { // Default offset set to 10%
+    // Calculate the full scale notes from tonal.js
+    const notes = Scale.rangeOf(scaleRange)("A1", "A4"); // Ensure you call this correctly
+    let lastIndex = -1; // No note has been selected initially
+
+    return function randomNoteInRange() {
+        if (lastIndex === -1) {
+            // First call: choose any random note from the array
+            lastIndex = Math.floor(Math.random() * notes.length);
+        } else {
+            // Subsequent calls: choose a note within a percentage of the total notes from the last index
+            const variance = Math.floor(notes.length * (offsetPct / 100)); // Calculate variance based on the percentage
+            const minIndex = Math.max(0, lastIndex - variance);
+            const maxIndex = Math.min(notes.length - 1, lastIndex + variance);
+            const indexRange = maxIndex - minIndex + 1;
+            lastIndex = minIndex + Math.floor(Math.random() * indexRange);
+        }
+        return notes[lastIndex];
+    };
+}
+
+// init quantizer + offset amp per call
+const FminPentRandomNote = createRandomNoteSelector("F minor pentatonic", 25); // N% variance along scale per step
+const DmalkosRandomNote = createRandomNoteSelector("D malkos raga", 50); // N% variance along scale per step
 
   // synth init
   let synth, synths;
@@ -247,13 +280,13 @@ function setupDroneSynth() {
   droneSynth = new Tone.AMSynth({
       oscillator: { type: "sine" },
       envelope: {
-          attack: 10,   // Long attack time of 10 seconds
+          attack: 2,   // in seconds
           decay: 0.4,
           sustain: 1,
           release: 1
       },
       detune: 100,
-      harmonicity: 0.5,
+      harmonicity: 1.5,
       volume: -1
   });
 
@@ -318,12 +351,12 @@ function setupCellPing() {
 
 
 function setupMembraneSynth() {
-  membraneSynth = new Tone.MembraneSynth({
+  membraneSynth = new Tone.Synth({
       envelope: {
           attack: 0.005, // Quick attack for a sharp percussive sound
-          decay: 0.4,
-          sustain: 0.01,
-          release: 0.01
+          decay: 0.05,
+          sustain: 0.5,
+          release: 0.005
       },
       volume: -10 
   });
@@ -331,7 +364,7 @@ function setupMembraneSynth() {
   // Initialize the filter specifically for the membrane synth
   membraneFilter = new Tone.Filter({
       type: 'highpass', // High-pass filter might suit percussive elements better
-      frequency: 500, // Starting cutoff frequency
+      frequency: 4000, // Starting cutoff frequency
       Q: 1
   });
 
@@ -398,21 +431,21 @@ accessChannel: {
 };
 
 // Function to update channel volume or mute state
-function updateAudioChannels(channelName, settings) {
-  const channel = audioChannels[channelName];
+function updateAudioChannels(audioChannelName, settings) {
+  const audioChannel = audioChannels[audioChannelName];
   if (settings.volume !== undefined) {
-      channel.volume = settings.volume;
-      channel.synths.forEach(synthName => {
+    audioChannel.volume = settings.volume;
+    audioChannel.synths.forEach(synthName => {
           if (synths[synthName]) {
               synths[synthName].volume.value = settings.volume;
           }
       });
   }
   if (settings.muted !== undefined) {
-      channel.muted = settings.muted;
-      channel.synths.forEach(synthName => {
+    audioChannel.muted = settings.muted;
+    audioChannel.synths.forEach(synthName => {
           if (synths[synthName]) {
-              synths[synthName].volume.value = settings.muted ? -Infinity : channel.volume;
+              synths[synthName].volume.value = settings.muted ? -Infinity : audioChannel.volume;
           }
       });
   }
@@ -426,13 +459,25 @@ function updateAudioChannels(channelName, settings) {
 
 
 function switchSynth(activeChannel) {
-  // Mute all audioChannels
-  Object.keys(audioChannels).forEach(channelName => {
-      updateAudioChannels(channelName, { muted: true });
+  // Mute all channels by ramping down their volume
+  Object.keys(audioChannels).forEach(audioChannelName => {
+      if (audioChannelName !== activeChannel) {
+          fadeOutVol(audioChannelName); // Ramp down and mute
+      }
   });
 
-  // Unmute the selected channel
+  // Check and unmute the selected channel
   if (audioChannels[activeChannel]) {
+      // Cancel any ongoing mute if necessary
+      const channel = audioChannels[activeChannel];
+      channel.synths.forEach(synthName => {
+          const synth = synths[synthName];
+          if (synth && synth.volume) {
+              synth.volume.cancelScheduledValues(Tone.now());
+              synth.volume.rampTo(0, 2); // ramp volume back up if it was being muted
+          }
+      });
+
       updateAudioChannels(activeChannel, { muted: false });
       console.log(`Activated channel: ${activeChannel}`);
   } else {
@@ -441,8 +486,8 @@ function switchSynth(activeChannel) {
 }
 
 let lastEventTime = Tone.now();
-const timeIncrement = 0.2;
-const randomBuffer = 0.05; // Adding a small random buffer to avoid collisions
+const timeIncrement = 0.015;
+const randomBuffer = 0.01; // Adding a small random buffer to avoid collisions
 
 // transport stuff
 function getNextEventTime() {
@@ -451,7 +496,7 @@ function getNextEventTime() {
   return lastEventTime;
 }
 
-// ensure linear time / consecutive events
+// ensure linear time / consecutive events ... latency isn't great here
 function safeTriggerSound(synth, note, duration) {
 if (!synth) {
   console.error("Attempted to trigger an instrument that does not exist");
@@ -460,6 +505,25 @@ if (!synth) {
 const time = getNextEventTime();
 synth.triggerAttackRelease(note, duration, time);
 }
+
+function fadeOutVol(audioChannelName, duration = 3) {
+  const channel = audioChannels[audioChannelName];
+  if (channel && !channel.muted) {
+      channel.synths.forEach(synthName => {
+          const synth = synths[synthName];
+          if (synth && synth.volume) {
+              // Assuming volume is a Tone.Param or similar
+              synth.volume.rampTo(-Infinity, duration); // Ramp to silence over 3 seconds
+          }
+      });
+
+      // Set a timeout to mark the channel as muted after the ramp down is complete
+      setTimeout(() => {
+          updateAudioChannels(audioChannelName, { muted: true });
+      }, duration * 1000); // to seconds
+  }
+}
+
 
 
 function updateReverbBasedOnCameraZoom(camera) {
@@ -527,6 +591,20 @@ function loadSynthPresets(data) {
   synthPresets = data;
   console.log("Synth presets loaded", synthPresets);
 }
+
+
+function transitionToRestingState() {
+  // Ensure to ramp back to a resting state smoothly
+  droneSynth.harmonicity.rampTo(1, 1);
+  droneSynth.volume.rampTo(Tone.gainToDb(0.15), 0.75);
+  droneFilter.frequency.rampTo(200, 1);
+  droneFilter.Q.rampTo(4, 1);
+
+  if (synths.radioTuner) {
+    synths.radioTuner.volume.rampTo(Tone.gainToDb(0.15), 0.75);  // Mute the radioTuner
+}
+}
+
 
 // function applyPreset(preset) {
 //   if (preset.type) {
@@ -607,19 +685,8 @@ function adjustDroneSynthParametersForSwitch(switchState) {
 
   if (switchState === 1) {
 
-    droneSynth.set({
-      envelope: {
-          attack: 5,   // Smooth, slow attack to fade in the synth sound
-          decay: 0.4,
-          sustain: 1,
-          release: 1
-      },
-      volume: -20  // Start at a lower volume and ramp up if needed
-  });
+    setupDroneSynth();
 
-  droneSynth.volume.rampTo(-1, 3); 
-      // Activate the synth only for switch1 = 1
-  droneSynth.harmonicity.value = 1;  // Initial harmonicity setting
 } else {
       droneSynth.volume.rampTo(-Infinity, 3);  
   }
@@ -670,8 +737,8 @@ function updateColorFromVUMeter() {
 // Set the interval to update the color based on VU meter readings
 setInterval(() => {
   updateColorFromVUMeter();  // This function will internally calculate and update the color
-  console.log(Math.round(meter.getValue(), 1))
-}, 50);
+  // console.log(Math.round(meter.getValue(), 1))
+}, 10);
 
 
 function monitorSynths() {
@@ -1026,7 +1093,7 @@ function monitorSynths() {
   const raycasterDict = {
     // 1: determine presence or absence of cell signal
     // method: nearest CELL SERVICE MESH vertex
-    cellServiceMesh: { group: cellServiceMesh, enabled: false, onIntersect: raycastCellServiceMesh },
+    // cellServiceMesh: { group: cellServiceMesh, enabled: false, onIntersect: raycastCellServiceMesh },
     // 2: reflect the degree of remoteness of a place
     // method: nearest ACCESSIBILITY MESH vertex
     // accessibilityHex: { group: accessibilityHex, enabled: false, onIntersect: raycastAccessVertex },
@@ -1039,7 +1106,7 @@ function monitorSynths() {
     // method: distance from PROPAGATION POLYGON edge to centroid
     fmTransmitterPoints: { group: fmPropagationPolygons, enabled: false, onIntersect: raycastFMpolygon },
     cameraCenter: { 
-      group: accessibilityMesh,  // terrain proxy 
+      group: cellServiceMesh,  // terrain proxy 
       enabled: true,  // always enabled
       onIntersect: () => printCameraCenterCoordinates(camera)  // this function prints coords to a text div
 }
@@ -1048,16 +1115,18 @@ function monitorSynths() {
 };
 
 
+
+
 function raycastCellServiceVertex(intersection, maxCellTowerRays = 1) {
   const intersectPoint = intersection.point;
   const nearestTowers = findNearestCellTowers(intersectPoint, maxCellTowerRays);
 
   if (nearestTowers.length > 0) {
       nearestTowers.forEach(tower => {
-          drawcellRayLine(intersectPoint, tower.position, maxCellTowerRays, tower.uniqSysId, tower.distance, currentColor);
+          drawcellRayLine(intersectPoint, tower.position, maxCellTowerRays, tower.uniqueCellid, cellServiceMesh.gridCode, tower.distance, currentColor);
       });
   } else {
-      console.log('No cell towers found');
+      console.log('No cell towers found or dead zone!');
       cellRayCleanup(maxCellTowerRays);
   }
 }
@@ -1066,17 +1135,20 @@ let currentRayLines = [];
 let lastTowerId = null; // tower focus init
 
 
-function drawcellRayLine(start, end, maxCellTowerRays, towerId, distance, color) {
+function drawcellRayLine(start, end, maxCellTowerRays, towerId, gridCode, distance, color) {
   const lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+  // console.log("line geom: " + JSON.stringify(lineGeometry))
   const lineMaterial = new THREE.LineBasicMaterial({ color });
   const line = new THREE.Line(lineGeometry, lineMaterial);
   scene.add(line);
   currentRayLines.push(line);
 
-  console.log("tower ID: " + towerId)
-  console.log("last tower ID: " + lastTowerId)
+  // console.log("tower ID: " + towerId)
+  // console.log("last tower ID: " + lastTowerId)
+  // console.log("tower gridCode: " + gridCode)
 
-  if (lastTowerId !== towerId) {
+  if (gridCode !== 0
+    ){  if (lastTowerId !== towerId) {
       triggerMembraneSynth(distance);
       lastTowerId = towerId;
   }
@@ -1086,7 +1158,7 @@ function drawcellRayLine(start, end, maxCellTowerRays, towerId, distance, color)
       scene.remove(oldLine);
       if (oldLine.geometry) oldLine.geometry.dispose();
   }
-}
+}}
 
 function cellRayCleanup(maxCellTowerRays) {
 while (currentRayLines.length > maxCellTowerRays) {
@@ -1115,12 +1187,12 @@ function findNearestCellTowers(intersectPoint, maxCellTowerRays = 1) {
   const intersectGeo = toGeographic(intersectPoint.x, intersectPoint.y);
 
   cellTransmitterPoints.children.forEach(pyramid => {
-      const towerGeo = toGeographic(pyramid.position.x, pyramid.position.y);
+      const towerGeo = toGeographic(pyramid.position.x, pyramid.position.y, pyramid.position.z);
       const distance = calculateGeodesicDistance(intersectGeo, towerGeo);
       towers.push({
         distance: distance,
         // gridCode: pyramid.userData.gridCode, 
-        uniqSysId: pyramid.userData.UniqSysID, 
+        uniqueCellid: pyramid.userData.uniqueCellid, 
         position: pyramid.position.clone()
       });
     });
@@ -1139,8 +1211,9 @@ function findNearestCellTowers(intersectPoint, maxCellTowerRays = 1) {
 // }
 
 function triggerMembraneSynth(distance) {
-  // let note = mapDistanceToPitch(distance);
-  safeTriggerSound(membraneSynth, "A1", "16n"); 
+  const note = DmalkosRandomNote(); 
+  safeTriggerSound(membraneSynth, note, "0.1"); 
+  console.log(`triggering " + ${note}`); // Log the same note
 }
 
 function triggerCellPing(distance) {
@@ -1148,16 +1221,6 @@ function triggerCellPing(distance) {
   safeTriggerSound(cellPing, "A1", "16n"); 
 }
 
-
-function mapDistanceToPitch(distance) {
-  // Example mapping: closer towers produce higher pitches
-  const maxPitch = 48;  // High note
-  const minPitch = 12;  // Low note
-  const pitchRange = maxPitch - minPitch;
-  const normalizedDistance = Math.min(1, distance / 1000); // Normalize distance
-  const pitch = maxPitch - normalizedDistance * pitchRange;
-  return `C${Math.floor(pitch / 12)}`;  // C is the note, and the octave is calculated
-}
 
 
 function mapProximityToMembraneFrequency(proximity) {
@@ -1234,55 +1297,64 @@ function raycastFMpolygon(intersections) {
 
 
 function updateDroneSynthBasedOnShortestRay() {
-  let shortestDistance = Infinity;
-  let avgRadius = 1;
+  let shortestDistance = Infinity; // This will hold the shortest distance in kilometers
+  let avgRadius = 1; // Default avgRadius in kilometers
   let shouldAdjust = false;
 
   fmRayLinesByUniqueId.forEach(line => {
       const positions = line.geometry.attributes.position.array;
       const start = new THREE.Vector3(positions[0], positions[1], positions[2]);
       const end = new THREE.Vector3(positions[3], positions[4], positions[5]);
-      const length = start.distanceTo(end);
-      if (length < shortestDistance) {
-          shortestDistance = length;
-          avgRadius = line.userData.avgRadius || 1; // Get avgRadius from line's userData
+      const length = start.distanceTo(end); // This is in Three.js units, typically meters
+
+      // idk why this is the coefficient
+      const adjustedRayLength = length * 75;
+
+      if (adjustedRayLength < shortestDistance) {
+          shortestDistance = adjustedRayLength;
+          avgRadius = line.userData.avgRadius || 1; // Ensure avgRadius is taken or defaulted correctly in kilometers
           shouldAdjust = true;
       }
   });
 
   if (shouldAdjust) {
-      // Update droneSynth volume and filter based on distance
-      updateVolumeBasedOnDistance(droneSynth, droneFilter, shortestDistance, avgRadius);
-      // Optionally update radioTuner volume, assuming no filter is used
-      updateVolumeBasedOnDistance(synths.radioTuner, null, shortestDistance, avgRadius);
+      // Update droneSynth volume and filter based on the normalized distance
+      updateParamsBasedOnDistFM(synths.droneSynth, droneFilter, shortestDistance, avgRadius);
+      updateParamsBasedOnDistFM(synths.radioTuner, null, shortestDistance, avgRadius);
   } else {
       // Transition to resting state if no intersections are detected
       transitionToRestingState();
   }
 }
 
-
-function updateVolumeBasedOnDistance(audioComponent, filterComponent, shortestDistance, avgRadius, type) {
-  const normalizedDistance = Math.max(0, Math.min(1, (shortestDistance / avgRadius - 0.01) / (2 - 0.01)));
+function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDistance, avgRadius) {
+  const normalizedDistance = Math.max(0, Math.min(1, shortestDistance / avgRadius));
   const targetVolume = Tone.gainToDb(1 - normalizedDistance);
   const targetCutoff = 2000 * (1 - normalizedDistance);  // Adjust filter cutoff based on distance
 
-
+  // update any active instrument parameters
+  console.log("updating " + audioComponent.name);
+  console.log("normalized distance: " + normalizedDistance)
 
   audioComponent.volume.rampTo(targetVolume, 0.5);
+
+  // update only filters
   if (filterComponent) {
       filterComponent.frequency.rampTo(targetCutoff, 0.5);
-      filterComponent.Q.rampTo(2, 0.5);
+      filterComponent.Q.rampTo(5, 0.5);
   }
-  if (type === "droneSynth") {
+
+  // only drone
+  if (audioComponent === synths.droneSynth) {
     // Specific adjustments for droneSynth to maintain its sonic character
-    audioComponent.harmonicity.rampTo(1.0 - normalizedDistance, 0.5);
+    audioComponent.harmonicity.rampTo(Math.exp(1.5 - normalizedDistance), 0.5);
     if (filterComponent) {
-        filterComponent.frequency.rampTo(targetCutoff, 0.5);
-        filterComponent.Q.rampTo(2, 0.5);
+        // filterComponent.frequency.rampTo(targetCutoff, 0.5);
     }
-} else if (type === "radioTuner") {
-}
+
+    // only sample player
+    } else if (audioComponent === synths.radioTuner) {
+  }
 }
 
 
@@ -1342,9 +1414,10 @@ let fmRayLines = [];
 let fmRayLinesByUniqueId = new Map();
 let avgRadius;
 
-function drawFMLine(intersectPoint, end, uniqueId, avgRadius, color) {
+function drawFMLine(start, end, uniqueId, avgRadius, color) {
+  console.log("ray origin: " + start[0])
   let line = fmRayLinesByUniqueId.get(uniqueId);
-  let lineGeometry = new THREE.BufferGeometry().setFromPoints([intersectPoint, end]);
+  let lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
 
   if (line) {
       scene.remove(line);  // Remove the old line from the scene
@@ -1384,7 +1457,7 @@ let lastCameraQuaternion = new THREE.Quaternion();
 
 // Thresholds for detecting significant movement or rotation
 const positionThreshold = 0; // page units
-const rotationThreshold = 0.5; // radians
+const rotationThreshold = 0; // radians
 
 function needsUpdate(camera) {
     // Calculate the change in position
@@ -1427,17 +1500,9 @@ function updateActiveRaycasterRays() {
   
       // Access the preset for the new gridCode
       const preset = synthPresets.presets["cellServiceMesh"][gridCode];
-      if (preset) {
+      if (currentGridCode = 1) {
 
   
-        // Stop any currently playing notes
-        synth.triggerRelease([Tone.now() + 0.1]); // This stops all currently playing notes. Adjust if your synth setup is different.
-       
-        applyPreset(preset);
-
-
-        // Start a new note or drone. Adjust the note and duration as needed.
-        synth.triggerAttack([Tone.now() + 0.1]); // Use triggerAttack for a continuous sound
       } else {
         console.log(`Intersected unspecified gridCode ${gridCode}`, intersection);
       }
@@ -1464,8 +1529,13 @@ function updateActiveRaycasterRays() {
     }
   }
 
+  ///////////////////////////// 
+  /// raycaster helpers n handlers
+  //////////////////////////////////////////////////////////////
+
   // reorient cam-center raycaster for orthographic perspective
   function updateRaycasterOriginForTilt(camera, controls, terrainHeight = 0) {
+    // let terrainHeight = meanElevation * zScale;
     const polarAngle = controls.getPolarAngle(); // Current vertical rotation in radians
     const cameraHeight = camera.position.z - terrainHeight; // Height of the camera from the terrain
 
@@ -1528,18 +1598,6 @@ function handleRaycasters(camera, scene) {
   });
 }
 
-function transitionToRestingState() {
-  // Ensure to ramp back to a resting state smoothly
-  droneSynth.harmonicity.rampTo(1, 1);
-  droneSynth.volume.rampTo(Tone.gainToDb(0.666), 1.5);
-  droneFilter.frequency.rampTo(200, 1);
-  droneFilter.Q.rampTo(4, 1);
-
-  if (synths.radioTuner) {
-    synths.radioTuner.volume.rampTo(0.05, 1.5);  // Mute the radioTuner
-}
-}
-
 
 // Simple geodesic distance calculation (Haversine formula)
 function calculateGeodesicDistance(p1, p2) {
@@ -1591,6 +1649,7 @@ function printCameraCenterCoordinates(intersectPoint) {
       const result = proj4('EPSG:2261').inverse([intersectPoint.x, intersectPoint.y]);
       const latitudeDMS = decimalToDMS(result[1], false);  // Passing false for latitude
       const longitudeDMS = decimalToDMS(result[0], true);  // Passing true for longitude
+      // const elevationReadout = [intersectPoint.z] / zScale;
       const displayText = `${latitudeDMS}<br>${longitudeDMS}`;  // Using DMS format with cardinal directions
       document.getElementById('latLonDisplay').innerHTML = displayText;  // Use innerHTML to render the line break
   } catch (error) {
@@ -1855,7 +1914,7 @@ function toggleMapScene(switchState, source) {
     let channelSlider = document.getElementById('fm-channel-controls');
 
 
-    raycasterDict.cellServiceMesh.enabled = false;
+    // raycasterDict.cellServiceMesh.enabled = false;
     raycasterDict.cellTransmitterPoints.enabled = false;
     raycasterDict.fmTransmitterPoints.enabled = false;
 
@@ -1892,7 +1951,7 @@ function toggleMapScene(switchState, source) {
         digitalGroup.visible = true;
         analogGroup.visible = false;
         fmTransmitterPoints.visible = false;
-        raycasterDict.cellServiceMesh.enabled = true;
+        // raycasterDict.cellServiceMesh.enabled = true;
         raycasterDict.cellTransmitterPoints.enabled = true;
         raycasterDict.fmTransmitterPoints.enabled = false;
         activeSynthType = 'digitalChannel';
@@ -2218,13 +2277,13 @@ function toggleMapScene(switchState, source) {
   
     // Calculate the total elevation to find the mean
     const totalElevation = elevations.reduce((acc, elevation) => acc + elevation, 0);
-    const meanElevation = totalElevation / elevations.length;
+    const meanElevation = Math.round(totalElevation / elevations.length,0);
   
     // Optionally, calculate min and max elevations for additional insights
     const minElevation = Math.min(...elevations);
     const maxElevation = Math.max(...elevations);
   
-    // console.log(`Min Elevation: ${minElevation}, Max Elevation: ${maxElevation}, Mean Elevation: ${meanElevation}`);
+    console.log(`Min Elevation: ${minElevation}, Max Elevation: ${maxElevation}, Mean Elevation: ${meanElevation}`);
   
     return meanElevation;
   }
@@ -2840,12 +2899,25 @@ function computeCentroid(vertices) {
 // Helper function to calculate the average radius from the centroid
 function computeAverageRadius(vertices, centroid) {
   let totalDistance = 0;
-  vertices.forEach(vertex => {
-      totalDistance += vertex.distanceTo(new THREE.Vector3(centroid.x, centroid.y, vertex.z));
-  });
-  return totalDistance / vertices.length;
-}
 
+  vertices.forEach(vertex => {
+      // Convert vertex coordinates back to geographic coordinates
+      const vertexGeo = toGeographic(vertex.x, vertex.y);
+      const centroidGeo = toGeographic(centroid.x, centroid.y);
+
+      // Calculate geodesic distance using the provided Haversine function
+      const distanceInMeters = calculateGeodesicDistance(
+          { lat: vertexGeo.lat, lon: vertexGeo.lon },
+          { lat: centroidGeo.lat, lon: centroidGeo.lon }
+      );
+
+      // Accumulate the total distance
+      totalDistance += distanceInMeters;
+  });
+
+  // Convert total distance from meters to kilometers and calculate the average
+  return (totalDistance / vertices.length) / 1000;
+}
 
 // Function to add FM propagation 3D line loops
 function addFMpropagation3D(geojson, channelFilter, fmPropagationContours, stride = 1) {
@@ -3133,12 +3205,14 @@ function addCellTowerPts(geojson) {
               pyramidGeometry,
               pyramidMaterialCellular,
             );
+            // let cellTowerZ = 0; // hardcode zero for reticule
             pyramid.position.set(x, y, z);
+            const uniqueCellid = `Tower-${index}`;  // This creates a unique identifier like "Tower-0", "Tower-1", etc.
 
             pyramid.userData = {
               position: new THREE.Vector3(x, y, z),
               gridCode: feature.properties.gridCode || 'unknown', // todo: attach a sound preset key json in lieu of gridcode
-              UniqSysID: feature.properties.UniqSysID || 'unknown',
+              uniqueCellid: uniqueCellid || 'unknown',
             };
   
             // Add the pyramid to the cellTransmitterPoints group
