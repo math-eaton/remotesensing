@@ -6,12 +6,19 @@ import http from 'http';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import cors from 'cors';
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = http.createServer(app);
+
+app.use(cors({
+  origin: 'http://localhost:5173'
+}));
+
 
 const soundsDir = path.join(__dirname, 'public', 'assets', 'sounds');
 app.use('/assets/sounds', express.static(soundsDir));

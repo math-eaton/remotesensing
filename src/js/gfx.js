@@ -224,7 +224,8 @@ const DmalkosRandomNote = createRandomNoteSelector("D malkos raga", 50); // N% v
   let synth, synths;
   let synthPresets = {};
   let droneSynth, droneLP, droneHP; 
-  let radioTuner;
+  let radioTuner, ToneAudioBuffer
+  let sampleUrls = [];  // radio tuner URLs
   let membraneSynth, membraneHP;
   let noiseSynth, noiseFilter;
   let globalVolume, reverbSend, pitchLFO;
@@ -331,41 +332,12 @@ function setupDroneSynth() {
   return droneSynth;
 }
 
-// function setupRadioTuner() {
-//    radioTuner = new Tone.Player({
-//       // url: "src/assets/sounds/iddqd_loopy.WAV",
-//       url: "src/assets/sounds/Sugar Ray - Someday (2015 Remaster).mp3",
-//       loop: true,
-//       grainSize: 0.01, 
-//       overlap: 0.25,
-//       drift: 0.5, // Random timing variations between grains
-//       playbackRate: 0.5,
-//       detune: 0,
-//       volume: Tone.gainToDb(0)
-//   }).connect(reverbSend);
-
-//   radioTuner.onload = () => {
-//       console.log('radioTuner sample loaded successfully');
-//       if (typeof lastChannelValue === 'number') {
-//           updatePlaybackPosition(lastChannelValue);
-//       }
-//   };
-
-//   radioTuner.onerror = (e) => {
-//       console.error('Failed to load the radioTuner sample:', e);
-//   };
-
-//   radioTuner.fadeIn = 0.1;
-//   radioTuner.fadeOut = 0.1;
-
-//   radioTuner.connect(reverbSend); // Optionally connect to the reverb if needed
-//   return radioTuner;
-// }
+let currentSampleIndex = 0; // Track the index of the current sample
 
 function setupRadioTuner() {
   radioTuner = new Tone.GrainPlayer({
      // url: "src/assets/sounds/iddqd_loopy.WAV",
-     url: "src/assets/sounds/processed_2024-04-25/snippet_Crazy_Frog_-_Axel_F_Official_Video.mp3",
+     url: sampleBuffers[0], // Start with the first preloaded buffer
      loop: true,
      grainSize: 1, 
      overlap: 0,
@@ -389,9 +361,39 @@ function setupRadioTuner() {
  radioTuner.fadeIn = 0.1;
  radioTuner.fadeOut = 0.1;
 
- radioTuner.connect(reverbSend); // Optionally connect to the reverb if needed
+ radioTuner.start();
+ setInterval(changeSample, 10000); // Change radio samples every 3 seconds
+
+
+ radioTuner.connect(reverbSend); 
  return radioTuner;
 }
+
+function changeSample() {
+  currentBufferIndex = (currentBufferIndex + 1) % sampleBuffers.length;
+  radioTuner.buffer = sampleBuffers[currentBufferIndex];
+  console.log(`Switched to sample: ${currentBufferIndex}`);
+}
+
+// update FM radio player based on freq tuning + safe triggering
+function updatePlaybackPosition(channelValue) {
+  if (synths.radioTuner.loaded) {
+      const sampleDuration = synths.radioTuner.buffer.duration;
+      const newPosition = (channelValue / 100) * sampleDuration;
+      const nextTime = getNextEventTime();
+
+      // Stop the player before starting if it's currently playing to avoid overlapping
+      if (synths.radioTuner.state === "started") {
+          synths.radioTuner.stop(nextTime);
+      }
+
+      // Use the calculated future time to start playing
+      synths.radioTuner.start(nextTime, newPosition);
+  } else {
+      console.log("radioTuner buffer is not loaded yet");
+  }
+}
+
 
 
 function setupHarmonicOscillator() {
@@ -660,26 +662,6 @@ function adjustVolumeForReverb(wetLevel) {
   const volumeAdjustment = maxVolume - ((wetLevel - 0.05) / 0.95) * (minVolume - maxVolume);
 
   globalVolume.volume.rampTo(volumeAdjustment, 0.5); // Smooth transition to the new volume level
-}
-
-
-// update FM radio player based on freq tuning + safe triggering
-function updatePlaybackPosition(channelValue) {
-  if (synths.radioTuner.loaded) {
-      const sampleDuration = synths.radioTuner.buffer.duration;
-      const newPosition = (channelValue / 100) * sampleDuration;
-      const nextTime = getNextEventTime();
-
-      // Stop the player before starting if it's currently playing to avoid overlapping
-      if (synths.radioTuner.state === "started") {
-          synths.radioTuner.stop(nextTime);
-      }
-
-      // Use the calculated future time to start playing
-      synths.radioTuner.start(nextTime, newPosition);
-  } else {
-      console.log("radioTuner buffer is not loaded yet");
-  }
 }
 
 
@@ -1449,8 +1431,8 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
   const scaledDepth = maxDepth * (1 - normalizedDistance);
 
   // update any active instrument parameters
-  console.log("updating " + audioComponent.name);
-  console.log("normalized distance: " + normalizedDistance)
+  // console.log("updating " + audioComponent.name);
+  // console.log("normalized distance: " + normalizedDistance)
 
 
   // update only filters
@@ -1462,7 +1444,7 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
   // only drone
   if (audioComponent === synths.droneSynth) {
     audioComponent.volume.rampTo(Tone.gainToDb(normalizedDistance), 0.5);
-    console.log(audioComponent.volume)
+    // console.log(audioComponent.volume)
     // Specific adjustments for droneSynth to maintain its sonic character
     audioComponent.harmonicity.rampTo((1 - (normalizedDistance)), 0.5);
 
@@ -1618,7 +1600,7 @@ let fmRayLinesByUniqueId = new Map();
 let avgRadius;
 
 function drawFMLine(start, end, uniqueId, avgRadius, color) {
-  console.log("ray origin: " + start[0])
+  // console.log("ray origin: " + start[0])
   let line = fmRayLinesByUniqueId.get(uniqueId);
   let lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
 
@@ -1968,6 +1950,7 @@ function updateScaleBar(scaleBar, camera) {
 
           updateActiveRaycasterRays();
 
+
           renderer.render(scene, camera);
 
 
@@ -2214,23 +2197,29 @@ function toggleMapScene(switchState, source) {
     onWindowResize(); // Update the resolution
 
     // Load GeoJSON data and then enable interaction
-    loadGeoJSONData(() => {
-      postLoadOperations(); // Setup the scene after critical datasets are loaded
+    await loadAllData();  // Load all necessary data (GeoJSON and samples)
+    postLoadOperations();  // Setup the scene after critical datasets are loaded
+    initWebSocketConnection();
+    enableInteraction();
+    flipCamera();
 
-      // // Ensure the sliderValue is up-to-date
-      // sliderValue = (parseFloat(document.getElementById('fm-channel-slider').value) / sliderLength);
-      // const resolutionSlider = document.getElementById('fm-channel-slider');
-      // updateSliderDisplay(sliderValue, resolutionSlider);
+    // loadGeoJSONData(() => {
+    //   postLoadOperations(); // Setup the scene after critical datasets are loaded
+
+    //   // // Ensure the sliderValue is up-to-date
+    //   // sliderValue = (parseFloat(document.getElementById('fm-channel-slider').value) / sliderLength);
+    //   // const resolutionSlider = document.getElementById('fm-channel-slider');
+    //   // updateSliderDisplay(sliderValue, resolutionSlider);
   
 
-      initWebSocketConnection();
-      enableInteraction(); // Directly enable interaction without waiting for a button click
-      flipCamera();
+    //   initWebSocketConnection();
+    //   enableInteraction(); // Directly enable interaction without waiting for a button click
+    //   flipCamera();
 
 
 
-      // document.getElementById('progress-bar').style.display = 'none'; // Hide the progress bar
-    });
+    //   // document.getElementById('progress-bar').style.display = 'none'; // Hide the progress bar
+    // });
 
 
 
@@ -3581,7 +3570,7 @@ function addCellTowerPts(geojson) {
   }
   
 
-  
+
   function initFMsliderAndContours(frequencyData) {
     channelFrequencies = frequencyData;
   
@@ -3997,19 +3986,19 @@ function addCellTowerPts(geojson) {
   /////////////////////////////////////////////////////
   // FETCH EXTERNAL DATA /////////////////////////////
 
-  async function loadSampleUrls() {
-    try {
-        const response = await fetch('/api/samples');
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
-        const sampleUrls = await response.json();
-        console.log(sampleUrls);
-        // Proceed to use these URLs in your application
-    } catch (error) {
-        console.error('Failed to fetch sample URLs:', error);
-    }
+let sampleBuffers = [];
+let currentBufferIndex = 0;
+
+async function loadAllData() {
+  // Fetch all URLs including GeoJSON and sample URLs
+  const geoJsonPromise = loadGeoJSONData();  // Adjust this function to return a promise
+  const sampleUrlsPromise = loadSampleUrls();  // Load sample URLs
+  
+  // Wait for both promises to complete
+  await Promise.all([geoJsonPromise, sampleUrlsPromise]);
+  console.log("All data loaded successfully.");
 }
+
 
   // Fetching the contour lines GeoJSON and adding to the scene
   async function loadGeoJSONData(onCriticalDataLoaded) {
@@ -4052,7 +4041,16 @@ function addCellTowerPts(geojson) {
           console.error(`Error loading ${url}:`, error);
         });
     });
+
+    try {
+      const dataPromises = urls.map(url => fetch(url).then(res => res.json()));
+      const results = await Promise.all(dataPromises);
+      results.forEach((data, index) => handleGeoJSONData(urls[index], data));
+    } catch (error) {
+      console.error("Failed to load GeoJSON data:", error);
+    }
   }
+  
 
   function isCriticalDataset(url) {
     // Define logic to determine if a dataset is critical for initial rendering
@@ -4175,6 +4173,32 @@ function addCellTowerPts(geojson) {
     }
   }
 
+  async function loadSampleUrls() {
+    try {
+      const response = await fetch('/api/samples');
+      if (!response.ok) {
+          throw new Error('Network response was not ok');
+      }
+      const sampleUrls = await response.json();
+      await Promise.all(sampleUrls.map(url => loadSample(url)));
+      console.log("All samples loaded successfully.");
+    } catch (error) {
+      console.error('Failed to fetch sample URLs:', error);
+    }
+  }
+
+  async function loadSample(url) {
+    try {
+      const buffer = await Tone.ToneAudioBuffer.fromUrl(url);
+      sampleBuffers.push(buffer);
+      console.log(`Loaded sample: ${url}`);
+    } catch (error) {
+      console.error(`Error loading sample from ${url}:`, error);
+    }
+  }
+  
+  
+
   function postLoadOperations() {
     const boundingBox = getBoundingBoxOfGeoJSON(boundingBoxGeojsonData);
 
@@ -4222,7 +4246,7 @@ function addCellTowerPts(geojson) {
     toggleMapScene(1, 'switch1'); // init fm on pageload
     toggleMapScene(1, 'switch2'); // init elev contours
 
-    loadSampleUrls(); // load sound sample URLs from node.js server
+    // loadSampleUrls(); // load sound sample URLs from node.js server
 
     controls.update();
 }

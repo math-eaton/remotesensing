@@ -50,6 +50,7 @@
   "dependencies": {
     "@serialport/parser-readline": "^12.0.0",
     "convex-hull": "^1.0.3",
+    "cors": "^2.8.5",
     "delaunator": "^5.0.1",
     "eslint": "^8.57.0",
     "express": "^4.19.2",
