@@ -13,20 +13,21 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const server = http.createServer(app);
 
-const samplesDir = path.join(__dirname, 'public/assets/sounds');
-app.use('/assets/sounds', express.static(samplesDir));
+const soundsDir = path.join(__dirname, 'public', 'assets', 'sounds');
+app.use('/assets/sounds', express.static(soundsDir));
 
 app.get('/api/samples', (req, res) => {
-    fs.readdir(samplesDir, (err, files) => {
-        if (err) {
-            console.error(err);
-            res.status(500).send('Error reading samples directory');
-            return;
-        }
-        const urls = files.filter(file => file.endsWith('.mp3'))
-                          .map(file => `/assets/sounds/${file}`);
-        res.json(urls);
-    });
+  fs.readdir(soundsDir, (err, files) => {
+      if (err) {
+          console.error('Error reading directory:', err);
+          return res.status(500).send('Failed to read directory');
+      }
+      const soundFiles = files
+          .filter(file => file.endsWith('.mp3'))  // Ensure only MP3 files are listed
+          .map(file => `/assets/sounds/${file}`);  
+
+      res.json(soundFiles);
+  });
 });
 
 server.listen(8080, () => console.log('Server listening on port 8080'));
