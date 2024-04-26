@@ -1474,23 +1474,39 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
 
     // only sample player
     } else if (audioComponent === synths.radioTuner) {
-      audioComponent.volume.rampTo(targetVolume * 1.5, 0.5);
+      audioComponent.volume.rampTo(targetVolume * 1.25, 0.5);
 
       // Conditional logic based on the threshold
       if (normalizedDistance < 0.15) {
         // Check if just crossing below the threshold
         if (previousNormalizedDistance >= 0.15) {
-          // Switch to normal playback settings
-          audioComponent.set({
-            grainSize: 1.0,
-            playbackRate: 1.0
-          });
+          // Switch to normal playback settings using a manual fn bc built-in busted for grain player?
+          customRampTo(audioComponent, 'grainSize', 1.0, 500); // Ramp grainSize to 1.0 over N milliseconds
+          customRampTo(audioComponent, 'playbackRate', 1.0, 500); 
+          customRampTo(audioComponent, 'overlap', 0, 500); 
+          customRampTo(audioComponent, 'detune', 0, 500); 
+          customRampTo(audioComponent, 'drift', 0, 500); 
+          
+          console.log("playback: " + audioComponent.playbackRate)
+  
+          // audioComponent.set({
+          //   grainSize: 1.0,
+          //   playbackRate: 1.0,
+          //   overlap: 0,
+          //   detune: 0,
+          //   drift: 0,
+          // });
+
         }
       } else {
         // freaky settings when above the dist threshold
         audioComponent.set({
           grainSize: Math.exp(1 - normalizedDistance) / 2,
-          playbackRate: Math.abs(normalizedDistance) * 10
+          playbackRate: Math.abs(normalizedDistance) * 10,
+          overlap: (1 - normalizedDistance) * 2,
+          drift: (1 - normalizedDistance) * 10,
+          detune: (1 - normalizedDistance) * 10,
+     
         });
       }
   
@@ -1499,33 +1515,56 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
     }
   }
   
-function rampGrainSize(audioComponent, targetGrainSize, duration) {
-  const initialGrainSize = audioComponent.grainSize; // Assuming grainSize is a direct numeric property
-  const stepTime = 20; // milliseconds per step
-  const totalSteps = duration / stepTime;
-  const stepSize = (targetGrainSize - initialGrainSize) / totalSteps;
-  let currentStep = 0;
 
-  const intervalId = setInterval(() => {
-      if (currentStep < totalSteps) {
-          audioComponent.grainSize += stepSize;  // Directly update the grainSize
-          currentStep++;
-      } else {
-          clearInterval(intervalId);
-          audioComponent.grainSize = targetGrainSize; // Ensure it ends exactly at target
-      }
-  }, stepTime);
+  function customRampTo(audioComponent, parameter, targetValue, duration) {
+    const startTime = Date.now();
+    const startValue = audioComponent[parameter];
+    const changeInValue = targetValue - startValue;
+    
+    function updateValue() {
+        const elapsedTime = Date.now() - startTime;
+        const fractionOfDuration = elapsedTime / duration;
+        if (fractionOfDuration < 1) {
+            const newValue = startValue + changeInValue * fractionOfDuration;
+            audioComponent[parameter] = newValue;
+            requestAnimationFrame(updateValue);
+        } else {
+            audioComponent[parameter] = targetValue; // Ensure it sets exactly to targetValue at the end
+        }
+    }
+
+    requestAnimationFrame(updateValue);
 }
 
-function adjustGrainSizeBasedOnDistance(audioComponent, normalizedDistance) {
-  const minGrainSize = 0.001; // very small grain size at the edge
-  const maxGrainSize = 0.1;  // larger grain size, closer to real-time, at the center
 
-  // Calculate the target grain size
-  const targetGrainSize = minGrainSize + (maxGrainSize - minGrainSize) * (1 - normalizedDistance);
 
-  rampGrainSize(audioComponent, targetGrainSize, 500); // Smooth transition over 500 ms
-}
+// function rampGrainSize(audioComponent, targetGrainSize, duration) {
+//   const initialGrainSize = audioComponent.grainSize; // Assuming grainSize is a direct numeric property
+//   const stepTime = 20; // milliseconds per step
+//   const totalSteps = duration / stepTime;
+//   const stepSize = (targetGrainSize - initialGrainSize) / totalSteps;
+//   let currentStep = 0;
+
+//   const intervalId = setInterval(() => {
+//       if (currentStep < totalSteps) {
+//           audioComponent.grainSize += stepSize;  // Directly update the grainSize
+//           currentStep++;
+//       } else {
+//           clearInterval(intervalId);
+//           audioComponent.grainSize = targetGrainSize; // Ensure it ends exactly at target
+//       }
+//   }, stepTime);
+// }
+
+// function adjustGrainSizeBasedOnDistance(audioComponent, normalizedDistance) {
+//   const minGrainSize = 0.001; // very small grain size at the edge
+//   const maxGrainSize = 0.1;  // larger grain size, closer to real-time, at the center
+
+//   // Calculate the target grain size
+//   const targetGrainSize = minGrainSize + (maxGrainSize - minGrainSize) * (1 - normalizedDistance);
+
+//   rampGrainSize(audioComponent, targetGrainSize, 500); // Smooth transition over 500 ms
+// }
 
 
 
