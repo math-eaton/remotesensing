@@ -365,7 +365,7 @@ function setupDroneSynth() {
 function setupRadioTuner() {
   radioTuner = new Tone.GrainPlayer({
      // url: "src/assets/sounds/iddqd_loopy.WAV",
-     url: "src/assets/sounds/Sugar Ray - Someday (2015 Remaster).mp3",
+     url: "src/assets/sounds/processed_2024-04-25/snippet_Crazy_Frog_-_Axel_F_Official_Video.mp3",
      loop: true,
      grainSize: 1, 
      overlap: 0,
@@ -450,13 +450,13 @@ function setupMembraneSynth() {
           sustain: 0.5,
           release: 0.005
       },
-      volume: -10 
+      volume: Tone.gainToDb(1), 
   });
 
   // Initialize the filter specifically for the membrane synth
   membraneHP = new Tone.Filter({
       type: 'highpass', // High-pass filter might suit percussive elements better
-      frequency: 4000, // Starting cutoff frequency
+      frequency: 400, // Starting cutoff frequency
       Q: 1
   });
 
@@ -504,22 +504,22 @@ let audioChannels = {
   analogChannel: {
       synths: ['droneSynth', 'radioTuner'],
       volume: -10,
-      muted: false
+      muted: true
   },
   digitalChannel: {
       synths: ['membraneSynth', 'harmonicOscillator'],
       volume: 0,
-      muted: false
+      muted: true
   },
   elevationChannel: {
-    synths: ['droneSynth', 'radioTuner'],
+    synths: [''],
     volume: 0,
-    muted: false
+    muted: true
 },
 accessChannel: {
     synths: ['noiseSynth'],
     volume: 0,
-    muted: false
+    muted: true
 }
 
 };
@@ -532,7 +532,7 @@ function updateAudioChannels(audioChannelName, settings) {
     audioChannel.synths.forEach(synthName => {
       if (synths[synthName] && synths[synthName].volume) {
         synths[synthName].volume.value = settings.volume;
-      } else if (synthName === 'harmonicOscillator') { // Special handling for the harmonic oscillator
+      // } else if (synthName === 'harmonicOscillator') { // Special handling for the harmonic oscillator
         // setHarmonicOscillatorVolume(settings.volume);
       }
     });
@@ -542,7 +542,7 @@ function updateAudioChannels(audioChannelName, settings) {
     audioChannel.synths.forEach(synthName => {
       if (synths[synthName] && synths[synthName].volume) {
         synths[synthName].volume.value = settings.muted ? -Infinity : audioChannel.volume;
-      } else if (synthName === 'harmonicOscillator') { // Special handling for the harmonic oscillator
+      // } else if (synthName === 'harmonicOscillator') { // Special handling for the harmonic oscillator
         // setHarmonicOscillatorVolume(settings.muted ? -Infinity : audioChannel.volume);
       }
     });
@@ -604,7 +604,7 @@ const time = getNextEventTime();
 synth.triggerAttackRelease(note, duration, time);
 }
 
-function fadeOutVol(audioChannelName, duration = 3) {
+function fadeOutVol(audioChannelName, duration = 2) {
   const channel = audioChannels[audioChannelName];
   if (channel && !channel.muted) {
       channel.synths.forEach(synthName => {
@@ -618,7 +618,7 @@ function fadeOutVol(audioChannelName, duration = 3) {
       // Set a timeout to mark the channel as muted after the ramp down is complete
       setTimeout(() => {
           updateAudioChannels(audioChannelName, { muted: true });
-      }, duration * 1000); // to seconds
+      }, duration * 2);
   }
 }
 
@@ -696,13 +696,13 @@ function transitionToRestingState() {
   droneSynth.volume.rampTo(Tone.gainToDb(0.5), 0.75);
   radioTuner.volume.rampTo(Tone.gainToDb(0.05), 0.75);
   droneLP.frequency.rampTo(300, 1);
-  droneLP.Q.rampTo(4, 1);
+  droneLP.Q.rampTo(3, 1);
   // droneHP.frequency.rampTo(1000, 1);
   // droneHP.Q.rampTo(4, 1);
 
 
   if (synths.radioTuner) {
-    synths.radioTuner.volume.rampTo(Tone.gainToDb(0.15), 0.75);  // Mute the radioTuner
+    synths.radioTuner.volume.rampTo(Tone.gainToDb(0), 0.5);  // Mute the radioTuner
 }
 
 
@@ -1324,7 +1324,7 @@ function findNearestCellTowers(intersectPoint, maxCellTowerRays = 1) {
 
 function triggerMembraneSynth(distance) {
   const note = DmalkosRandomNote(); 
-  safeTriggerSound(membraneSynth, note, "0.1"); 
+  safeTriggerSound(membraneSynth, note, "0.15"); 
   console.log(`triggering " + ${note}`); // Log the same note
 }
 
@@ -1473,67 +1473,60 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
     }
 
     // only sample player
-    } else if (audioComponent === synths.radioTuner) {
-      audioComponent.volume.rampTo(targetVolume * 1.25, 0.5);
+  } else if (audioComponent === synths.radioTuner) {
+    audioComponent.volume.rampTo(targetVolume * 1.5, 0.5);
 
-      // Conditional logic based on the threshold
-      if (normalizedDistance < 0.15) {
-        // Check if just crossing below the threshold
-        if (previousNormalizedDistance >= 0.15) {
-          // Switch to normal playback settings using a manual fn bc built-in busted for grain player?
-          customRampTo(audioComponent, 'grainSize', 1.0, 500); // Ramp grainSize to 1.0 over N milliseconds
-          customRampTo(audioComponent, 'playbackRate', 1.0, 500); 
-          customRampTo(audioComponent, 'overlap', 0, 500); 
-          customRampTo(audioComponent, 'detune', 0, 500); 
-          customRampTo(audioComponent, 'drift', 0, 500); 
-          
-          console.log("playback: " + audioComponent.playbackRate)
-  
-          // audioComponent.set({
-          //   grainSize: 1.0,
-          //   playbackRate: 1.0,
-          //   overlap: 0,
-          //   detune: 0,
-          //   drift: 0,
-          // });
-
-        }
-      } else {
-        // freaky settings when above the dist threshold
+    // Conditional logic based on the threshold
+    if (normalizedDistance < 0.15) {
+      // Check if just crossing below the threshold
+      if (previousNormalizedDistance >= 0.15) {
+        // Switch to normal playback settings
         audioComponent.set({
-          grainSize: Math.exp(1 - normalizedDistance) / 2,
-          playbackRate: Math.abs(normalizedDistance) * 10,
-          overlap: (1 - normalizedDistance) * 2,
-          drift: (1 - normalizedDistance) * 10,
-          detune: (1 - normalizedDistance) * 10,
-     
+          grainSize: 1.0,
+          playbackRate: 1.0,
+          overlap: 1,
         });
       }
-  
-      // Update previousNormalizedDistance for the next call
-      previousNormalizedDistance = normalizedDistance;
+    } else {
+      // freaky settings when above the dist threshold
+      audioComponent.set({
+        grainSize: Math.exp(1 - normalizedDistance) / 10,
+        playbackRate: Math.abs(normalizedDistance),
+        overlap: 1,
+      });
     }
+
+    // Update previousNormalizedDistance for the next call
+    previousNormalizedDistance = normalizedDistance;
   }
-  
+}
 
-  function customRampTo(audioComponent, parameter, targetValue, duration) {
-    const startTime = Date.now();
-    const startValue = audioComponent[parameter];
-    const changeInValue = targetValue - startValue;
-    
-    function updateValue() {
-        const elapsedTime = Date.now() - startTime;
-        const fractionOfDuration = elapsedTime / duration;
-        if (fractionOfDuration < 1) {
-            const newValue = startValue + changeInValue * fractionOfDuration;
-            audioComponent[parameter] = newValue;
-            requestAnimationFrame(updateValue);
-        } else {
-            audioComponent[parameter] = targetValue; // Ensure it sets exactly to targetValue at the end
-        }
+function rampGrainSize(audioComponent, targetGrainSize, duration) {
+const initialGrainSize = audioComponent.grainSize; // Assuming grainSize is a direct numeric property
+const stepTime = 20; // milliseconds per step
+const totalSteps = duration / stepTime;
+const stepSize = (targetGrainSize - initialGrainSize) / totalSteps;
+let currentStep = 0;
+
+const intervalId = setInterval(() => {
+    if (currentStep < totalSteps) {
+        audioComponent.grainSize += stepSize;  // Directly update the grainSize
+        currentStep++;
+    } else {
+        clearInterval(intervalId);
+        audioComponent.grainSize = targetGrainSize; // Ensure it ends exactly at target
     }
+}, stepTime);
+}
 
-    requestAnimationFrame(updateValue);
+function adjustGrainSizeBasedOnDistance(audioComponent, normalizedDistance) {
+const minGrainSize = 0.001; // very small grain size at the edge
+const maxGrainSize = 0.1;  // larger grain size, closer to real-time, at the center
+
+// Calculate the target grain size
+const targetGrainSize = minGrainSize + (maxGrainSize - minGrainSize) * (1 - normalizedDistance);
+
+rampGrainSize(audioComponent, targetGrainSize, 500); // Smooth transition over 500 ms
 }
 
 
@@ -2172,7 +2165,6 @@ function toggleMapScene(switchState, source) {
           fmContourGroups[groupId].decayRate = 1.0; // Set decay rate for immediate effect
           updatefmContourGroups(); // Call update function to process changes
         });
-
 
         break;
     }
@@ -4005,6 +3997,20 @@ function addCellTowerPts(geojson) {
   /////////////////////////////////////////////////////
   // FETCH EXTERNAL DATA /////////////////////////////
 
+  async function loadSampleUrls() {
+    try {
+        const response = await fetch('/api/samples');
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        const sampleUrls = await response.json();
+        console.log(sampleUrls);
+        // Proceed to use these URLs in your application
+    } catch (error) {
+        console.error('Failed to fetch sample URLs:', error);
+    }
+}
+
   // Fetching the contour lines GeoJSON and adding to the scene
   async function loadGeoJSONData(onCriticalDataLoaded) {
     // console.log("loading...")
@@ -4212,14 +4218,11 @@ function addCellTowerPts(geojson) {
 
     // console.log(`analog group: ${analogGroup}`)
 
-    // set up synths
-    // setupDroneSynth();
-    // setupMembraneSynth();
-    // setupNoiseSynth();
-
     // init switch settings
     toggleMapScene(1, 'switch1'); // init fm on pageload
     toggleMapScene(1, 'switch2'); // init elev contours
+
+    loadSampleUrls(); // load sound sample URLs from node.js server
 
     controls.update();
 }

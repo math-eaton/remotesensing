@@ -16,10 +16,12 @@ export default defineConfig({
   ],
   server: {
     proxy: {
-      // Proxy API requests to the Node.js server
-      '/api': 'http://localhost:8080',
-      //  other paths frontend needs to access from the Node.js server
-      '/assets': 'http://localhost:8080',
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      }
     }
   }
 });

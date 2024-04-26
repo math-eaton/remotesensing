@@ -4,16 +4,18 @@ import { ReadlineParser } from '@serialport/parser-readline';
 import { server as WebSocketServer } from 'websocket';
 import http from 'http';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = http.createServer(app);
 
-// Serve static files
 const samplesDir = path.join(__dirname, 'public/assets/sounds');
 app.use('/assets/sounds', express.static(samplesDir));
 
-// API to list audio files
 app.get('/api/samples', (req, res) => {
     fs.readdir(samplesDir, (err, files) => {
         if (err) {
@@ -35,6 +37,11 @@ const wsServer = new WebSocketServer({
 });
 
 wsServer.on('request', (request) => {
+  if (request.origin !== 'expectedOrigin') {
+    request.reject();
+    console.log('Connection from origin ' + request.origin + ' rejected.');
+    return;
+  }
   const connection = request.accept(null, request.origin);
   console.log('WebSocket connection accepted');
 
