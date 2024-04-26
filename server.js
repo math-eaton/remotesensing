@@ -1,14 +1,37 @@
+import express from 'express';
 import { SerialPort } from 'serialport';
 import { ReadlineParser } from '@serialport/parser-readline';
 import { server as WebSocketServer } from 'websocket';
 import http from 'http';
+import fs from 'fs';
+import path from 'path';
 
-const httpServer = http.createServer();
-httpServer.listen(8080, () => console.log('Server listening on port 8080'));
+const app = express();
+const server = http.createServer(app);
+
+// Serve static files
+const samplesDir = path.join(__dirname, 'public/assets/sounds');
+app.use('/assets/sounds', express.static(samplesDir));
+
+// API to list audio files
+app.get('/api/samples', (req, res) => {
+    fs.readdir(samplesDir, (err, files) => {
+        if (err) {
+            console.error(err);
+            res.status(500).send('Error reading samples directory');
+            return;
+        }
+        const urls = files.filter(file => file.endsWith('.mp3'))
+                          .map(file => `/assets/sounds/${file}`);
+        res.json(urls);
+    });
+});
+
+server.listen(8080, () => console.log('Server listening on port 8080'));
 
 const wsServer = new WebSocketServer({
-  httpServer,
-  autoAcceptConnections: false,
+    httpServer: server,
+    autoAcceptConnections: false,
 });
 
 wsServer.on('request', (request) => {
@@ -41,7 +64,4 @@ wsServer.on('request', (request) => {
     }
   });
 
-  // Additional WebSocket event handlers (e.g., on 'close', 'error')
 });
-
-

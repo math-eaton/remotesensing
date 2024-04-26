@@ -70,9 +70,9 @@
               }
           }
       },
-      "cellTransmitterPoints": {
+      "noiseSynth": {
           "0": {
-              "type": "FMSynth",
+              "type": "noiseSynth",
               "settings": {
                   "harmonicity": 8,
                   "modulationIndex": 14,
@@ -97,7 +97,7 @@
               }
           },
           "1": {
-              "type": "FMSynth",
+              "type": "noiseSynth",
               "settings": {
                   "harmonicity": 1,
                   "modulationIndex": 2,
@@ -122,7 +122,7 @@
               }
           }
       },
-      "fmContours": {
+      "droneSynth": {
           "0": {
               "type": "FMSynth",
               "settings": {
@@ -143,15 +143,15 @@
               "type": "FMSynth",
               "settings": {
                   "oscillator": {
-                      "type": "triangle",
+                      "type": "sine",
                       "frequency": 880
 
                   },
                   "envelope": {
-                      "attack": 0.5,
-                      "decay": 0.5,
-                      "sustain": 0.1,
-                      "release": 0.5
+                      "attack": 0.1,
+                      "decay": 0.2,
+                      "sustain": 0.9,
+                      "release": 0.1
                   }
               }
           }

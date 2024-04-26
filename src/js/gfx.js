@@ -282,7 +282,8 @@ function setupSynths() {
       membraneSynth: setupMembraneSynth(),
       noiseSynth: setupNoiseSynth(),
       radioTuner: setupRadioTuner(),
-      cellPing: setupCellPing()
+      cellPing: setupCellPing(),
+      // harmonicOscillator: setupHarmonicOscillator()
   };
 }
 
@@ -315,50 +316,119 @@ function setupDroneSynth() {
     // Initialize HP
     droneHP = new Tone.Filter({
       type: 'highpass',
-      frequency: 5,  // Starting cutoff frequency
+      frequency: 1000,  // Starting cutoff frequency
       rolloff: -24,
-      Q: 1,
+      Q: 2,
   });
 
-  droneLP.connect(droneHP);
-  droneHP.connect(reverbSend);
+  droneHP.connect(droneLP);
+  droneLP.connect(reverbSend);
 
 
   // Trigger continuous note
-  droneSynth.triggerAttack("A1");
+  droneSynth.triggerAttack("F2");
 
   return droneSynth;
 }
 
-function setupRadioTuner() {
-   radioTuner = new Tone.GrainPlayer({
-      url: "src/assets/sounds/iddqd_loopy.WAV",
-      loop: true,
-      grainSize: 0.01, 
-      overlap: 0.25,
-      drift: 0.5, // Random timing variations between grains
-      playbackRate: 0.5,
-      detune: 0,
-      volume: -10
-  }).connect(reverbSend);
+// function setupRadioTuner() {
+//    radioTuner = new Tone.Player({
+//       // url: "src/assets/sounds/iddqd_loopy.WAV",
+//       url: "src/assets/sounds/Sugar Ray - Someday (2015 Remaster).mp3",
+//       loop: true,
+//       grainSize: 0.01, 
+//       overlap: 0.25,
+//       drift: 0.5, // Random timing variations between grains
+//       playbackRate: 0.5,
+//       detune: 0,
+//       volume: Tone.gainToDb(0)
+//   }).connect(reverbSend);
 
-  radioTuner.onload = () => {
-      console.log('radioTuner sample loaded successfully');
-      if (typeof lastChannelValue === 'number') {
-          updatePlaybackPosition(lastChannelValue);
+//   radioTuner.onload = () => {
+//       console.log('radioTuner sample loaded successfully');
+//       if (typeof lastChannelValue === 'number') {
+//           updatePlaybackPosition(lastChannelValue);
+//       }
+//   };
+
+//   radioTuner.onerror = (e) => {
+//       console.error('Failed to load the radioTuner sample:', e);
+//   };
+
+//   radioTuner.fadeIn = 0.1;
+//   radioTuner.fadeOut = 0.1;
+
+//   radioTuner.connect(reverbSend); // Optionally connect to the reverb if needed
+//   return radioTuner;
+// }
+
+function setupRadioTuner() {
+  radioTuner = new Tone.GrainPlayer({
+     // url: "src/assets/sounds/iddqd_loopy.WAV",
+     url: "src/assets/sounds/Sugar Ray - Someday (2015 Remaster).mp3",
+     loop: true,
+     grainSize: 1, 
+     overlap: 0,
+     drift: 0, // Random timing variations between grains
+     playbackRate: 1,
+     detune: 0,
+     volume: Tone.gainToDb(0)
+ }).connect(reverbSend);
+
+ radioTuner.onload = () => {
+     console.log('radioTuner sample loaded successfully');
+     if (typeof lastChannelValue === 'number') {
+         updatePlaybackPosition(lastChannelValue);
+     }
+ };
+
+ radioTuner.onerror = (e) => {
+     console.error('Failed to load the radioTuner sample:', e);
+ };
+
+ radioTuner.fadeIn = 0.1;
+ radioTuner.fadeOut = 0.1;
+
+ radioTuner.connect(reverbSend); // Optionally connect to the reverb if needed
+ return radioTuner;
+}
+
+
+function setupHarmonicOscillator() {
+  const fundamentalFreq = 110; // A2, an example fundamental frequency
+  const numHarmonics = 10; // Number of harmonics
+  const harmonicOscillators = [];
+  const gains = [];
+
+  // Create an array of oscillators for the harmonics
+  for (let i = 1; i <= numHarmonics; i++) {
+      const freq = fundamentalFreq * i;
+      const oscillator = new Tone.Oscillator(freq, "sine").start();
+      const gain = new Tone.Gain(0); // Initialize with gain at 0
+      oscillator.connect(gain);
+      gain.connect(reverbSend); // Connect each gain to the destination
+      harmonicOscillators.push(oscillator);
+      gains.push(gain);
+  }
+
+  return {
+      oscillators: harmonicOscillators,
+      gains: gains,
+      setAmplitude: function(harmonicIndex, amplitude) {
+          // Ensure amplitude is within bounds and harmonic index is valid
+          if (harmonicIndex >= 1 && harmonicIndex <= numHarmonics) {
+              gains[harmonicIndex - 1].gain.rampTo(amplitude, 0.1);
+          }
       }
   };
-
-  radioTuner.onerror = (e) => {
-      console.error('Failed to load the radioTuner sample:', e);
-  };
-
-  radioTuner.fadeIn = 0.1;
-  radioTuner.fadeOut = 0.1;
-
-  radioTuner.connect(reverbSend); // Optionally connect to the reverb if needed
-  return radioTuner;
 }
+
+function setHarmonicOscillatorVolume(volume) {
+  synths.harmonicOscillator.gains.forEach(gain => {
+    gain.gain.value = volume;
+  });
+}
+
 
 function setupCellPing() {
   const cellPing = new Tone.Player({
@@ -433,11 +503,11 @@ function setupNoiseSynth() {
 let audioChannels = {
   analogChannel: {
       synths: ['droneSynth', 'radioTuner'],
-      volume: 0,
+      volume: -10,
       muted: false
   },
   digitalChannel: {
-      synths: ['membraneSynth'],
+      synths: ['membraneSynth', 'harmonicOscillator'],
       volume: 0,
       muted: false
   },
@@ -460,18 +530,22 @@ function updateAudioChannels(audioChannelName, settings) {
   if (settings.volume !== undefined) {
     audioChannel.volume = settings.volume;
     audioChannel.synths.forEach(synthName => {
-          if (synths[synthName]) {
-              synths[synthName].volume.value = settings.volume;
-          }
-      });
+      if (synths[synthName] && synths[synthName].volume) {
+        synths[synthName].volume.value = settings.volume;
+      } else if (synthName === 'harmonicOscillator') { // Special handling for the harmonic oscillator
+        // setHarmonicOscillatorVolume(settings.volume);
+      }
+    });
   }
   if (settings.muted !== undefined) {
     audioChannel.muted = settings.muted;
     audioChannel.synths.forEach(synthName => {
-          if (synths[synthName]) {
-              synths[synthName].volume.value = settings.muted ? -Infinity : audioChannel.volume;
-          }
-      });
+      if (synths[synthName] && synths[synthName].volume) {
+        synths[synthName].volume.value = settings.muted ? -Infinity : audioChannel.volume;
+      } else if (synthName === 'harmonicOscillator') { // Special handling for the harmonic oscillator
+        // setHarmonicOscillatorVolume(settings.muted ? -Infinity : audioChannel.volume);
+      }
+    });
   }
 }
 
@@ -549,7 +623,6 @@ function fadeOutVol(audioChannelName, duration = 3) {
 }
 
 
-
 function updateReverbBasedOnCameraZoom(camera) {
   const wetLevel = calculateReverbWetLevel(camera.zoom);
   reverbSend.wet.rampTo(wetLevel, 0.5);  // Ramp the wet level to smooth transitions
@@ -620,8 +693,9 @@ function loadSynthPresets(data) {
 function transitionToRestingState() {
   // Ensure to ramp back to a resting state smoothly
   droneSynth.harmonicity.rampTo(1, 1);
-  droneSynth.volume.rampTo(Tone.gainToDb(0.1), 0.75);
-  droneLP.frequency.rampTo(200, 1);
+  droneSynth.volume.rampTo(Tone.gainToDb(0.5), 0.75);
+  radioTuner.volume.rampTo(Tone.gainToDb(0.05), 0.75);
+  droneLP.frequency.rampTo(300, 1);
   droneLP.Q.rampTo(4, 1);
   // droneHP.frequency.rampTo(1000, 1);
   // droneHP.Q.rampTo(4, 1);
@@ -630,6 +704,8 @@ function transitionToRestingState() {
   if (synths.radioTuner) {
     synths.radioTuner.volume.rampTo(Tone.gainToDb(0.15), 0.75);  // Mute the radioTuner
 }
+
+
 }
 
 
@@ -934,6 +1010,8 @@ function monitorSynths() {
 
     // Start Tone.Transport with a slight future offset to ensure all is ready
     Tone.Transport.start("+0.1");
+
+    console.log('Synths initialized:', synths);
 
 }
 
@@ -1361,6 +1439,8 @@ function updateDroneSynthBasedOnShortestRay() {
   }
 }
 
+let previousNormalizedDistance = 1; // 1.0 is ideally fm poly edge
+
 function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDistance, avgRadius) {
   const normalizedDistance = Math.max(0, Math.min(1, (shortestDistance / avgRadius - 0.01) / (2 - 0.01)));
   const targetVolume = Tone.gainToDb(Math.abs(1 - normalizedDistance));
@@ -1381,7 +1461,8 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
 
   // only drone
   if (audioComponent === synths.droneSynth) {
-    audioComponent.volume.rampTo(targetVolume, 0.5);
+    audioComponent.volume.rampTo(Tone.gainToDb(normalizedDistance), 0.5);
+    console.log(audioComponent.volume)
     // Specific adjustments for droneSynth to maintain its sonic character
     audioComponent.harmonicity.rampTo((1 - (normalizedDistance)), 0.5);
 
@@ -1393,8 +1474,59 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
 
     // only sample player
     } else if (audioComponent === synths.radioTuner) {
+      audioComponent.volume.rampTo(targetVolume * 1.5, 0.5);
+
+      // Conditional logic based on the threshold
+      if (normalizedDistance < 0.15) {
+        // Check if just crossing below the threshold
+        if (previousNormalizedDistance >= 0.15) {
+          // Switch to normal playback settings
+          audioComponent.set({
+            grainSize: 1.0,
+            playbackRate: 1.0
+          });
+        }
+      } else {
+        // freaky settings when above the dist threshold
+        audioComponent.set({
+          grainSize: Math.exp(1 - normalizedDistance) / 2,
+          playbackRate: Math.abs(normalizedDistance) * 10
+        });
+      }
+  
+      // Update previousNormalizedDistance for the next call
+      previousNormalizedDistance = normalizedDistance;
+    }
   }
+  
+function rampGrainSize(audioComponent, targetGrainSize, duration) {
+  const initialGrainSize = audioComponent.grainSize; // Assuming grainSize is a direct numeric property
+  const stepTime = 20; // milliseconds per step
+  const totalSteps = duration / stepTime;
+  const stepSize = (targetGrainSize - initialGrainSize) / totalSteps;
+  let currentStep = 0;
+
+  const intervalId = setInterval(() => {
+      if (currentStep < totalSteps) {
+          audioComponent.grainSize += stepSize;  // Directly update the grainSize
+          currentStep++;
+      } else {
+          clearInterval(intervalId);
+          audioComponent.grainSize = targetGrainSize; // Ensure it ends exactly at target
+      }
+  }, stepTime);
 }
+
+function adjustGrainSizeBasedOnDistance(audioComponent, normalizedDistance) {
+  const minGrainSize = 0.001; // very small grain size at the edge
+  const maxGrainSize = 0.1;  // larger grain size, closer to real-time, at the center
+
+  // Calculate the target grain size
+  const targetGrainSize = minGrainSize + (maxGrainSize - minGrainSize) * (1 - normalizedDistance);
+
+  rampGrainSize(audioComponent, targetGrainSize, 500); // Smooth transition over 500 ms
+}
+
 
 
 function removeRayLine(uniqueId) {
