@@ -16,7 +16,7 @@
 import { gfx } from './gfx.js';
 
 // init external js
-setTimeout(gfx(), 500);
+setTimeout(gfx(), 1000);
 
 const threeContainer = document.getElementById('gfx');
 

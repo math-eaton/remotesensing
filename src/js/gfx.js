@@ -347,6 +347,8 @@ function setupRadioTuner() {
      volume: Tone.gainToDb(0)
  }).connect(reverbSend);
 
+ radioTuner.autoStart = true;
+
  radioTuner.onload = () => {
      console.log('radioTuner sample loaded successfully');
      if (typeof lastChannelValue === 'number') {
@@ -361,37 +363,90 @@ function setupRadioTuner() {
  radioTuner.fadeIn = 0.1;
  radioTuner.fadeOut = 0.1;
 
- radioTuner.start();
- setInterval(changeSample, 10000); // Change radio samples every 3 seconds
+ setInterval(changeSample, 5000); // Change radio samples every N ms
 
 
  radioTuner.connect(reverbSend); 
  return radioTuner;
 }
 
+function waitForBufferToLoad(audioComponent, retryInterval = 100, maxRetries = 50) {
+  return new Promise((resolve, reject) => {
+      let retries = 0;
+
+      const checkBuffer = () => {
+          if (audioComponent.buffer && audioComponent.buffer.loaded) {
+              resolve();
+          } else if (retries < maxRetries) {
+              retries++;
+              setTimeout(checkBuffer, retryInterval);
+          } else {
+              reject(new Error("Buffer failed to load within the maximum retry limit."));
+          }
+      };
+
+      checkBuffer();
+  });
+}
+
+function checkAndStartPlayback() {
+  const currentBuffer = sampleBuffers[currentBufferIndex];
+  if (currentBuffer && currentBuffer.loaded) {
+      radioTuner.buffer = currentBuffer.buffer;
+      radioTuner.start(Tone.now() + 0.1);
+      console.log('Playback started with loaded buffer.');
+  } else {
+      console.log('Attempted to play a sample that is not loaded yet.');
+  }
+}
+
 function changeSample() {
   currentBufferIndex = (currentBufferIndex + 1) % sampleBuffers.length;
-  radioTuner.buffer = sampleBuffers[currentBufferIndex];
+  checkAndStartPlayback();
   console.log(`Switched to sample: ${currentBufferIndex}`);
 }
 
+function schedulePlayback(startOffset, stopOffset) {
+  const currentTime = Tone.now();
+  const startTime = currentTime + startOffset;
+  const stopTime = startTime + stopOffset;
+
+  if (startTime < currentTime) {
+      console.error('Start time is in the past. Adjusting...');
+      startOffset += currentTime - startTime + 0.1;
+  }
+
+  radioTuner.start(currentTime + startOffset);
+  radioTuner.stop(currentTime + startOffset + stopOffset);
+}
+
+
+
+// function changeSample() {
+//   currentBufferIndex = (currentBufferIndex + 1) % sampleBuffers.length;
+//   radioTuner.buffer = sampleBuffers[currentBufferIndex];
+//   console.log(`Switched to sample: ${currentBufferIndex}`);
+// }
+
 // update FM radio player based on freq tuning + safe triggering
 function updatePlaybackPosition(channelValue) {
-  if (synths.radioTuner.loaded) {
-      const sampleDuration = synths.radioTuner.buffer.duration;
-      const newPosition = (channelValue / 100) * sampleDuration;
-      const nextTime = getNextEventTime();
+  const sampleDuration = radioTuner.buffer.duration;
+  const newPosition = (channelValue / 100) * sampleDuration;
+  const currentTime = Tone.now();
+  const nextTime = getNextEventTime(currentTime);
 
-      // Stop the player before starting if it's currently playing to avoid overlapping
-      if (synths.radioTuner.state === "started") {
-          synths.radioTuner.stop(nextTime);
-      }
-
-      // Use the calculated future time to start playing
-      synths.radioTuner.start(nextTime, newPosition);
-  } else {
-      console.log("radioTuner buffer is not loaded yet");
+  // Ensure the new position is scheduled correctly
+  if (nextTime < currentTime) {
+      console.warn('Adjusted nextTime to avoid scheduling error.');
+      nextTime = currentTime + 0.1;
   }
+
+  // Start or change playback
+  radioTuner.start(nextTime, newPosition);
+}
+
+function getNextEventTime(currentTime) {
+  return currentTime + 0.1;  // Adjust as needed based on your application's timing requirements
 }
 
 
@@ -509,7 +564,7 @@ let audioChannels = {
       muted: true
   },
   digitalChannel: {
-      synths: ['membraneSynth', 'harmonicOscillator'],
+      synths: ['membraneSynth', 'harmonicOscillator', 'radioTuner'],
       volume: 0,
       muted: true
   },
@@ -2197,11 +2252,15 @@ function toggleMapScene(switchState, source) {
     onWindowResize(); // Update the resolution
 
     // Load GeoJSON data and then enable interaction
-    await loadAllData();  // Load all necessary data (GeoJSON and samples)
-    postLoadOperations();  // Setup the scene after critical datasets are loaded
-    initWebSocketConnection();
-    enableInteraction();
-    flipCamera();
+    try {
+      await loadAllData();
+      postLoadOperations();
+      initWebSocketConnection();
+      enableInteraction();
+      flipCamera();
+  } catch (error) {
+      console.error('Initialization failed:', error);
+  }
 
     // loadGeoJSONData(() => {
     //   postLoadOperations(); // Setup the scene after critical datasets are loaded
@@ -3991,8 +4050,8 @@ let currentBufferIndex = 0;
 
 async function loadAllData() {
   // Fetch all URLs including GeoJSON and sample URLs
-  const geoJsonPromise = loadGeoJSONData();  // Adjust this function to return a promise
   const sampleUrlsPromise = loadSampleUrls();  // Load sample URLs
+  const geoJsonPromise = loadGeoJSONData();  // Adjust this function to return a promise
   
   // Wait for both promises to complete
   await Promise.all([geoJsonPromise, sampleUrlsPromise]);
@@ -4001,56 +4060,62 @@ async function loadAllData() {
 
 
   // Fetching the contour lines GeoJSON and adding to the scene
-  async function loadGeoJSONData(onCriticalDataLoaded) {
+  async function loadGeoJSONData() {
     // console.log("loading...")
     const urls = [
       'src/assets/data/elevation_contours_shaved.geojson',
       'src/assets/data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson',
       // 'src/assets/data/FmTowers_FeaturesToJSON_AOI_20231204.geojson',
       'src/assets/data/ne_50m_coastline_aoiClip.geojson',
-      'src/assets/data/cellServiceCentroids_2000m_20231210.geojson',
+      // 'src/assets/data/cellServiceCentroids_2000m_20231210.geojson',
       'src/assets/data/fm_freq_dict.json',
       'src/assets/data/FM_transmitter_sites.geojson',
       'src/assets/data/fm_contours_shaved.geojson',
       'src/assets/data/ne_50m_ocean_aoiClip.geojson',
-      'src/assets/data/compositeSurface_polygon_surface.geojson',
+      // 'src/assets/data/compositeSurface_polygon_surface.geojson',
       'src/assets/data/NYS_fullElevDEM_boundingBox.geojson',
       'src/assets/data/cellService_contours_5KM_pts_20240407.geojson',
-      'src/assets/data/cellService_contours_5KM_explode_mini.geojson',
+      // 'src/assets/data/cellService_contours_5KM_explode_mini.geojson',
       'src/assets/data/accessService_contours_5KM_pts_20240407.geojson',
-      'src/assets/data/AccessHexTesselation_lvl5_nodata.geojson',
-      'src/assets/sounds/presets.json',
+      // 'src/assets/data/AccessHexTesselation_lvl5_nodata.geojson',
+      // 'src/assets/sounds/presets.json',
     ];
 
-    let criticalDatasetsLoaded = 0;
-    const criticalDatasetsCount = 3; // Set this to the number of datasets critical for initial rendering
-
-    urls.forEach((url) => {
-      fetch(url)
-        .then((response) => response.json())
-        .then((data) => {
-          handleGeoJSONData(url, data);
-          if (isCriticalDataset(url)) {
-            criticalDatasetsLoaded++;
-            if (criticalDatasetsLoaded === criticalDatasetsCount) {
-              onCriticalDataLoaded();
-            }
-          }
-        })
-        .catch((error) => {
-          console.error(`Error loading ${url}:`, error);
-        });
-    });
-
     try {
-      const dataPromises = urls.map(url => fetch(url).then(res => res.json()));
-      const results = await Promise.all(dataPromises);
-      results.forEach((data, index) => handleGeoJSONData(urls[index], data));
-    } catch (error) {
-      console.error("Failed to load GeoJSON data:", error);
-    }
+      let criticalDatasetsLoaded = 0;
+      const criticalDatasetsCount = 3;  // Adjust as needed
+
+      const dataPromises = urls.map(url => 
+          fetch(url).then(res => {
+              if (!res.ok) throw new Error(`Network response was not ok for ${url}`);
+              return res.json();
+          })
+          .then(data => {
+              handleGeoJSONData(url, data);
+              if (isCriticalDataset(url)) {
+                  criticalDatasetsLoaded++;
+                  if (criticalDatasetsLoaded === criticalDatasetsCount) {
+                      return 'critical';  // Indicate critical data loaded
+                  }
+              }
+              return 'non-critical';  // Indicate non-critical data loaded
+          })
+          .catch(error => {
+              console.error(`Error loading ${url}:`, error);
+              throw error;  // Re-throw to handle in outer catch
+          })
+      );
+
+      const results = await Promise.allSettled(dataPromises);
+      const criticalResults = results.filter(result => result.value === 'critical');
+      if (criticalResults.length < criticalDatasetsCount) {
+          throw new Error('Not all critical datasets were loaded successfully');
+      }
+      console.log("All data loaded successfully.");
+  } catch (error) {
+      console.error("Failed to load some GeoJSON data:", error);
   }
-  
+}
 
   function isCriticalDataset(url) {
     // Define logic to determine if a dataset is critical for initial rendering
@@ -4189,15 +4254,18 @@ async function loadAllData() {
 
   async function loadSample(url) {
     try {
-      const buffer = await Tone.ToneAudioBuffer.fromUrl(url);
-      sampleBuffers.push(buffer);
-      console.log(`Loaded sample: ${url}`);
+        // Load the buffer and wait for it to complete
+        const buffer = await Tone.ToneAudioBuffer.fromUrl(url);
+        console.log(`Sample loaded: ${url}`);
+
+        // Push the loaded buffer into the array with the correct status
+        sampleBuffers.push({ url, buffer, loaded: true });
+        
+        // checkAndStartPlayback();
     } catch (error) {
-      console.error(`Error loading sample from ${url}:`, error);
+        console.error(`Error loading sample from ${url}:`, error);
     }
-  }
-  
-  
+}
 
   function postLoadOperations() {
     const boundingBox = getBoundingBoxOfGeoJSON(boundingBoxGeojsonData);
