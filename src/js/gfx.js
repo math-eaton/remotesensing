@@ -332,7 +332,11 @@ function setupDroneSynth() {
   return droneSynth;
 }
 
+// FM RADIO PLAYER
+// GRANULAR SYNTHESIZZZ
+
 let currentSampleIndex = 0; // Track the index of the current sample
+let lastIntersectedIds = new Set(); // to keep track of FM propagation polys
 
 function setupRadioTuner() {
   radioTuner = new Tone.GrainPlayer({
@@ -363,72 +367,42 @@ function setupRadioTuner() {
  radioTuner.fadeIn = 0.1;
  radioTuner.fadeOut = 0.1;
 
- setInterval(changeSample, 5000); // Change radio samples every N ms
+//  setInterval(changeSample, 5000); // Change radio samples every N ms
 
 
  radioTuner.connect(reverbSend); 
  return radioTuner;
 }
 
-function waitForBufferToLoad(audioComponent, retryInterval = 100, maxRetries = 50) {
-  return new Promise((resolve, reject) => {
-      let retries = 0;
-
-      const checkBuffer = () => {
-          if (audioComponent.buffer && audioComponent.buffer.loaded) {
-              resolve();
-          } else if (retries < maxRetries) {
-              retries++;
-              setTimeout(checkBuffer, retryInterval);
-          } else {
-              reject(new Error("Buffer failed to load within the maximum retry limit."));
-          }
-      };
-
-      checkBuffer();
-  });
-}
-
+// playback init with check for sample load
 function checkAndStartPlayback() {
-  const currentBuffer = sampleBuffers[currentBufferIndex];
+  const currentBuffer = sampleBuffers[currentSampleIndex];
   if (currentBuffer && currentBuffer.loaded) {
       radioTuner.buffer = currentBuffer.buffer;
       radioTuner.start(Tone.now() + 0.1);
       console.log('Playback started with loaded buffer.');
   } else {
-      console.log('Attempted to play a sample that is not loaded yet.');
+      console.error('Attempted to play a sample that is not loaded yet.');
   }
 }
 
-function changeSample() {
-  currentBufferIndex = (currentBufferIndex + 1) % sampleBuffers.length;
+function getRandomSampleIndex(excludeIndex) {
+  let newIndex = Math.floor(Math.random() * sampleBuffers.length);
+  while (newIndex === excludeIndex) {
+      newIndex = Math.floor(Math.random() * sampleBuffers.length);
+  }
+  return newIndex;
+}
+
+
+function changeSampleToIndex(index) {
+  currentSampleIndex = index;
   checkAndStartPlayback();
-  console.log(`Switched to sample: ${currentBufferIndex}`);
-}
-
-function schedulePlayback(startOffset, stopOffset) {
-  const currentTime = Tone.now();
-  const startTime = currentTime + startOffset;
-  const stopTime = startTime + stopOffset;
-
-  if (startTime < currentTime) {
-      console.error('Start time is in the past. Adjusting...');
-      startOffset += currentTime - startTime + 0.1;
-  }
-
-  radioTuner.start(currentTime + startOffset);
-  radioTuner.stop(currentTime + startOffset + stopOffset);
+  console.log(`Switched to sample: ${currentSampleIndex}`);
 }
 
 
-
-// function changeSample() {
-//   currentBufferIndex = (currentBufferIndex + 1) % sampleBuffers.length;
-//   radioTuner.buffer = sampleBuffers[currentBufferIndex];
-//   console.log(`Switched to sample: ${currentBufferIndex}`);
-// }
-
-// update FM radio player based on freq tuning + safe triggering
+// update FM radio player based on slider tuning
 function updatePlaybackPosition(channelValue) {
   const sampleDuration = radioTuner.buffer.duration;
   const newPosition = (channelValue / 100) * sampleDuration;
@@ -445,12 +419,8 @@ function updatePlaybackPosition(channelValue) {
   radioTuner.start(nextTime, newPosition);
 }
 
-function getNextEventTime(currentTime) {
-  return currentTime + 0.1;  // Adjust as needed based on your application's timing requirements
-}
-
-
-
+// TODO HARMONICSSSS AS MADE FAMOUS BY MR DONALD BUCHLA 
+// .. MAYBE SHOULD JUST CREATE A DICTIONARY WITH THESE HARDCODED FREQS
 function setupHarmonicOscillator() {
   const fundamentalFreq = 110; // A2, an example fundamental frequency
   const numHarmonics = 10; // Number of harmonics
@@ -1418,12 +1388,16 @@ function processSortedCellRays() {
 
 function raycastFMpolygon(intersections) {
   let currentActiveIds = new Set();
+  let foundNewIntersection = false;
 
   // Process all intersections
   intersections.forEach(intersection => {
       const uniqueId = intersection.object.userData.uniqueId;
       const avgRadius = intersection.object.userData.avgRadius || 1; // Default to 1 if undefined
       currentActiveIds.add(uniqueId);
+      if (!lastIntersectedIds.has(uniqueId)) {
+        foundNewIntersection = true; // New intersection detected
+    }
 
       const matchingTowers = findAllMatchingFMTowers(uniqueId);
       matchingTowers.forEach(tower => {
@@ -1431,6 +1405,15 @@ function raycastFMpolygon(intersections) {
               drawFMLine(intersection.point, tower.position, uniqueId, avgRadius, currentColor);
           }
       });
+
+      if (foundNewIntersection) {
+        const newIndex = getRandomSampleIndex(currentSampleIndex);
+        changeSampleToIndex(newIndex);
+    }
+
+    // Update lastIntersectedIds for the next cycle
+    lastIntersectedIds = currentActiveIds;
+
   });
 
   // Update the drone synth parameters only based on the shortest active ray
