@@ -337,6 +337,8 @@ function setupDroneSynth() {
 
 let currentSampleIndex = 0; // Track the index of the current sample
 let lastIntersectedIds = new Set(); // to keep track of FM propagation polys
+const polygonSampleMap = new Map();
+const maxEntries = 20;
 
 function setupRadioTuner() {
   radioTuner = new Tone.GrainPlayer({
@@ -401,6 +403,27 @@ function changeSampleToIndex(index) {
   console.log(`Switched to sample: ${currentSampleIndex}`);
 }
 
+function updatePolygonSampleMap(uniqueId) {
+  if (!polygonSampleMap.has(uniqueId)) {
+      if (polygonSampleMap.size >= maxEntries) {
+          // Remove the oldest entry; Maps maintain the order of keys as they were added
+          const oldestKey = polygonSampleMap.keys().next().value;
+          polygonSampleMap.delete(oldestKey);
+      }
+      // Assign a new random sample index
+      const newIndex = getRandomSampleIndex();
+      polygonSampleMap.set(uniqueId, newIndex);
+  }
+  return polygonSampleMap.get(uniqueId);
+}
+
+function getRandomSampleIndex() {
+  let newIndex;
+  do {
+      newIndex = Math.floor(Math.random() * sampleBuffers.length);
+  } while (sampleBuffers[newIndex] && sampleBuffers[newIndex].buffer === radioTuner.buffer);
+  return newIndex;
+}
 
 // update FM radio player based on slider tuning
 function updatePlaybackPosition(channelValue) {
@@ -1388,6 +1411,7 @@ function processSortedCellRays() {
 
 function raycastFMpolygon(intersections) {
   let currentActiveIds = new Set();
+  let sampleIndexToPlay;
   let foundNewIntersection = false;
 
   // Process all intersections
@@ -1396,8 +1420,9 @@ function raycastFMpolygon(intersections) {
       const avgRadius = intersection.object.userData.avgRadius || 1; // Default to 1 if undefined
       currentActiveIds.add(uniqueId);
       if (!lastIntersectedIds.has(uniqueId)) {
-        foundNewIntersection = true; // New intersection detected
-    }
+        sampleIndexToPlay = updatePolygonSampleMap(uniqueId); // Update map and get sample index
+        changeSampleToIndex(sampleIndexToPlay); // Change sample
+}
 
       const matchingTowers = findAllMatchingFMTowers(uniqueId);
       matchingTowers.forEach(tower => {
