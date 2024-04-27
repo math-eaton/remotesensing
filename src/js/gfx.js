@@ -249,8 +249,8 @@ const DmalkosRandomNote = createRandomNoteSelector("D malkos raga", 50); // N% v
 
     // Setup reverb
     reverbSend = new Tone.Reverb({ 
-        decay: 7,
-        preDelay: 0.05
+        decay: 3,
+        preDelay: 0.15
     }).toDestination();
     reverbSend.wet.value = 0.1;
 
@@ -300,7 +300,7 @@ function setupDroneSynth() {
       },
       detune: 150,
       harmonicity: 0.5,
-      volume: -1
+      volume: 0,
   });
 
   // Initialize LP
@@ -308,7 +308,7 @@ function setupDroneSynth() {
       type: 'lowpass',
       frequency: 100,  // Starting cutoff frequency
       rolloff: -96,
-      Q: 2,
+      Q: 0,
   });
 
   // Connect the synth to the filter then reverb
@@ -703,8 +703,8 @@ function calculateReverbWetLevel(cameraZoom) {
 }
 
 function adjustVolumeForReverb(wetLevel) {
-  const minVolume = -5; 
-  const maxVolume = -1;
+  const minVolume = -15; 
+  const maxVolume = -7;
 
   // As wet level increases, decrease the volume (since wetLevel ranges from 0.05 to 1.0)
   const volumeAdjustment = maxVolume - ((wetLevel - 0.05) / 0.95) * (minVolume - maxVolume);
@@ -723,8 +723,7 @@ function loadSynthPresets(data) {
 function transitionToRestingState() {
   // Ensure to ramp back to a resting state smoothly
   droneSynth.harmonicity.rampTo(1, 1);
-  droneSynth.volume.rampTo(Tone.gainToDb(0.5), 0.75);
-  radioTuner.volume.rampTo(Tone.gainToDb(0.05), 0.75);
+  droneSynth.volume.rampTo(Tone.gainToDb(0.75), 0.75);
   droneLP.frequency.rampTo(300, 1);
   droneLP.Q.rampTo(3, 1);
   // droneHP.frequency.rampTo(1000, 1);
@@ -1408,45 +1407,39 @@ function processSortedCellRays() {
   });
 }
 
-
+// fm propagation raycasting stuff
 function raycastFMpolygon(intersections) {
   let currentActiveIds = new Set();
-  let sampleIndexToPlay;
-  let foundNewIntersection = false;
 
-  // Process all intersections
   intersections.forEach(intersection => {
-      const uniqueId = intersection.object.userData.uniqueId;
-      const avgRadius = intersection.object.userData.avgRadius || 1; // Default to 1 if undefined
-      currentActiveIds.add(uniqueId);
+      const mesh = intersection.object; // This should be the mesh intersected by the raycaster
+      const uniqueId = mesh.userData.uniqueId;
+      const vertices = mesh.userData.vertices;
 
-      // Check for new intersection
-      if (!lastIntersectedIds.has(uniqueId)) {
-          foundNewIntersection = true;
-          sampleIndexToPlay = updatePolygonSampleMap(uniqueId); // Update map and get sample index
-          changeSampleToIndex(sampleIndexToPlay); // Change sample
+      if (!vertices) {
+          console.error("Vertices not found for object", mesh);
+          return; // Skip processing this intersection
       }
 
-      // Check for matching towers or use centroid fallback
+      currentActiveIds.add(uniqueId);
+      if (!lastIntersectedIds.has(uniqueId)) {
+          const sampleIndexToPlay = updatePolygonSampleMap(uniqueId);
+          changeSampleToIndex(sampleIndexToPlay);
+      }
+
       const { towers, found } = findAllMatchingFMTowers(uniqueId);
       if (found) {
           towers.forEach(tower => {
-              drawFMLine(intersection.point, tower.position, uniqueId, avgRadius, currentColor);
+              drawFMLine(intersection.point, tower.position, uniqueId, mesh, currentColor);
           });
       } else {
-          // Calculate centroid if no tower is found
-          const centroid = calculateCentroid(intersection.object);
-          drawFMLine(intersection.point, centroid, uniqueId, avgRadius, currentColor);
+          const centroid = calculateCentroid(mesh); // calculateCentroid should handle the mesh directly
+          drawFMLine(intersection.point, centroid, uniqueId, mesh, currentColor);
       }
   });
 
-  // Update lastIntersectedIds for the next cycle
   lastIntersectedIds = currentActiveIds;
-
-  // Update the drone synth parameters only based on the shortest active ray
   updateDroneSynthBasedOnShortestRay();
-
-  // Remove lines for polygons no longer intersected
   fmRayLinesByUniqueId.forEach((line, uniqueId) => {
       if (!currentActiveIds.has(uniqueId)) {
           removeRayLine(uniqueId);
@@ -1454,46 +1447,43 @@ function raycastFMpolygon(intersections) {
   });
 }
 
-
 function updateDroneSynthBasedOnShortestRay() {
-  let shortestDistance = Infinity; // This will hold the shortest distance in kilometers
-  let avgRadius = 1; // Default avgRadius in kilometers
+  let shortestDistance = Infinity;
+  let nearestVertexDistance = 1; // Default if no lines are found
   let shouldAdjust = false;
 
   fmRayLinesByUniqueId.forEach(line => {
       const positions = line.geometry.attributes.position.array;
       const start = new THREE.Vector3(positions[0], positions[1], positions[2]);
       const end = new THREE.Vector3(positions[3], positions[4], positions[5]);
-      const length = start.distanceTo(end); // This is in Three.js units, typically meters
+      const length = start.distanceTo(end);
 
-      // idk why this is the coefficient
-      const adjustedRayLength = length * 50;
-
-      if (adjustedRayLength < shortestDistance) {
-          shortestDistance = adjustedRayLength;
-          avgRadius = line.userData.avgRadius || 1; // Ensure avgRadius is taken or defaulted correctly in kilometers
+      if (length < shortestDistance) {
+          shortestDistance = length;
+          nearestVertexDistance = line.userData.nearestVertexDistance || 1;
           shouldAdjust = true;
       }
   });
 
   if (shouldAdjust) {
-      // Update droneSynth volume and filter based on the normalized distance
-      updateParamsBasedOnDistFM(synths.droneSynth, droneLP, shortestDistance, avgRadius);
-      updateParamsBasedOnDistFM(synths.radioTuner, null, shortestDistance, avgRadius);
+      updateParamsBasedOnDistFM(synths.droneSynth, droneLP, shortestDistance, nearestVertexDistance);
+      updateParamsBasedOnDistFM(synths.radioTuner, null, shortestDistance, nearestVertexDistance);
   } else {
-      // Transition to resting state if no intersections are detected
       transitionToRestingState();
   }
 }
 
 let previousNormalizedDistance = 1; // 1.0 is ideally fm poly edge
 
-function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDistance, avgRadius) {
-  const normalizedDistance = Math.max(0, Math.min(1, (shortestDistance / avgRadius - 0.01) / (2 - 0.01)));
+function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDistance, nearestVertexDistance) {
+  // Normalize distance calculation against the nearest vertex distance
+  const normalizedDistance = Math.max(0, Math.min(1, (shortestDistance / nearestVertexDistance - 0.01) / (2 - 0.01)));
   const targetVolume = Tone.gainToDb(Math.abs(1 - normalizedDistance));
   const targetCutoff = 300 * (1 - normalizedDistance);  // Adjust filter cutoff based on distance
   const maxDepth = 2; // Maximum depth of pitch modulation
   const scaledDepth = maxDepth * (1 - normalizedDistance);
+
+  console.log("NEW NORMAL IS: " + normalizedDistance)
 
   // update any active instrument parameters
   // console.log("updating " + audioComponent.name);
@@ -1517,6 +1507,7 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
     pitchLFO.max = scaledDepth;
   
     if (filterComponent) {
+      // idk
     }
 
     // only sample player
@@ -1524,9 +1515,9 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
     audioComponent.volume.rampTo(targetVolume * 1.5, 0.5);
 
     // Conditional logic based on the threshold
-    if (normalizedDistance < 0.15) {
+    if (normalizedDistance < 0.40) {
       // Check if just crossing below the threshold
-      if (previousNormalizedDistance >= 0.15) {
+      if (previousNormalizedDistance >= 0.40) {
         // Switch to normal playback settings
         audioComponent.set({
           grainSize: 1.0,
@@ -1548,65 +1539,37 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
   }
 }
 
+
+
 function rampGrainSize(audioComponent, targetGrainSize, duration) {
-const initialGrainSize = audioComponent.grainSize; // Assuming grainSize is a direct numeric property
-const stepTime = 20; // milliseconds per step
-const totalSteps = duration / stepTime;
-const stepSize = (targetGrainSize - initialGrainSize) / totalSteps;
-let currentStep = 0;
-
-const intervalId = setInterval(() => {
-    if (currentStep < totalSteps) {
-        audioComponent.grainSize += stepSize;  // Directly update the grainSize
-        currentStep++;
-    } else {
-        clearInterval(intervalId);
-        audioComponent.grainSize = targetGrainSize; // Ensure it ends exactly at target
-    }
-}, stepTime);
-}
-
-function adjustGrainSizeBasedOnDistance(audioComponent, normalizedDistance) {
-const minGrainSize = 0.001; // very small grain size at the edge
-const maxGrainSize = 0.1;  // larger grain size, closer to real-time, at the center
-
-// Calculate the target grain size
-const targetGrainSize = minGrainSize + (maxGrainSize - minGrainSize) * (1 - normalizedDistance);
-
-rampGrainSize(audioComponent, targetGrainSize, 500); // Smooth transition over 500 ms
-}
-
-
-
-// function rampGrainSize(audioComponent, targetGrainSize, duration) {
-//   const initialGrainSize = audioComponent.grainSize; // Assuming grainSize is a direct numeric property
-//   const stepTime = 20; // milliseconds per step
-//   const totalSteps = duration / stepTime;
-//   const stepSize = (targetGrainSize - initialGrainSize) / totalSteps;
-//   let currentStep = 0;
-
-//   const intervalId = setInterval(() => {
-//       if (currentStep < totalSteps) {
-//           audioComponent.grainSize += stepSize;  // Directly update the grainSize
-//           currentStep++;
-//       } else {
-//           clearInterval(intervalId);
-//           audioComponent.grainSize = targetGrainSize; // Ensure it ends exactly at target
-//       }
-//   }, stepTime);
-// }
-
-// function adjustGrainSizeBasedOnDistance(audioComponent, normalizedDistance) {
-//   const minGrainSize = 0.001; // very small grain size at the edge
-//   const maxGrainSize = 0.1;  // larger grain size, closer to real-time, at the center
-
-//   // Calculate the target grain size
-//   const targetGrainSize = minGrainSize + (maxGrainSize - minGrainSize) * (1 - normalizedDistance);
-
-//   rampGrainSize(audioComponent, targetGrainSize, 500); // Smooth transition over 500 ms
-// }
-
-
+  const initialGrainSize = audioComponent.grainSize; // Assuming grainSize is a direct numeric property
+  const stepTime = 20; // milliseconds per step
+  const totalSteps = duration / stepTime;
+  const stepSize = (targetGrainSize - initialGrainSize) / totalSteps;
+  let currentStep = 0;
+  
+  const intervalId = setInterval(() => {
+      if (currentStep < totalSteps) {
+          audioComponent.grainSize += stepSize;  // Directly update the grainSize
+          currentStep++;
+      } else {
+          clearInterval(intervalId);
+          audioComponent.grainSize = targetGrainSize; // Ensure it ends exactly at target
+      }
+  }, stepTime);
+  }
+  
+  function adjustGrainSizeBasedOnDistance(audioComponent, normalizedDistance) {
+  const minGrainSize = 0.001; // very small grain size at the edge
+  const maxGrainSize = 0.1;  // larger grain size, closer to real-time, at the center
+  
+  // Calculate the target grain size
+  const targetGrainSize = minGrainSize + (maxGrainSize - minGrainSize) * (1 - normalizedDistance);
+  
+  rampGrainSize(audioComponent, targetGrainSize, 500); // Smooth transition over 500 ms
+  }
+  
+  
 
 function removeRayLine(uniqueId) {
   let line = fmRayLinesByUniqueId.get(uniqueId);
@@ -1677,23 +1640,42 @@ let fmRayLines = [];
 let fmRayLinesByUniqueId = new Map();
 let avgRadius;
 
-function drawFMLine(start, end, uniqueId, avgRadius, color) {
-  // console.log("ray origin: " + start[0])
+function drawFMLine(start, end, uniqueId, mesh, color) {
   let line = fmRayLinesByUniqueId.get(uniqueId);
   let lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
 
   if (line) {
-      scene.remove(line);  // Remove the old line from the scene
-      line.geometry.dispose();  // Dispose of the old geometry
+      scene.remove(line);
+      line.geometry.dispose();
   }
 
   let fmRayMaterial = new THREE.LineBasicMaterial({ color });
   line = new THREE.Line(lineGeometry, fmRayMaterial);
-  line.userData.avgRadius = avgRadius; // Store avgRadius in userData for use in distance calculations
-  // console.log("avg radius: " + avgRadius)
+
+  // Calculate nearest vertex distance using vertices stored in mesh userData
+  let nearestVertexDistance = calculateNearestVertexDistance(end, mesh);
+  line.userData.nearestVertexDistance = nearestVertexDistance;
+
   scene.add(line);
   fmRayLinesByUniqueId.set(uniqueId, line);
 }
+
+
+function calculateNearestVertexDistance(point, mesh) {
+  let nearestDistance = Infinity;
+  if (mesh.userData.vertices) {
+      mesh.userData.vertices.forEach(vertex => {
+          const distance = vertex.distanceTo(point);
+          if (distance < nearestDistance) {
+              nearestDistance = distance;
+          }
+      });
+  } else {
+      console.error("No vertices data found in mesh userData");
+  }
+  return nearestDistance;
+}
+
 
 
 function clearFMrays(currentActiveIds) {
@@ -1710,6 +1692,35 @@ function clearFMrays(currentActiveIds) {
       return;  // Exit the function if currentActiveIds is not valid
   }
 }
+
+
+// function rampGrainSize(audioComponent, targetGrainSize, duration) {
+//   const initialGrainSize = audioComponent.grainSize; // Assuming grainSize is a direct numeric property
+//   const stepTime = 20; // milliseconds per step
+//   const totalSteps = duration / stepTime;
+//   const stepSize = (targetGrainSize - initialGrainSize) / totalSteps;
+//   let currentStep = 0;
+
+//   const intervalId = setInterval(() => {
+//       if (currentStep < totalSteps) {
+//           audioComponent.grainSize += stepSize;  // Directly update the grainSize
+//           currentStep++;
+//       } else {
+//           clearInterval(intervalId);
+//           audioComponent.grainSize = targetGrainSize; // Ensure it ends exactly at target
+//       }
+//   }, stepTime);
+// }
+
+// function adjustGrainSizeBasedOnDistance(audioComponent, normalizedDistance) {
+//   const minGrainSize = 0.001; // very small grain size at the edge
+//   const maxGrainSize = 0.1;  // larger grain size, closer to real-time, at the center
+
+//   // Calculate the target grain size
+//   const targetGrainSize = minGrainSize + (maxGrainSize - minGrainSize) * (1 - normalizedDistance);
+
+//   rampGrainSize(audioComponent, targetGrainSize, 500); // Smooth transition over 500 ms
+// }
 
 
 
@@ -1826,6 +1837,7 @@ function handleRaycasters(camera, scene) {
 
           const visibleChildren = group.children.filter(child => child.visible);
           const intersections = raycaster.intersectObjects(visibleChildren, true);
+          // const intersections = raycaster.intersectObjects(group.children);
 
           if (intersections.length > 0) {
               if (key === 'fmTransmitterPoints') {
@@ -3309,9 +3321,11 @@ function addFMpropagation3D(geojson, channelFilter, fmPropagationContours, strid
             channelFilter: feature.properties.channel, 
             uniqueId: uniqueId,
             contourIndex: contourIndex,
-            avgRadius: avgRadius
-            // vertices: vertices,
+            avgRadius: avgRadius,
+            vertices: vertices,
           };
+
+          // console.log(" vertices are: " + JSON.stringify(vertices))
                   
           // Add to group and scene
           const groupId = feature.properties.key.split('_')[0];
