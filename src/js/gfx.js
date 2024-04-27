@@ -1419,27 +1419,29 @@ function raycastFMpolygon(intersections) {
       const uniqueId = intersection.object.userData.uniqueId;
       const avgRadius = intersection.object.userData.avgRadius || 1; // Default to 1 if undefined
       currentActiveIds.add(uniqueId);
+
+      // Check for new intersection
       if (!lastIntersectedIds.has(uniqueId)) {
-        sampleIndexToPlay = updatePolygonSampleMap(uniqueId); // Update map and get sample index
-        changeSampleToIndex(sampleIndexToPlay); // Change sample
-}
+          foundNewIntersection = true;
+          sampleIndexToPlay = updatePolygonSampleMap(uniqueId); // Update map and get sample index
+          changeSampleToIndex(sampleIndexToPlay); // Change sample
+      }
 
-      const matchingTowers = findAllMatchingFMTowers(uniqueId);
-      matchingTowers.forEach(tower => {
-          if (tower) {
+      // Check for matching towers or use centroid fallback
+      const { towers, found } = findAllMatchingFMTowers(uniqueId);
+      if (found) {
+          towers.forEach(tower => {
               drawFMLine(intersection.point, tower.position, uniqueId, avgRadius, currentColor);
-          }
-      });
-
-      if (foundNewIntersection) {
-        const newIndex = getRandomSampleIndex(currentSampleIndex);
-        changeSampleToIndex(newIndex);
-    }
-
-    // Update lastIntersectedIds for the next cycle
-    lastIntersectedIds = currentActiveIds;
-
+          });
+      } else {
+          // Calculate centroid if no tower is found
+          const centroid = calculateCentroid(intersection.object);
+          drawFMLine(intersection.point, centroid, uniqueId, avgRadius, currentColor);
+      }
   });
+
+  // Update lastIntersectedIds for the next cycle
+  lastIntersectedIds = currentActiveIds;
 
   // Update the drone synth parameters only based on the shortest active ray
   updateDroneSynthBasedOnShortestRay();
@@ -1633,6 +1635,7 @@ function updateAllLinesWithNewColor(newColor) {
 
 function findAllMatchingFMTowers(uniqueId) {
   let matchingTowers = [];
+  let found = false;
 
   [window.instancedPyramidMatching, window.instancedPyramidNonMatching].forEach(instancedMesh => {
     const count = instancedMesh.count;
@@ -1642,21 +1645,33 @@ function findAllMatchingFMTowers(uniqueId) {
         instancedMesh.getMatrixAt(i, matrix);
         const position = new THREE.Vector3().setFromMatrixPosition(matrix);
 
-        // Check if position components are valid numbers
         if (!isNaN(position.x) && !isNaN(position.y) && !isNaN(position.z)) {
           matchingTowers.push({
             uniqueId: uniqueId,
             position: position.clone()
           });
-        } else {
-          console.error("Invalid position data", position);
+          found = true;
         }
       }
     }
   });
 
-  return matchingTowers;
+  return { towers: matchingTowers, found };
 }
+
+function calculateCentroid(polygon) {
+  const vertices = polygon.geometry.attributes.position.array;
+  let centroid = new THREE.Vector3(0, 0, 0);
+  let count = vertices.length / 3;
+  for (let i = 0; i < vertices.length; i += 3) {
+    centroid.x += vertices[i];
+    centroid.y += vertices[i + 1];
+    centroid.z += vertices[i + 2];
+  }
+  centroid.divideScalar(count);
+  return centroid;
+}
+
 
 let fmRayLines = [];
 let fmRayLinesByUniqueId = new Map();
