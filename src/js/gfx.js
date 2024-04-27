@@ -1483,6 +1483,8 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
   const maxDepth = 2; // Maximum depth of pitch modulation
   const scaledDepth = maxDepth * (1 - normalizedDistance);
 
+  console.log("shortest dist?: " + shortestDistance)
+  console.log("nearest vertex dist: " + nearestVertexDistance)
   console.log("NEW NORMAL IS: " + normalizedDistance)
 
   // update any active instrument parameters
@@ -1653,7 +1655,7 @@ function drawFMLine(start, end, uniqueId, mesh, color) {
   line = new THREE.Line(lineGeometry, fmRayMaterial);
 
   // Calculate nearest vertex distance using vertices stored in mesh userData
-  let nearestVertexDistance = calculateNearestVertexDistance(end, mesh);
+  let nearestVertexDistance = calculateNearestVertexDistance(start, mesh);
   line.userData.nearestVertexDistance = nearestVertexDistance;
 
   scene.add(line);
