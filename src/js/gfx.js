@@ -239,7 +239,7 @@ const DmalkosRandomNote = createRandomNoteSelector("D malkos raga", 50); // N% v
 
     // Setup compressor
     let compressor = new Tone.Compressor({
-        threshold: -10,  // dB value where compression starts
+        threshold: -2,  // dB value where compression starts
         ratio: 6,        // Input/output ratio for signals above the threshold
         attack: 0.003,   // Time taken to apply compression
         release: 0.25    // Time taken to release compression
@@ -1477,11 +1477,12 @@ let previousNormalizedDistance = 1; // 1.0 is ideally fm poly edge
 
 function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDistance, nearestVertexDistance) {
   // Normalize distance calculation against the nearest vertex distance
-  const normalizedDistance = Math.max(0, Math.min(1, (shortestDistance / nearestVertexDistance - 0.01) / (2 - 0.01)));
-  const targetVolume = Tone.gainToDb(Math.abs(1 - normalizedDistance));
-  const targetCutoff = 300 * (1 - normalizedDistance);  // Adjust filter cutoff based on distance
-  const maxDepth = 2; // Maximum depth of pitch modulation
+  const normalizedDistance = Math.max(0, Math.min(1, (shortestDistance / nearestVertexDistance - 0.01) / (2 - 0.01)) - 0.15); // minus 0.15 constant
+  const targetVolume = Tone.gainToDb(Math.abs(1 - normalizedDistance) + 0.01);
+  const targetCutoff =  2500 * (1 - normalizedDistance);  // Adjust filter cutoff based on distance
+  const maxDepth = 3; // Maximum depth of pitch modulation
   const scaledDepth = maxDepth * (1 - normalizedDistance);
+  const targetVolume_log = Math.log(10) * targetVolume;
 
   console.log("shortest dist?: " + shortestDistance)
   console.log("nearest vertex dist: " + nearestVertexDistance)
@@ -1495,12 +1496,12 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
   // update only filters
   if (filterComponent) {
       filterComponent.frequency.rampTo(targetCutoff, 0.5);
-      filterComponent.Q.rampTo(4, 1);
+      // filterComponent.Q.rampTo(4, 1);
   }
 
   // only drone
   if (audioComponent === synths.droneSynth) {
-    audioComponent.volume.rampTo(Tone.gainToDb(normalizedDistance), 0.5);
+    audioComponent.volume.rampTo(Tone.gainToDb(normalizedDistance / 2), 0.5);
     // console.log(audioComponent.volume)
     // Specific adjustments for droneSynth to maintain its sonic character
     audioComponent.harmonicity.rampTo((1 - (normalizedDistance)), 0.5);
@@ -1514,7 +1515,7 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
 
     // only sample player
   } else if (audioComponent === synths.radioTuner) {
-    audioComponent.volume.rampTo(targetVolume * 1.5, 0.5);
+    audioComponent.volume.rampTo(targetVolume_log, 0.5);
 
     // Conditional logic based on the threshold
     if (normalizedDistance < 0.40) {
@@ -1533,6 +1534,7 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
         grainSize: Math.exp(1 - normalizedDistance) / 10,
         playbackRate: Math.abs(normalizedDistance),
         overlap: 1,
+        drift: Math.exp(1 - normalizedDistance) / 10
       });
     }
 
