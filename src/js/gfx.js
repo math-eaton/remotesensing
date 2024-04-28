@@ -353,7 +353,7 @@ function setupDroneSynth() {
 
   droneLP = new Tone.Filter({
       type: 'lowpass',
-      frequency: 200,  // Starting cutoff frequency
+      frequency: 250,  // Starting cutoff frequency
       rolloff: -96,
       Q: 0,
   });
@@ -466,17 +466,25 @@ function getRandomSampleIndex() {
 }
 // update FM radio player based on slider tuning
 function updatePlaybackPosition(channelValue) {
-  const sampleDuration = radioTuner.buffer.duration;
-  const newPosition = (channelValue / 100) * sampleDuration;
+  // Calculate new positions based on the channel value scaled by the buffer durations
+  const radioSampleDuration = radioTuner.buffer.duration;
+  const noiseSampleDuration = noiseTuner.buffer.duration;
+  
+  const newRadioPosition = (channelValue / 100) * radioSampleDuration;
+  const newNoisePosition = (channelValue / 100) * noiseSampleDuration;
+  
   const currentTime = Tone.now();
   const nextTime = getNextEventTime(currentTime);
-  // Ensure the new position is scheduled correctly
+
+  // Ensure the new positions are scheduled correctly
   if (nextTime < currentTime) {
       console.warn('Adjusted nextTime to avoid scheduling error.');
       nextTime = currentTime + 0.1;
   }
-  // Start or change playback
-  radioTuner.start(nextTime, newPosition);
+
+  // Start or change playback for both tuners
+  radioTuner.start(nextTime, newRadioPosition);
+  noiseTuner.start(nextTime + 0.01, newNoisePosition);
 }
 
 
@@ -507,7 +515,10 @@ function setupNoiseTuner() {
  noiseTuner.start(); // Start playing the noise tuner
 
  noiseTuner.onload = () => {
-  console.log('noiseTuner sample loaded successfully');
+  console.log('noisetuner sample loaded successfully');
+  if (typeof lastChannelValue === 'number') {
+      updatePlaybackPosition(lastChannelValue);
+  }
 };
 
 noiseTuner.onerror = (e) => {
@@ -662,12 +673,12 @@ let audioChannels = {
   },
   elevationChannel: {
     synths: [''],
-    volume: 0,
+    volume: -10,
     muted: true
 },
 accessChannel: {
     synths: ['noiseSynth'],
-    volume: 0,
+    volume: -10,
     muted: true
 }
 
@@ -818,7 +829,7 @@ function loadSynthPresets(data) {
 }
 
 
-function transitionToRestingState() {
+function transitionToFMRestingState() {
   // Ensure to ramp back to a resting state smoothly
   droneSynth.harmonicity.rampTo(1, 1);
   droneSynth.volume.rampTo(Tone.gainToDb(0.75), 0.75);
@@ -839,6 +850,26 @@ function transitionToRestingState() {
   if (synths.radioTuner) {
     synths.radioTuner.volume.rampTo(Tone.gainToDb(0), 0.5);  // Mute the radioTuner
 }
+
+
+}
+
+function noCellServiceState() {
+  // Ensure to ramp back to a resting state smoothly
+  droneSynth.harmonicity.rampTo(1, 0.5);
+  droneSynth.volume.rampTo(Tone.gainToDb(0.75), 0.75);
+  droneLP.frequency.rampTo(450, 0.5);
+  droneLP.Q.rampTo(3, 1);
+  droneBP.frequency.rampTo(100, 1);
+  droneBP.Q.rampTo(20, 1);
+  // droneHP.frequency.rampTo(1000, 1);
+  // droneHP.Q.rampTo(4, 1);
+
+  noiseSynth.volume.rampTo(Tone.gainToDb(0.03), 0.75);
+  noiseBP.frequency.rampTo(666,5);
+  noiseBP.Q.rampTo(0,2);
+
+
 
 
 }
@@ -1367,16 +1398,57 @@ function monitorSynths() {
 function raycastCellServiceVertex(intersection, maxCellTowerRays = 1) {
   const intersectPoint = intersection.point;
   const nearestTowers = findNearestCellTowers(intersectPoint, maxCellTowerRays);
+  const gridCode = intersection.object.userData.gridCode || 'unknown';  // Default to 'unknown' if not provided
+
+  console.log("Intersected gridCode:", gridCode);  // Log the current gridCode at intersection
+
 
   if (nearestTowers.length > 0) {
       nearestTowers.forEach(tower => {
           drawcellRayLine(intersectPoint, tower.position, maxCellTowerRays, tower.uniqueCellid, cellServiceMesh.gridCode, tower.distance, currentColor);
+
+          // Update audio parameters based on distance and gridCode
+          updateCellAudioParams(tower.distance, cellServiceMesh.gridCode);
+
       });
   } else {
       console.log('No cell towers found or dead zone!');
       cellRayCleanup(maxCellTowerRays);
   }
 }
+
+function updateCellAudioParams(distance, gridCode) {
+  const normalizedDistance = normalizeCellRayDistance(distance);
+  switch(gridCode) {
+    case 0:
+      // Adjust parameters for gridCode 1
+      console.log('case 0!!!!!!!!!')
+      synths.membraneSynth.set({
+        detune: -100 * normalizedDistance,
+        volume: Tone.gainToDb(1 - normalizedDistance)
+      });
+      break;
+    case 1:
+      // Adjust parameters for gridCode 2
+      console.log('case 1!')
+      synths.droneSynth.set({
+        harmonicity: 1.5 * normalizedDistance,
+        volume: Tone.gainToDb(0.5 - normalizedDistance)
+      });
+      synths.noiseSynth.set({
+        playbackRate: 1 + normalizedDistance,
+        volume: Tone.gainToDb(normalizedDistance)
+      });
+      break;
+  }
+}
+
+function normalizeCellRayDistance(distance) {
+  // Normalize distance based on your application's specific range
+  return Math.min(Math.max(0, (distance - 100) / (1000 - 100)), 1);
+}
+
+
 
 let currentRayLines = [];
 let lastTowerId = null; // tower focus init
@@ -1448,35 +1520,12 @@ function findNearestCellTowers(intersectPoint, maxCellTowerRays = 1) {
   return towers.sort((a, b) => a.distance - b.distance).slice(0, maxCellTowerRays);
 }
 
-  
-
-// function triggerMembraneSynthBasedOnTowerChange() {
-//   // Determine the distance for the last focused tower or a default value
-//   let distance = lastTowerId ? calculateDistanceForTower(lastTowerId) : 100; // Example distance
-//   let note = mapDistanceToPitch(distance);
-//   safeTriggerSound(membraneSynth, note, "16n");
-// }
-
 function triggerMembraneSynth(distance) {
   const note = DmalkosRandomNote(); 
   safeTriggerSound(membraneSynth, note, "0.15"); 
   console.log(`triggering " + ${note}`); // Log the same note
 }
 
-function triggerCellPing(distance) {
-  // let note = mapDistanceToPitch(distance);
-  safeTriggerSound(cellPing, "A1", "16n"); 
-}
-
-
-
-function mapProximityToMembraneFrequency(proximity) {
-  // Assuming proximity ranges from 0 (close) to 1 (far)
-  // Map this range to a suitable frequency range for the high-pass filter
-  const minFreq = 500; // Minimum frequency
-  const maxFreq = 5000; // Maximum frequency
-  return minFreq + (maxFreq - minFreq) * proximity;
-}
 
 
 function getSortedCellRayDistances() {
@@ -1576,7 +1625,7 @@ function updateDroneSynthBasedOnShortestRay() {
       updateParamsBasedOnDistFM(synths.radioTuner, null, shortestDistance, nearestVertexDistance);
       updateParamsBasedOnDistFM(synths.noiseTuner, null, shortestDistance, nearestVertexDistance);
   } else {
-      transitionToRestingState();
+      transitionToFMRestingState();
   }
 }
 
@@ -1958,7 +2007,7 @@ function handleRaycasters(camera, scene) {
           const raycaster = new THREE.Raycaster();
           const rayOrigin = updateRaycasterOriginForTilt(camera, controls);
           raycaster.set(rayOrigin, new THREE.Vector3(0, 0, -1));
-          raycaster.params.Points.threshold = 0.275;
+          raycaster.params.Points.threshold = 0.175;
 
           const visibleChildren = group.children.filter(child => child.visible);
           const intersections = raycaster.intersectObjects(visibleChildren, true);
@@ -1984,7 +2033,7 @@ function handleRaycasters(camera, scene) {
               if (key === 'fmTransmitterPoints') {
 
                 // drone to resting state
-                transitionToRestingState();
+                transitionToFMRestingState();
 
                 // remove rays
                 clearFMrays();
@@ -2338,6 +2387,8 @@ function toggleMapScene(switchState, source) {
         raycasterDict.cellTransmitterPoints.enabled = false;
         activeSynthType = 'analogChannel';
         channelSlider.style.visibility = "visible";
+        // synths.droneSynth.triggerRelease(Tone.now()+ 0.1)
+        synths.droneSynth.triggerAttack("F2");
 
 
         if (lastChannelFilter !== null) {
@@ -2356,6 +2407,9 @@ function toggleMapScene(switchState, source) {
         raycasterDict.cellTransmitterPoints.enabled = true;
         raycasterDict.fmTransmitterPoints.enabled = false;
         activeSynthType = 'digitalChannel';
+        // synths.droneSynth.triggerRelease(Tone.now()+ 0.1)
+        synths.droneSynth.triggerAttack("A3");
+
         channelSlider.style.visibility = "hidden";
 
         Object.keys(fmContourGroups).forEach(groupId => {
@@ -3074,11 +3128,11 @@ function logMeshData(group) {
         Object.keys(groups).forEach(gridCode => {
           const pointsForDelaunay = groups[gridCode];
           const pointsMaterial = new THREE.PointsMaterial({
-            // size: 5,
+            size: 1,
             // color: accessibilityColorRamp(parseInt(gridCode)),
             // opacity: accessibilityOpacityRamp(parseInt(gridCode)),
             transparent: false,
-            visible: false,
+            visible: true,
           });
           const pointsGeometry = new THREE.BufferGeometry().setFromPoints(pointsForDelaunay);
           const points = new THREE.Points(pointsGeometry, pointsMaterial);
