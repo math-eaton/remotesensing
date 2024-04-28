@@ -33,6 +33,7 @@ export function gfx() {
   let fmPropagationPolygons = new THREE.Group();
   let waterPolys = new THREE.Group();
   let cellServiceMesh = new THREE.Group();
+  let cellServiceRayMesh = new THREE.Group();
   let accessibilityMesh = new THREE.Group();
   let accessibilityHex = new THREE.Group();
   let analysisArea = new THREE.Group();
@@ -44,6 +45,7 @@ export function gfx() {
   fmPropagationContours.visible = true;
   fmPropagationPolygons.visible = false;
   cellServiceMesh.visible = true;
+  cellServiceRayMesh.visible = true;
   cellTransmitterPoints.visible = true;
   cellMSTLines.visible = true;
   elevContourLines.visible = true;
@@ -109,7 +111,7 @@ export function gfx() {
     // middleElevationColor: "#00ff00", // Green
     // highestElevationColor: "#ff0000", // Red
     mstFmColor: '#FF5F1F', 
-    boundingBoxColor: '#3d3d3d',
+    boundingBoxColor: '#b80000',
     coastlineColor: '#303030',
     // contoursLabelColor: '#00ff00',
     // cellColor: '#ffffff',
@@ -288,20 +290,20 @@ function setupFx() {
           type: "peaking",
           frequency: 2110,
           Q: 1.0,
-          gain: 10
+          gain: 15
       });
       midBoost.connect(eq.mid);
   
       const highPass = new Tone.Filter({
           type: "highpass",
-          frequency: 300,
+          frequency: 700,
           Q: 0.7
       });
       highPass.connect(midBoost);
   
       const lowPass = new Tone.Filter({
           type: "lowpass",
-          frequency: 4000,
+          frequency: 3300,
           Q: 0.7
       });
       lowPass.connect(highPass);
@@ -1379,12 +1381,12 @@ function monitorSynths() {
     // 3: draw a line to the nearest cell tower at all times
     // method: nearest CELL TRANSMITTER vertex
     // cellTransmitterPoints: { group: cellTransmitterPoints, enabled: false, onIntersect: raycastCellTower },
-    cellTransmitterPoints: { group: cellServiceMesh, enabled: false, onIntersect: raycastCellServiceVertex },
+    cellTransmitterPoints: { group: cellServiceRayMesh, enabled: false, onIntersect: raycastCellServiceVertex },
     // 4: play a 'radio station' signal
     // method: distance from PROPAGATION POLYGON edge to centroid
     fmTransmitterPoints: { group: fmPropagationPolygons, enabled: false, onIntersect: raycastFMpolygon },
     cameraCenter: { 
-      group: cellServiceMesh,  // terrain proxy 
+      group: cellServiceRayMesh,  // terrain proxy 
       enabled: true,  // always enabled
       onIntersect: () => printCameraCenterCoordinates(camera)  // this function prints coords to a text div
 }
@@ -1402,15 +1404,15 @@ function raycastCellServiceVertex(intersection, maxCellTowerRays = 1) {
 
   console.log("Intersected gridCode:", gridCode);  // Log the current gridCode at intersection
 
-
   if (nearestTowers.length > 0) {
-      nearestTowers.forEach(tower => {
-          drawcellRayLine(intersectPoint, tower.position, maxCellTowerRays, tower.uniqueCellid, cellServiceMesh.gridCode, tower.distance, currentColor);
+      // Only use the nearest tower for audio parameters and ray drawing
+      const nearestTower = nearestTowers[0];
+      console.log("nearest tower: ", JSON.stringify(nearestTower.distance))
 
-          // Update audio parameters based on distance and gridCode
-          updateCellAudioParams(tower.distance, cellServiceMesh.gridCode);
+      drawcellRayLine(intersectPoint, nearestTower.position, maxCellTowerRays, nearestTower.uniqueCellid, cellServiceMesh.gridCode, nearestTower.distance, currentColor);
 
-      });
+      // Update audio parameters based on distance and gridCode of the nearest tower
+      updateCellAudioParams(Math.round(nearestTower.distance,0), cellServiceMesh.gridCode);
   } else {
       console.log('No cell towers found or dead zone!');
       cellRayCleanup(maxCellTowerRays);
@@ -1418,32 +1420,29 @@ function raycastCellServiceVertex(intersection, maxCellTowerRays = 1) {
 }
 
 function updateCellAudioParams(distance, gridCode) {
-  const normalizedDistance = normalizeCellRayDistance(distance);
+  const cellRayMeters = distance;
+  console.log(cellRayMeters)
   switch(gridCode) {
-    case 0:
-      // Adjust parameters for gridCode 1
-      console.log('case 0!!!!!!!!!')
-      synths.membraneSynth.set({
-        detune: -100 * normalizedDistance,
-        volume: Tone.gainToDb(1 - normalizedDistance)
-      });
-      break;
-    case 1:
-      // Adjust parameters for gridCode 2
-      console.log('case 1!')
-      synths.droneSynth.set({
-        harmonicity: 1.5 * normalizedDistance,
-        volume: Tone.gainToDb(0.5 - normalizedDistance)
-      });
-      synths.noiseSynth.set({
-        playbackRate: 1 + normalizedDistance,
-        volume: Tone.gainToDb(normalizedDistance)
-      });
-      break;
+      case 0:
+          synths.membraneSynth.set({
+              detune: -100 * cellRayMeters,
+              volume: Tone.gainToDb(1 - cellRayMeters)
+          });
+          break;
+      case 1:
+          synths.droneSynth.set({
+              harmonicity: 1.5 * cellRayMeters,
+              volume: Tone.gainToDb(0.5 - cellRayMeters)
+          });
+          synths.noiseSynth.set({
+              playbackRate: 1 + cellRayMeters,
+              volume: Tone.gainToDb(cellRayMeters)
+          });
+          break;
   }
 }
 
-function normalizeCellRayDistance(distance) {
+function normalizedCellRayDistance(distance) {
   // Normalize distance based on your application's specific range
   return Math.min(Math.max(0, (distance - 100) / (1000 - 100)), 1);
 }
@@ -1671,12 +1670,12 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
 
     // only primary sample player
   } else if (audioComponent === synths.radioTuner) {
-    audioComponent.volume.rampTo(targetSampleVolume_log + .05, 0.45);
+    audioComponent.volume.rampTo(targetSampleVolume_log - 0.5, 0.45);
 
     // Conditional logic based on the threshold
-    if (normalizedDistance < 0.45) {
+    if (normalizedDistance < 0.3) {
       // Check if just crossing below the threshold
-      if (previousNormalizedDistance >= 0.45) {
+      if (previousNormalizedDistance >= 0.3) {
         // Switch to normal playback settings
         audioComponent.set({
           grainSize: 1.0,
@@ -2023,7 +2022,7 @@ function handleRaycasters(camera, scene) {
 
               intersections.forEach(intersection => {
                   printCameraCenterCoordinates(intersection.point);
-                  raycasterReticule.position.set(intersection.point.x, intersection.point.y, intersection.point.z);
+                  raycasterReticule.position.set(intersection.point.x, intersection.point.y, intersection.point.z + 0.01);
                   raycasterReticule.material.color.set(currentColor);
                   if (!raycasterReticule.parent) {
                       scene.add(raycasterReticule);
@@ -2388,7 +2387,8 @@ function toggleMapScene(switchState, source) {
         activeSynthType = 'analogChannel';
         channelSlider.style.visibility = "visible";
         // synths.droneSynth.triggerRelease(Tone.now()+ 0.1)
-        synths.droneSynth.triggerAttack("F2");
+        synths.droneSynth.triggerAttack("F2", Tone.now() + 0.2);
+        // safeTriggerSound(droneSynth, "F2", "0.5"); 
 
 
         if (lastChannelFilter !== null) {
@@ -2408,7 +2408,8 @@ function toggleMapScene(switchState, source) {
         raycasterDict.fmTransmitterPoints.enabled = false;
         activeSynthType = 'digitalChannel';
         // synths.droneSynth.triggerRelease(Tone.now()+ 0.1)
-        synths.droneSynth.triggerAttack("A3");
+        synths.droneSynth.triggerAttack("A3", Tone.now() + 0.2);
+        // safeTriggerSound(droneSynth, "A3", "0.5"); 
 
         channelSlider.style.visibility = "hidden";
 
@@ -2966,6 +2967,7 @@ function logMeshData(group) {
       try {
         // Reset/clear the group to avoid adding duplicate meshes
         cellServiceMesh.clear();
+        cellServiceRayMesh.clear();  // Additional mesh group for raycasting
 
         // Downsample and group points by 'group_ID'
         const groups = {};
@@ -2986,13 +2988,14 @@ function logMeshData(group) {
         // Process each grid_code group separately
         Object.keys(groups).forEach((gridCode) => {
           const pointsForDelaunay = groups[gridCode];
+          const flatPointsForDelaunay = pointsForDelaunay.map(p => new THREE.Vector3(p.x, p.y, 0)); // Clone for flat mesh
   
           var delaunay = Delaunator.from(
             pointsForDelaunay.map((p) => [p.x, p.y]),
           );
           var meshIndex = [];
           // set triangulation distance threshold to avoid connecting distant pts
-          const thresholdDistance = 0.075; 
+          const thresholdDistance = 0.15; 
 
           for (let i = 0; i < delaunay.triangles.length; i += 3) {
             const p1 = pointsForDelaunay[delaunay.triangles[i]];
@@ -3013,13 +3016,14 @@ function logMeshData(group) {
             }
           }
 
-          var geom = new THREE.BufferGeometry().setFromPoints(
-            pointsForDelaunay,
-          );
+          var geom = new THREE.BufferGeometry().setFromPoints(pointsForDelaunay);
           geom.setIndex(meshIndex);
           geom.computeVertexNormals();
-          
-
+        
+          var flatGeom = new THREE.BufferGeometry().setFromPoints(flatPointsForDelaunay); // Geometry for flat mesh
+          flatGeom.setIndex(meshIndex);
+          flatGeom.computeVertexNormals();
+                  
           // unique symbols based on grid_code
           let wireframeMaterial, fillMaterial;
           switch (gridCode) {
@@ -3108,23 +3112,28 @@ function logMeshData(group) {
 
           // Create mesh with the wireframe material
           var wireframeMesh = new THREE.Mesh(geom, wireframeMaterial);
-          // wireframeMesh.name = 'wireframeMesh-' + gridCode;
+          var flatWireframeMesh = new THREE.Mesh(flatGeom, wireframeMaterial);
+                  // wireframeMesh.name = 'wireframeMesh-' + gridCode;
 
           // add metadata to the meshes for raycaster triggers
           fillMesh.userData.gridCode = gridCode;
           wireframeMesh.userData.gridCode = gridCode;
+          flatWireframeMesh.userData.gridCode = gridCode;
 
           // Group to hold both meshes
           var group = new THREE.Group();
           group.add(wireframeMesh);
           group.add(fillMesh);
 
-
+          var flatGroup = new THREE.Group();
+          flatGroup.add(flatWireframeMesh);
+        
           // Add the group to the cellServiceMesh group
           cellServiceMesh.add(group);
+          cellServiceRayMesh.add(flatGroup); // Make sure this line is within the forEach loop
         });
 
-        // create points group for raycasting / sound triggers only
+        // // create points group for raycasting / sound triggers only
         Object.keys(groups).forEach(gridCode => {
           const pointsForDelaunay = groups[gridCode];
           const pointsMaterial = new THREE.PointsMaterial({
@@ -3139,22 +3148,26 @@ function logMeshData(group) {
 
           points.userData = { gridCode, vertices: pointsForDelaunay };
 
-          var group = new THREE.Group();
-          group.add(points);  // Add points directly to the group
+          var pointsGroup = new THREE.Group();
+          pointsGroup.add(points);  // Add points directly to the group
 
-          cellServiceMesh.add(group);
+          // cellServiceMesh.add(pointsGroup);
+
+
         });
+        
 
 
-        // Add the cellServiceMesh group to the scene
         scene.add(cellServiceMesh);
+        scene.add(cellServiceRayMesh); // Add the flat mesh group to the scene
 
+  
         // report on group geom types
         // logMeshData(cellServiceMesh);
 
 
 
-        resolve(cellServiceMesh); // Optionally return the group for further manipulation
+        resolve({ cellServiceMesh, cellServiceRayMesh }); // Optionally return both groups
       } catch (error) {
         reject(`Error in addCellServiceMesh: ${error.message}`);
       }
@@ -3297,6 +3310,16 @@ function logMeshData(group) {
             side: THREE.DoubleSide,
             visible: true
           });
+          const flatMaterial = new THREE.MeshBasicMaterial({
+            color: gridCodeColor,
+            opacity: accessibilityOpacity * 1.5,
+            wireframe: true,
+            transparent: true,
+            alphaHash: true,
+            side: THREE.DoubleSide,
+            visible: true
+          });
+
   
           var fillMesh = new THREE.Mesh(geom, fillMaterial);
           var wireframeMesh = new THREE.Mesh(geom, wireframeMaterial);
@@ -4090,9 +4113,9 @@ function addCellTowerPts(geojson) {
         const material = new THREE.MeshBasicMaterial({
           color: colorScheme.boundingBoxColor, // Use the existing color scheme
           wireframe: false,
-          transparent: true,
-          opacity: 0.1,
-          side: THREE.FrontSide // Render both sides of the polygon
+          transparent: false,
+          opacity: 1,
+          side: THREE.DoubleSide // Render both sides of the polygon
         }); // bounding box color
 
         geojson.features.forEach((feature) => {
@@ -4296,6 +4319,7 @@ async function loadAllData() {
       'src/assets/data/accessService_contours_5KM_pts_20240407.geojson',
       // 'src/assets/data/AccessHexTesselation_lvl5_nodata.geojson',
       // 'src/assets/sounds/presets.json',
+      'src/assets/data/study_area_admin0clip.geojson'
     ];
 
     try {
@@ -4389,6 +4413,7 @@ async function loadAllData() {
         cellServiceGeojsonData = data;
         addCellServiceMesh(data);
         digitalGroup.add(cellServiceMesh);
+        digitalGroup.add(cellServiceRayMesh);
         break;
 
       case 'src/assets/data/accessService_contours_5KM_pts_20240407.geojson':
@@ -4444,6 +4469,12 @@ async function loadAllData() {
         waterPolyGeojsonData = data;
         // addWaterPoly(data);
         break;
+
+      case 'src/assets/data/study_area_admin0clip.geojson':
+        boundingBoxGeojsonData = data;
+        // visualizeBoundingBoxGeoJSON(data);
+        break;
+    
   
       case 'src/assets/data/fm_freq_dict.json':
         fmFreqDictionaryJson = data;
