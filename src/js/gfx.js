@@ -223,56 +223,85 @@ const DmalkosRandomNote = createRandomNoteSelector("D malkos raga", 50); // N% v
   // synth init
   let synth, synths;
   let synthPresets = {};
-  let droneSynth, droneLP, droneHP; 
+  let droneSynth, droneLP, droneHP, droneBP; 
   let radioTuner, ToneAudioBuffer
   let sampleUrls = [];  // radio tuner URLs
   let membraneSynth, membraneHP;
-  let noiseSynth, noiseFilter;
+  let noiseSynth, noiseHP, noiseBP;
   let globalVolume, reverbSend, pitchLFO;
   let meter = new Tone.Meter();
 
-  // fx init
-  function setupFx() {
-    // Initialize volume and dynamic range processors
-    globalVolume = new Tone.Volume().toDestination();
-    let limiter = new Tone.Limiter(-5);
 
-    // Setup compressor
-    let compressor = new Tone.Compressor({
-        threshold: -2,  // dB value where compression starts
-        ratio: 6,        // Input/output ratio for signals above the threshold
-        attack: 0.003,   // Time taken to apply compression
-        release: 0.25    // Time taken to release compression
-    });
+// fx init
+function setupFx() {
+  // Initialize volume and dynamic range processors
+  globalVolume = new Tone.Volume().toDestination();
+  let limiter = new Tone.Limiter(-5);
 
-    // let tremolo = new Tone.Tremolo(9, 0.75).connect(reverbSend).start()
+  // Setup compressor
+  let compressor = new Tone.Compressor({
+      threshold: -2,  
+      ratio: 6,        
+      attack: 0.003,   
+      release: 0.25    
+  });
 
-    // Setup reverb
-    reverbSend = new Tone.Reverb({ 
-        decay: 3,
-        preDelay: 0.15
-    }).toDestination();
-    reverbSend.wet.value = 0.1;
+  // Setup reverb
+  reverbSend = new Tone.Reverb({ 
+      decay: 3,
+      preDelay: 0.15
+  }).toDestination();
+  reverbSend.wet.value = 0.1;
 
-    // Routing audio signals through effects
-    globalVolume.chain(compressor, limiter, meter); // Connect the global volume to the compressor, then to the limiter
-    limiter.toDestination(); // Ensure limiter is connected to the final audio output
+  // Routing audio signals through effects
+  const outputEQ = createRadioEQ();  // Create the AM radio EQ effect
+  outputEQ.connect(globalVolume);    // Connect EQ before the global volume in the routing chain
 
-    // Connect reverb to the global volume
-    reverbSend.connect(globalVolume);
+  globalVolume.chain(compressor, limiter);  // Update the routing
+  limiter.toDestination();                  // Ensure limiter is connected to the final audio output
 
-    // Initialize and configure the LFO for pitch modulation
-    pitchLFO = new Tone.LFO({
-      frequency: 0.5, // Frequency of LFO in Hz
-      type: 'sine', // Waveform type of the LFO
-      min: -1, // Min value for modulation
-      max: 1 // Max value for modulation
-    });
-    
-    
-    
+  // Connect reverb to the global volume
+  reverbSend.connect(globalVolume);
+
+  // Initialize and configure the LFO for pitch modulation
+  pitchLFO = new Tone.LFO({
+    frequency: 0.5,
+    type: 'sine',
+    min: -1,
+    max: 1
+  });
 }
 
+  // output EQ for vibes
+  function createRadioEQ() {
+    const eq = new Tone.EQ3({
+        low: -48,       
+        mid: 0,         
+        high: -48       
+    });
+  
+    const midBoost = new Tone.Filter({
+        type: "peaking",
+        frequency: 2110,  
+        Q: 1.0,          
+        gain: 10         
+    }).connect(eq.mid);
+  
+    const highPass = new Tone.Filter({
+        type: "highpass",
+        frequency: 300,  
+        Q: 0.7           
+    }).connect(midBoost);
+  
+    const lowPass = new Tone.Filter({
+        type: "lowpass",
+        frequency: 4000, 
+        Q: 0.7           
+    }).connect(highPass);
+  
+    return lowPass;  // Return the first filter in the chain
+  }
+  
 /////////////////////////////////////////////
 /// init each sound source here /////////////
 ////////////////////////////////////////////
@@ -303,27 +332,37 @@ function setupDroneSynth() {
       volume: 0,
   });
 
-  // Initialize LP
+// init drone filters
+
+  droneHP = new Tone.Filter({
+    type: 'highpass',
+    frequency: 50,  // Starting cutoff frequency
+    rolloff: -12,
+    Q: 4,
+  });
+
+
   droneLP = new Tone.Filter({
       type: 'lowpass',
-      frequency: 100,  // Starting cutoff frequency
+      frequency: 200,  // Starting cutoff frequency
       rolloff: -96,
       Q: 0,
   });
 
-  // Connect the synth to the filter then reverb
-  droneSynth.connect(droneLP);
 
-    // Initialize HP
-    droneHP = new Tone.Filter({
-      type: 'highpass',
-      frequency: 1000,  // Starting cutoff frequency
-      rolloff: -24,
-      Q: 2,
+  droneBP = new Tone.Filter({
+    type: 'peaking',
+    frequency: 300,
+    rolloff: -24,
+    Q: 4
   });
 
+
+  // filters -> reverb
+  droneSynth.connect(droneHP);
   droneHP.connect(droneLP);
-  droneLP.connect(reverbSend);
+  droneLP.connect(droneBP);
+  droneBP.connect(reverbSend);
 
 
   // Trigger continuous note
@@ -344,7 +383,7 @@ function setupRadioTuner() {
   radioTuner = new Tone.GrainPlayer({
      // url: "src/assets/sounds/iddqd_loopy.WAV",
      url: sampleBuffers[0], // Start with the first preloaded buffer
-     loop: true,
+     loop: false,
      grainSize: 1, 
      overlap: 0,
      drift: 0, // Random timing variations between grains
@@ -352,6 +391,13 @@ function setupRadioTuner() {
      detune: 0,
      volume: Tone.gainToDb(0)
  }).connect(reverbSend);
+
+//  radioTuner.on("end", () => {
+//   console.log("Sample ended, loading a new random sample.");
+//   const newIndex = getRandomSampleIndex();
+//   changeSampleToIndex(newIndex);
+// });
+
 
  radioTuner.autoStart = true;
 
@@ -373,8 +419,31 @@ function setupRadioTuner() {
 
 
  radioTuner.connect(reverbSend); 
+
+ scheduleNextSample(radioTuner.buffer.duration);
+
  return radioTuner;
 }
+
+function scheduleNextSample(duration) {
+  setTimeout(() => {
+    const newIndex = getRandomSampleIndex();
+    changeSampleToIndex(newIndex);
+  }, duration * 1000 / radioTuner.playbackRate); // duration needs to be adjusted by the playback rate
+}
+
+
+// function monitorPlayback(radioTuner) {
+//   const checkInterval = 100; // Check every 100 ms
+//   const intervalId = setInterval(() => {
+//     if (!radioTuner.playing) {
+//       clearInterval(intervalId);
+//       const newIndex = getRandomSampleIndex();
+//       changeSampleToIndex(newIndex);
+//     }
+//   }, checkInterval);
+// }
+
 
 // playback init with check for sample load
 function checkAndStartPlayback() {
@@ -396,12 +465,24 @@ function getRandomSampleIndex(excludeIndex) {
   return newIndex;
 }
 
-
 function changeSampleToIndex(index) {
   currentSampleIndex = index;
-  checkAndStartPlayback();
-  console.log(`Switched to sample: ${currentSampleIndex}`);
+  const currentBuffer = sampleBuffers[currentSampleIndex];
+  if (currentBuffer && currentBuffer.loaded) {
+    radioTuner.buffer = currentBuffer.buffer;
+    radioTuner.start(Tone.now() + 0.1);
+    console.log('Switched to sample: ', currentSampleIndex);
+  } else {
+    console.log('Sample not loaded yet. Cannot switch.');
+  }
 }
+
+
+// function changeSampleToIndex(index) {
+//   currentSampleIndex = index;
+//   checkAndStartPlayback();
+//   console.log(`Switched to sample: ${currentSampleIndex}`);
+// }
 
 function updatePolygonSampleMap(uniqueId) {
   if (!polygonSampleMap.has(uniqueId)) {
@@ -523,29 +604,46 @@ function setupMembraneSynth() {
 
 function setupNoiseSynth() {
   noiseSynth = new Tone.NoiseSynth({
-      envelope: {
-          attack: 1, // Quick attack for a sharp percussive sound
-          decay: 0.4,
-          sustain: 0.01,
-          release: 1.4
+      volume: -20,
+      noise: {
+          type: 'pink'
       },
-      volume: -10 
+      envelope: {
+          attack: 0.5,
+          decay: 0,
+          sustain: 1,
+          release: 0.5
+      }
   });
 
-  noiseFilter = new Tone.Filter({
-      type: 'highpass', // High-pass filter might suit percussive elements better
-      frequency: 6000, // Starting cutoff frequency
+  noiseHP = new Tone.Filter({
+      type: 'highpass',
+      frequency: 2000,
       Q: 2
   });
 
-  // Connect the synth to the filter and then to the shared reverb
-  noiseSynth.connect(membraneHP);
-  noiseFilter.connect(reverbSend);
+  noiseBP = new Tone.Filter({
+    type: 'bandpass',
+    frequency: 5000,
+    Q: 1
+  });
 
-  // noiseFilter.toDestination();
-  return noiseSynth
+
+  noiseSynth.connect(noiseHP);
+  noiseHP.connect(noiseBP);
+  noiseBP.connect(reverbSend);
+  noiseSynth.triggerAttack(); // drone env
+
+  return noiseSynth;
 }
 
+// function stopNoiseSynth() {
+//   noiseSynth.triggerRelease();
+// }
+
+// function startNoiseSynth() {
+//   noiseSynth.triggerAttack();
+// }
 
 
 // audio mixer !
@@ -724,10 +822,16 @@ function transitionToRestingState() {
   // Ensure to ramp back to a resting state smoothly
   droneSynth.harmonicity.rampTo(1, 1);
   droneSynth.volume.rampTo(Tone.gainToDb(0.75), 0.75);
-  droneLP.frequency.rampTo(300, 1);
+  droneLP.frequency.rampTo(450, 1);
   droneLP.Q.rampTo(3, 1);
+  droneBP.frequency.rampTo(100, 3);
+  droneBP.Q.rampTo(20, 1);
   // droneHP.frequency.rampTo(1000, 1);
   // droneHP.Q.rampTo(4, 1);
+
+  noiseSynth.volume.rampTo(Tone.gainToDb(0.15), 0.75);
+  noiseBP.frequency.rampTo(666,5);
+  noiseBP.Q.rampTo(0,2);
 
 
   if (synths.radioTuner) {
@@ -1474,7 +1578,7 @@ function updateDroneSynthBasedOnShortestRay() {
 }
 
 let previousNormalizedDistance = 1; // 1.0 is ideally fm poly edge
-
+// sampler tuning on contour traversal
 function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDistance, nearestVertexDistance) {
   // Normalize distance calculation against the nearest vertex distance
   const normalizedDistance = Math.max(0, Math.min(1, (shortestDistance / nearestVertexDistance - 0.01) / (2 - 0.01)) - 0.15); // minus 0.15 constant
@@ -1501,9 +1605,8 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
 
   // only drone
   if (audioComponent === synths.droneSynth) {
-    audioComponent.volume.rampTo(Tone.gainToDb(normalizedDistance / 2), 0.5);
+    audioComponent.volume.rampTo(Tone.gainToDb(normalizedDistance / 2.5), 0.5);
     // console.log(audioComponent.volume)
-    // Specific adjustments for droneSynth to maintain its sonic character
     audioComponent.harmonicity.rampTo((1 - (normalizedDistance)), 0.5);
 
     pitchLFO.min = -scaledDepth;
@@ -1518,9 +1621,9 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
     audioComponent.volume.rampTo(targetVolume_log, 0.5);
 
     // Conditional logic based on the threshold
-    if (normalizedDistance < 0.40) {
+    if (normalizedDistance < 0.5) {
       // Check if just crossing below the threshold
-      if (previousNormalizedDistance >= 0.40) {
+      if (previousNormalizedDistance >= 0.5) {
         // Switch to normal playback settings
         audioComponent.set({
           grainSize: 1.0,
@@ -1537,6 +1640,12 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
         drift: Math.exp(1 - normalizedDistance) / 10
       });
     }
+
+    // pink noise 
+    let noiseVolume = Tone.gainToDb(1 - targetVolume_log) - 45; 
+    synths.noiseSynth.volume.rampTo(noiseVolume, 0.5);
+    noiseHP.frequency.rampTo(targetCutoff, 0.5);
+
 
     // Update previousNormalizedDistance for the next call
     previousNormalizedDistance = normalizedDistance;
