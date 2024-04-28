@@ -378,12 +378,11 @@ let currentSampleIndex = 0; // Track the index of the current sample
 let lastIntersectedIds = new Set(); // to keep track of FM propagation polys
 const polygonSampleMap = new Map();
 const maxEntries = 20;
-
 function setupRadioTuner() {
   radioTuner = new Tone.GrainPlayer({
      // url: "src/assets/sounds/iddqd_loopy.WAV",
      url: sampleBuffers[0], // Start with the first preloaded buffer
-     loop: false,
+     loop: true,
      grainSize: 1, 
      overlap: 0,
      drift: 0, // Random timing variations between grains
@@ -391,60 +390,22 @@ function setupRadioTuner() {
      detune: 0,
      volume: Tone.gainToDb(0)
  }).connect(reverbSend);
-
-//  radioTuner.on("end", () => {
-//   console.log("Sample ended, loading a new random sample.");
-//   const newIndex = getRandomSampleIndex();
-//   changeSampleToIndex(newIndex);
-// });
-
-
  radioTuner.autoStart = true;
-
  radioTuner.onload = () => {
      console.log('radioTuner sample loaded successfully');
      if (typeof lastChannelValue === 'number') {
          updatePlaybackPosition(lastChannelValue);
      }
  };
-
  radioTuner.onerror = (e) => {
      console.error('Failed to load the radioTuner sample:', e);
  };
-
  radioTuner.fadeIn = 0.1;
  radioTuner.fadeOut = 0.1;
-
 //  setInterval(changeSample, 5000); // Change radio samples every N ms
-
-
  radioTuner.connect(reverbSend); 
-
- scheduleNextSample(radioTuner.buffer.duration);
-
  return radioTuner;
 }
-
-function scheduleNextSample(duration) {
-  setTimeout(() => {
-    const newIndex = getRandomSampleIndex();
-    changeSampleToIndex(newIndex);
-  }, duration * 1000 / radioTuner.playbackRate); // duration needs to be adjusted by the playback rate
-}
-
-
-// function monitorPlayback(radioTuner) {
-//   const checkInterval = 100; // Check every 100 ms
-//   const intervalId = setInterval(() => {
-//     if (!radioTuner.playing) {
-//       clearInterval(intervalId);
-//       const newIndex = getRandomSampleIndex();
-//       changeSampleToIndex(newIndex);
-//     }
-//   }, checkInterval);
-// }
-
-
 // playback init with check for sample load
 function checkAndStartPlayback() {
   const currentBuffer = sampleBuffers[currentSampleIndex];
@@ -456,7 +417,6 @@ function checkAndStartPlayback() {
       console.error('Attempted to play a sample that is not loaded yet.');
   }
 }
-
 function getRandomSampleIndex(excludeIndex) {
   let newIndex = Math.floor(Math.random() * sampleBuffers.length);
   while (newIndex === excludeIndex) {
@@ -464,26 +424,11 @@ function getRandomSampleIndex(excludeIndex) {
   }
   return newIndex;
 }
-
 function changeSampleToIndex(index) {
   currentSampleIndex = index;
-  const currentBuffer = sampleBuffers[currentSampleIndex];
-  if (currentBuffer && currentBuffer.loaded) {
-    radioTuner.buffer = currentBuffer.buffer;
-    radioTuner.start(Tone.now() + 0.1);
-    console.log('Switched to sample: ', currentSampleIndex);
-  } else {
-    console.log('Sample not loaded yet. Cannot switch.');
-  }
+  checkAndStartPlayback();
+  console.log(`Switched to sample: ${currentSampleIndex}`);
 }
-
-
-// function changeSampleToIndex(index) {
-//   currentSampleIndex = index;
-//   checkAndStartPlayback();
-//   console.log(`Switched to sample: ${currentSampleIndex}`);
-// }
-
 function updatePolygonSampleMap(uniqueId) {
   if (!polygonSampleMap.has(uniqueId)) {
       if (polygonSampleMap.size >= maxEntries) {
@@ -497,7 +442,6 @@ function updatePolygonSampleMap(uniqueId) {
   }
   return polygonSampleMap.get(uniqueId);
 }
-
 function getRandomSampleIndex() {
   let newIndex;
   do {
@@ -505,20 +449,17 @@ function getRandomSampleIndex() {
   } while (sampleBuffers[newIndex] && sampleBuffers[newIndex].buffer === radioTuner.buffer);
   return newIndex;
 }
-
 // update FM radio player based on slider tuning
 function updatePlaybackPosition(channelValue) {
   const sampleDuration = radioTuner.buffer.duration;
   const newPosition = (channelValue / 100) * sampleDuration;
   const currentTime = Tone.now();
   const nextTime = getNextEventTime(currentTime);
-
   // Ensure the new position is scheduled correctly
   if (nextTime < currentTime) {
       console.warn('Adjusted nextTime to avoid scheduling error.');
       nextTime = currentTime + 0.1;
   }
-
   // Start or change playback
   radioTuner.start(nextTime, newPosition);
 }
