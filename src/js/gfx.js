@@ -230,8 +230,9 @@ const DmalkosRandomNote = createRandomNoteSelector("D malkos raga", 50); // N% v
   let noiseTuner;
   let sampleUrls = [];  // radio tuner URLs
   let membraneSynth, membraneHP;
-  let noiseSynth, noiseHP, noiseBP;
+  let noiseSynth, noiseHP, noiseBP, noiseLP;
   let globalVolume, reverbSend, pitchLFO;
+  let bitCrusher;
   let meter = new Tone.Meter();
   let outputEQ = createRadioEQ();  // Create the AM radio EQ effect
 
@@ -262,12 +263,15 @@ function setupFx() {
   }).connect(globalVolume);
   reverbSend.wet.value = 0.1;
 
-
   // Connect reverb to the global volume
   outputEQ.connect(reverbSend);    // Connect EQ before the global volume in the routing chain
 
-  globalVolume.chain(compressor, limiter);  // Update the routing
-  limiter.toDestination();                  // Ensure limiter is connected to the final audio output
+  bitCrusher = new Tone.BitCrusher(16); 
+  reverbSend.connect(bitCrusher);
+  bitCrusher.connect(globalVolume); // Connect the BitCrusher to the global volume
+
+  globalVolume.chain(meter, compressor, limiter);  // Update the routing
+  limiter.toDestination();               
 
 
   // Initialize and configure the LFO for pitch modulation
@@ -428,7 +432,7 @@ function checkAndStartPlayback() {
   const currentBuffer = sampleBuffers[currentSampleIndex];
   if (currentBuffer && currentBuffer.loaded) {
       radioTuner.buffer = currentBuffer.buffer;
-      radioTuner.start(Tone.now() + 0.1);
+      radioTuner.start(Tone.now());
       console.log('Playback started with loaded buffer.');
   } else {
       console.error('Attempted to play a sample that is not loaded yet.');
@@ -441,18 +445,18 @@ function getRandomSampleIndex(excludeIndex) {
   }
   return newIndex;
 }
-// function changeSampleToIndex(index) {
-//   currentSampleIndex = index;
-//   checkAndStartPlayback();
-//   console.log(`Switched to sample: ${currentSampleIndex}`);
-// }
-
 function changeSampleToIndex(index) {
   currentSampleIndex = index;
   checkAndStartPlayback();
-  updateLoopStart(radioTuner); // Update loop start for radio tuner
   console.log(`Switched to sample: ${currentSampleIndex}`);
 }
+
+// function changeSampleToIndex(index) {
+//   currentSampleIndex = index;
+//   checkAndStartPlayback();
+//   updateLoopStart(radioTuner); // Update loop start for radio tuner
+//   console.log(`Switched to sample: ${currentSampleIndex}`);
+// }
 
 
 function updatePolygonSampleMap(uniqueId) {
@@ -498,10 +502,10 @@ function updatePlaybackPosition(channelValue) {
   noiseTuner.start(nextTime + 0.01, newNoisePosition);
 }
 
-function updateLoopStart(grainPlayer) {
-  if (grainPlayer && grainPlayer.buffer && grainPlayer.buffer.loaded) {
-      grainPlayer.loopStart = Math.random() * grainPlayer.buffer.duration;
-      console.log(`Updated loopStart to: ${grainPlayer.loopStart}`);
+function updateLoopStart(radioTuner) {
+  if (radioTuner && radioTuner.buffer && radioTuner.buffer.loaded) {
+    radioTuner.loopStart = Math.random() * radioTuner.buffer.duration;
+      console.log(`Updated loopStart for instrument to: ${radioTuner.loopStart} ${synths[0]}`);
   } else {
       console.error("Buffer not loaded; cannot set loopStart.");
   }
@@ -618,6 +622,7 @@ function setupMembraneSynth() {
           sustain: 0.5,
           release: 0.005
       },
+      pitchDecay: 0.5,
       volume: Tone.gainToDb(1), 
   });
 
@@ -660,15 +665,24 @@ function setupNoiseSynth() {
   });
 
   noiseBP = new Tone.Filter({
-    type: 'bandpass',
-    frequency: 5000,
-    Q: 1
+    type: 'peaking',
+    frequency: 1000,
+    Q: 5,
+    gain: 2,
   });
+
+  noiseLP = new Tone.Filter({
+    type: 'lowpass',
+    frequency: 1800, 
+    rolloff: -96,
+    Q: 0,
+});
 
 
   noiseSynth.connect(noiseHP);
   noiseHP.connect(noiseBP);
-  noiseBP.connect(reverbSend);
+  noiseBP.connect(noiseLP);
+  noiseLP.connect(reverbSend);
   noiseSynth.triggerAttack(); // drone env
 
   return noiseSynth;
@@ -789,7 +803,7 @@ function fadeOutVol(audioChannelName, duration) {
       const synth = synths[synthName];
       if (synth && synth.volume) {
         const targetVolume = channel.muted ? -Infinity : audioChannels[audioChannelName].volume;
-        synth.volume.rampTo(targetVolume, duration, Tone.now() + 0.2);
+        synth.volume.rampTo(targetVolume, duration, Tone.now() + 0.1);
       }
     });
   }
@@ -1005,16 +1019,18 @@ function getColorFromVUMeter(vuMeterValue) {
 
   // Interpolate between start and end colors based on the normalized VU meter value
   const interpolatedColor = interpolateColor(startColor, endColor, factor);
+  console.log("da color is: " + rgbToHex(interpolatedColor))
   return rgbToHex(...interpolatedColor);
 }
 
-let currentColor = 0x00ff00;  // Default color, will be updated dynamically
-console.log("color is:" + currentColor)
+let currentColor = 0xf000ff;  // Default color, will be updated dynamically
+// console.log("color is:" + currentColor)
 
 function updateColorFromVUMeter() {
   const vuMeterValue = Math.round(meter.getValue(), 1);
-  currentColor = getColorFromVUMeter(vuMeterValue);
-  console.log("vu: " + vuMeterValue)
+  // console.log(`current color is: ${currentColor}`)
+  currentColor = getColorFromVUMeter(vuMeterValue * 1.5);
+  // console.log("vu: " + vuMeterValue)
   updateAllLinesWithNewColor(currentColor);  // Update all lines with the new color
 }
 
@@ -1175,7 +1191,11 @@ function monitorSynths() {
 
   function initToneJS() {
 
-    Tone.start();
+    Tone.start("+0.1");
+
+    // Start Tone.Transport with a slight future offset to ensure all is ready
+    Tone.Transport.start("+0.02");
+
 
     setupFx();
 
@@ -1190,8 +1210,6 @@ function monitorSynths() {
     pitchLFO.start();
 
 
-    // Start Tone.Transport with a slight future offset to ensure all is ready
-    Tone.Transport.start("+0.01");
 
     console.log('Synths initialized:', synths);
 
@@ -1438,7 +1456,7 @@ function updateCellAudioParams(distance, gridCode) {
   // console.log(cellRayMi)
   // Normalize distance to a 0-1 scale for audio parameter use
   let normalizedCellDistance = Math.max(0, Math.min(1, (cellRayMi - 0.1) / (10 - 0.1)));
-  console.log("normalized: " + normalizedCellDistance)
+  // console.log("normalized: " + normalizedCellDistance)
 
   
   switch (gridCode) {
@@ -1506,6 +1524,10 @@ function drawcellRayLine(start, end, maxCellTowerRays, towerId, gridCode, distan
   const lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
   const lineMaterial = new THREE.LineBasicMaterial({ color });
   const line = new THREE.Line(lineGeometry, lineMaterial);
+
+  lineMaterial.color.set(color);
+  lineMaterial.needsUpdate = true;  // Ensure the material updates
+
 
   // Set visibility based on gridCode
   line.visible = gridCode !== '0';
@@ -1810,13 +1832,14 @@ function removeRayLine(uniqueId) {
 // Helper function to update all lines with new color
 function updateAllLinesWithNewColor(newColor) {
   fmRayLinesByUniqueId.forEach((line, uniqueId) => {
-      line.material.color.set(newColor);  // Update the existing line's material color
+    line.material.color.set(newColor);  // Update the existing line's material color
+    line.material.needsUpdate = true;  // Ensure the material updates in the scene
   });
 
   currentRayLines.forEach((line) => {
-      line.material.color.set(newColor);  // Update each cell ray line's color
+    line.material.color.set(newColor);  // Update each cell ray line's color
+    line.material.needsUpdate = true;  // Ensure the material updates in the scene
   });
-
 }
 
 
@@ -1879,6 +1902,10 @@ function drawFMLine(start, end, uniqueId, mesh, color) {
   // Calculate nearest vertex distance using vertices stored in mesh userData
   let nearestVertexDistance = calculateNearestVertexDistance(start, mesh);
   line.userData.nearestVertexDistance = nearestVertexDistance;
+
+  line.material.color.set(color);
+  line.material.needsUpdate = true;  // Ensure the material updates
+
 
   scene.add(line);
   fmRayLinesByUniqueId.set(uniqueId, line);
@@ -2008,24 +2035,39 @@ function updateActiveRaycasterRays() {
   }
 
   // calculate the nearest vertex distance
-  // todo: add scaling factor of sound related to distance
-  // + change effect only if gridcode changes
   function raycastAccessVertex(intersection) {
     const intersectPoint = intersection.point;
     const vertices = intersection.object.userData.vertices;
     const gridCode = intersection.object.userData.gridCode || 'unknown';  // Default to 'unknown' if not provided
-  
+
     if (vertices) {
-      const nearestVertex = vertices.reduce((nearest, vertex) => {
-        const distance = Math.hypot(vertex.x - intersectPoint.x, vertex.y - intersectPoint.y, vertex.z - intersectPoint.z);
-        return distance < nearest.distance ? { vertex, distance } : nearest;
-      }, { vertex: null, distance: Infinity });
-  
-      console.log(`Nearest vertex distance: ${nearestVertex.distance}, Vertex: ${JSON.stringify(nearestVertex.vertex)}, Grid Code: ${gridCode}`);
+        const nearestVertex = vertices.reduce((nearest, vertex) => {
+            const distance = Math.hypot(vertex.x - intersectPoint.x, vertex.y - intersectPoint.y, vertex.z - intersectPoint.z);
+            return distance < nearest.distance ? { vertex, distance } : nearest;
+        }, { vertex: null, distance: Infinity });
+
+        // Check if gridCode is a valid number and update audio parameters accordingly
+        if (!isNaN(gridCode) && gridCode >= 0 && gridCode <= 5) {
+            updateAccessAudioParams(nearestVertex.distance, parseInt(gridCode));
+        }
+
+        console.log(`Nearest vertex distance: ${nearestVertex.distance}, Vertex: ${JSON.stringify(nearestVertex.vertex)}, Grid Code: ${gridCode}`);
     } else {
-      console.log('No vertices data found in userData');
+        console.log('No vertices data found in userData');
     }
-  }
+}
+
+function updateAccessAudioParams(distance, gridCode) {
+  const accessRayMi = distance / 5280;
+  let normalizedCellDistance = Math.max(0, Math.min(1, (accessRayMi - 0.1) / (10 - 0.1)));
+
+  // Calculate BitCrusher settings based on gridCode
+  const scaleFactor = gridCode / 5;
+  const bitDepth = Math.ceil(2 + 7 * scaleFactor);  // Scale bit depth from 1 to 8
+
+  bitCrusher.bits.rampTo(bitDepth, 0.5);  // Ramp the wet level to smooth transitions
+
+}
 
   ///////////////////////////// 
   /// raycaster helpers n handlers
@@ -2264,6 +2306,7 @@ function updateScaleBar(scaleBar, camera) {
 
           updateActiveRaycasterRays();
 
+          Tone.Transport.cancel(Tone.now() + 0.1);  // Cancels all scheduled events 0.1 seconds ahead
 
           renderer.render(scene, camera);
 
@@ -2315,6 +2358,7 @@ var lastSwitchState2 = null; // Initialize last state for switch2
   
 function initWebSocketConnection() {
   var ws = new WebSocket('ws://localhost:8080');
+  unlockAudioContext(); // Attempt to unlock AudioContext on WebSocket connection
 
   ws.onopen = function() {
     console.log('Connected to WebSocket server');
@@ -2358,13 +2402,15 @@ function handleSerialData(serialData){
 
 
   if (serialData.LEDpotValue !== undefined && !isDragging) {
+    console.log("Original LED pot value: ", serialData.LEDpotValue);
     const scaledValue = Math.round(remapValues(serialData.LEDpotValue, 201, 300, 300, 201));
+    console.log("Scaled LED pot value: ", scaledValue);
     const slider = document.getElementById('fm-channel-slider');
     slider.value = scaledValue; // Programmatically update slider value
     updateLabelPosition(scaledValue); 
     updateDisplays(scaledValue);
   }
-
+  
   if (serialData.zoomPotValue !== undefined && !isDragging) {
     // scale between min zoom and max zoom values for ortho cam
     const exponent = 2;  // add exponential curve to remapping
@@ -2456,7 +2502,7 @@ function toggleMapScene(switchState, source) {
         raycasterDict.cellTransmitterPoints.enabled = false;
         channelSlider.style.visibility = "visible";
         // synths.droneSynth.triggerRelease(Tone.now()+ 0.1)
-        synths.droneSynth.triggerAttack("F2", Tone.now() + 0.2);
+        synths.droneSynth.triggerAttack("F2", Tone.now() + 0.1);
         // safeTriggerSound(droneSynth, "F2", "0.5"); 
 
 
@@ -2477,7 +2523,7 @@ function toggleMapScene(switchState, source) {
         raycasterDict.fmTransmitterPoints.enabled = false;
         activeAudioChannel = 'digitalChannel';
         // synths.droneSynth.triggerRelease(Tone.now()+ 0.1)
-        synths.droneSynth.triggerAttack("A3", Tone.now() + 0.2);
+        synths.droneSynth.triggerAttack("A3", Tone.now() + 0.1);
         // safeTriggerSound(droneSynth, "A3", "0.5"); 
 
         channelSlider.style.visibility = "hidden";
@@ -2489,6 +2535,8 @@ function toggleMapScene(switchState, source) {
         });
 
         break;
+
+    
     }
 
     // Use the activeAudioChannel determined by the switch
@@ -2517,6 +2565,13 @@ function toggleMapScene(switchState, source) {
         raycasterDict.accessibilityMesh.enabled = true;
         activeAudioChannel = 'accessChannel'; // This should match an existing channel or be defined similarly
         break;
+
+        default:
+          accessGroup.visible = false;
+          elevContourLines.visible = false;
+          
+        break;
+
     }
 
     // Use the activeAudioChannel determined by the switch
@@ -3098,7 +3153,7 @@ function logMeshData(group) {
           flatGeom.computeVertexNormals();
                   
           // unique symbols based on grid_code
-          let wireframeMaterial, fillMaterial;
+          let wireframeMaterial, fillMaterial, flatWireframeMaterial;
           switch (gridCode) {
 
             case `0`:
@@ -3123,6 +3178,18 @@ function logMeshData(group) {
                   wireframe: false,
                   visible: true,
                 });
+
+                flatWireframeMaterial = new THREE.MeshBasicMaterial({
+                  color: 0xffffff,
+                  transparent: true,
+                  alphaHash: true,
+                  opacity: 0.3,
+                  wireframe: true,
+                  side: THREE.DoubleSide,
+                  visible: false,
+                });
+
+
 
             break;
 
@@ -3150,19 +3217,31 @@ function logMeshData(group) {
                   visible: false,
                 });
 
+                flatWireframeMaterial = new THREE.MeshBasicMaterial({
+                  color: 0xffffff,
+                  transparent: true,
+                  alphaHash: true,
+                  opacity: 0.3,
+                  wireframe: true,
+                  side: THREE.DoubleSide,
+                  visible: false,
+                });
+
+
+
             break;
 
               default:
 
-                // wireframeMaterial = new THREE.MeshBasicMaterial({
-                //   color: 0xffffff,
-                //   transparent: true,
-                //   alphaHash: true,
-                //   opacity: 0.3,
-                //   wireframe: true,
-                //   side: THREE.DoubleSide,
-                //   visible: false,
-                // });
+                flatWireframeMaterial = new THREE.MeshBasicMaterial({
+                  color: 0xffffff,
+                  transparent: true,
+                  alphaHash: true,
+                  opacity: 0.3,
+                  wireframe: true,
+                  side: THREE.DoubleSide,
+                  visible: false,
+                });
 
 
                 // Solid fill material (black fill)
@@ -3185,7 +3264,7 @@ function logMeshData(group) {
 
           // Create mesh with the wireframe material
           var wireframeMesh = new THREE.Mesh(geom, wireframeMaterial);
-          var flatWireframeMesh = new THREE.Mesh(flatGeom, wireframeMaterial);
+          var flatWireframeMesh = new THREE.Mesh(flatGeom, flatWireframeMaterial);
                   // wireframeMesh.name = 'wireframeMesh-' + gridCode;
 
           // add metadata to the meshes for raycaster triggers
@@ -3204,7 +3283,7 @@ function logMeshData(group) {
         
           // Add the group to the cellServiceMesh group
           cellServiceMesh.add(group);
-          cellServiceRayMesh.add(flatGroup); // Make sure this line is within the forEach loop
+          cellServiceRayMesh.add(flatGroup); 
         });
 
         // // create points group for raycasting / sound triggers only
@@ -3267,7 +3346,7 @@ function logMeshData(group) {
   }
   
   function rgbToHex(r, g, b) {
-    return (r << 16) | (g << 8) | b;
+    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
   }
   
   // calculate color ramp for accessibility mesh
@@ -3871,6 +3950,7 @@ function addCellTowerPts(geojson) {
   }
   
   function updateLabelPosition(sliderValue) {
+    // new Tone.Delay(0.01);
     const slider = document.getElementById('fm-channel-slider');
     const label = document.getElementById('fm-frequency-display');
 
@@ -3897,7 +3977,6 @@ function addCellTowerPts(geojson) {
   
   // Update label position on slider input
   document.getElementById('fm-channel-slider').addEventListener('input', function() {
-    new Tone.Delay(0.01)
     updateLabelPosition(parseInt(this.value, 10));
   });
   
