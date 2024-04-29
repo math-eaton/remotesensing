@@ -738,7 +738,7 @@ function switchSynth(activeChannel) {
 }
 
 let lastEventTime = Tone.now();
-const timeIncrement = 0.015;
+const timeIncrement = 0.025;
 const randomBuffer = 0.01; // Adding a small random buffer to avoid collisions
 
 // transport stuff
@@ -1165,7 +1165,7 @@ function monitorSynths() {
 
 
     // Start Tone.Transport with a slight future offset to ensure all is ready
-    Tone.Transport.start("+0.1");
+    Tone.Transport.start("+0.01");
 
     console.log('Synths initialized:', synths);
 
@@ -1390,17 +1390,17 @@ function raycastCellServiceVertex(intersection, maxCellTowerRays = 1) {
   const nearestTowers = findNearestCellTowers(intersectPoint, maxCellTowerRays);
   const gridCode = intersection.object.userData.gridCode || 'unknown';  // Default to 'unknown' if not provided
 
-  // console.log("Intersected gridCode:", gridCode);  // Log the current gridCode at intersection
+  console.log("Intersected gridCode:", gridCode);  // Log the current gridCode at intersection
 
   if (nearestTowers.length > 0) {
       // Only use the nearest tower for audio parameters and ray drawing
       const nearestTower = nearestTowers[0];
       // console.log("nearest tower: ", JSON.stringify(nearestTower.distance))
 
-      drawcellRayLine(intersectPoint, nearestTower.position, maxCellTowerRays, nearestTower.uniqueCellid, cellServiceMesh.gridCode, nearestTower.distance, currentColor);
+      drawcellRayLine(intersectPoint, nearestTower.position, maxCellTowerRays, nearestTower.uniqueCellid, gridCode, nearestTower.distance, currentColor);
 
       // Update audio parameters based on distance and gridCode of the nearest tower
-      updateCellAudioParams(Math.round(nearestTower.distance,0), cellServiceMesh.gridCode);
+      updateCellAudioParams(Math.round(nearestTower.distance,0), cellServiceRayMesh.gridcode);
   } else {
       console.log('No cell towers found or dead zone!');
       cellRayCleanup(maxCellTowerRays);
@@ -1408,23 +1408,23 @@ function raycastCellServiceVertex(intersection, maxCellTowerRays = 1) {
 }
 
 function updateCellAudioParams(distance, gridCode) {
-  const cellRayKM = distance / 1000;
-  // console.log(cellRayKM)
+  const cellRayMi = distance / 5280;
+  console.log(cellRayMi)
   switch(gridCode) {
       case 0:
           synths.membraneSynth.Tone.now().set({
               detune: -100 * cellRayMeters,
-              volume: Tone.gainToDb(1 - cellRayKM)
+              volume: Tone.gainToDb(1 - cellRayMi)
           });
           break;
       case 1:
           synths.droneSynth.Tone.now().set({
-              harmonicity: 1.5 * cellRayKM,
-              volume: Tone.gainToDb(0.5 - cellRayKM)
+              harmonicity: 1.5 * cellRayMi,
+              volume: Tone.gainToDb(0.5 - cellRayMi)
           });
           synths.noiseSynth.Tone.now().set({
-              playbackRate: 1 + cellRayKM,
-              volume: Tone.gainToDb(cellRayKM)
+              playbackRate: 1 + cellRayMi,
+              volume: Tone.gainToDb(cellRayMi)
           });
           break;
   }
@@ -1443,28 +1443,30 @@ let lastTowerId = null; // tower focus init
 
 function drawcellRayLine(start, end, maxCellTowerRays, towerId, gridCode, distance, color) {
   const lineGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-  // console.log("line geom: " + JSON.stringify(lineGeometry))
   const lineMaterial = new THREE.LineBasicMaterial({ color });
   const line = new THREE.Line(lineGeometry, lineMaterial);
+
+  // Set visibility based on gridCode
+  line.visible = gridCode !== '0';
+
   scene.add(line);
   currentRayLines.push(line);
 
-  // console.log("tower ID: " + towerId)
-  // console.log("last tower ID: " + lastTowerId)
-  // console.log("tower gridCode: " + gridCode)
+  console.log("tower ID: " + towerId + ", last tower ID: " + lastTowerId + ", tower gridCode: " + gridCode);
 
-  if (gridCode !== 0
-    ){  if (lastTowerId !== towerId) {
+  // Trigger the membrane synth only if gridCode is not 0 and it's a new tower
+  if (gridCode !== '0' && lastTowerId !== towerId) {
       triggerMembraneSynth(distance);
       lastTowerId = towerId;
   }
 
+  // Clean up old lines to keep the array size within the maxCellTowerRays limit
   while (currentRayLines.length > maxCellTowerRays) {
       const oldLine = currentRayLines.shift();
       scene.remove(oldLine);
       if (oldLine.geometry) oldLine.geometry.dispose();
   }
-}}
+}
 
 function cellRayCleanup(maxCellTowerRays) {
 while (currentRayLines.length > maxCellTowerRays) {
@@ -2255,72 +2257,83 @@ function initWebSocketConnection() {
 
   ws.onopen = function() {
     console.log('Connected to WebSocket server');
-    unlockAudioContext(); // Attempt to unlock AudioContext on WebSocket connection
+    // unlockAudioContext(); // Attempt to unlock AudioContext on WebSocket connection
   };
 
   ws.onmessage = function(event) {
-
-
-    let threeContainer = document.getElementById('gfx');
-    // hide mouse cursor if/when data is received
-    document.body.style.cursor = 'none';
-    setTimeout(() => threeContainer.classList.remove('background'), 1000);
-
-    let serialData = JSON.parse(event.data);
-
-    // console.log('ws data:', serialData); // This will correctly log the object structure
-
-
-    if (serialData.LEDpotValue !== undefined && !isDragging) {
-      const scaledValue = Math.round(remapValues(serialData.LEDpotValue, 201, 300, 300, 201));
-      const slider = document.getElementById('fm-channel-slider');
-      slider.value = scaledValue; // Programmatically update slider value
-      updateLabelPosition(scaledValue); 
-      updateDisplays(scaledValue);
+    try {
+      let serialData = JSON.parse(event.data);
+      handleSerialData(serialData);
+    } catch (e) {
+      console.error("Error parsing WebSocket data:", e);
     }
-
-    if (serialData.zoomPotValue !== undefined && !isDragging) {
-      // scale between min zoom and max zoom values for ortho cam
-      const exponent = 2;  // add exponential curve to remapping
-      const scaledValue = Math.round(remapValuesExp(serialData.zoomPotValue, 0, 1023, 60, 360, exponent));
-      adjustCameraZoomSlidePot(scaledValue);
-    }
-  
-
-    if (serialData.deltaLeft !== undefined && serialData.deltaRight !== undefined) {
-      globalDeltaLeft = serialData.deltaLeft;
-      globalDeltaRight = serialData.deltaRight;
-    }
-
-    if (serialData.deltaLeftPressed !== undefined && serialData.deltaRightPressed !== undefined) {
-      globalDeltaLeftPressed = serialData.deltaLeftPressed;
-      globalDeltaRightPressed = serialData.deltaRightPressed;
-    }
-
-    // Check for switchState1 in the data and toggle group visibility accordingly 
-    // if the state changes
-    if (serialData.switchState1 !== undefined && serialData.switchState1 !== lastSwitchState1) {
-      lastSwitchState1 = serialData.switchState1;
-      toggleMapScene(serialData.switchState1, 'switch1');
-    }
-  
-    // Check for switchState2 and update if changed
-    if (serialData.switchState2 !== undefined && serialData.switchState2 !== lastSwitchState2) {
-      lastSwitchState2 = serialData.switchState2;
-      toggleMapScene(serialData.switchState2, 'switch2');
-    }
-  }
-
-//   ws.on('close', (reasonCode, description) => {
-//     console.log('WebSocket connection closed. Reason:', reasonCode, description);
-// });
-
-
-
-  ws.onerror = function(event) {
-    console.error('WebSocket error:', event);
   };
 
+  ws.onclose = function(event) {
+    console.log(`WebSocket connection closed: ${event.code} ${event.reason}`);
+    // Attempt to reconnect
+    setTimeout(initWebSocketConnection, 5000);
+  };
+
+  ws.onerror = function(event) {
+    console.error('WebSocket error observed:', event);
+    // Optional: Close the WebSocket connection if it's still open to trigger a reconnection attempt.
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.close();
+    }
+  };
+}
+
+function handleSerialData(serialData){
+
+  let threeContainer = document.getElementById('gfx');
+  // hide mouse cursor if/when data is received
+  document.body.style.cursor = 'none';
+  setTimeout(() => threeContainer.classList.remove('background'), 1000);
+
+  // let serialData = JSON.parse(event.data);
+
+  // console.log('ws data:', serialData); // This will correctly log the object structure
+
+
+  if (serialData.LEDpotValue !== undefined && !isDragging) {
+    const scaledValue = Math.round(remapValues(serialData.LEDpotValue, 201, 300, 300, 201));
+    const slider = document.getElementById('fm-channel-slider');
+    slider.value = scaledValue; // Programmatically update slider value
+    updateLabelPosition(scaledValue); 
+    updateDisplays(scaledValue);
+  }
+
+  if (serialData.zoomPotValue !== undefined && !isDragging) {
+    // scale between min zoom and max zoom values for ortho cam
+    const exponent = 2;  // add exponential curve to remapping
+    const scaledValue = Math.round(remapValuesExp(serialData.zoomPotValue, 0, 1023, 60, 360, exponent));
+    adjustCameraZoomSlidePot(scaledValue);
+  }
+
+
+  if (serialData.deltaLeft !== undefined && serialData.deltaRight !== undefined) {
+    globalDeltaLeft = serialData.deltaLeft;
+    globalDeltaRight = serialData.deltaRight;
+  }
+
+  if (serialData.deltaLeftPressed !== undefined && serialData.deltaRightPressed !== undefined) {
+    globalDeltaLeftPressed = serialData.deltaLeftPressed;
+    globalDeltaRightPressed = serialData.deltaRightPressed;
+  }
+
+  // Check for switchState1 in the data and toggle group visibility accordingly 
+  // if the state changes
+  if (serialData.switchState1 !== undefined && serialData.switchState1 !== lastSwitchState1) {
+    lastSwitchState1 = serialData.switchState1;
+    toggleMapScene(serialData.switchState1, 'switch1');
+  }
+
+  // Check for switchState2 and update if changed
+  if (serialData.switchState2 !== undefined && serialData.switchState2 !== lastSwitchState2) {
+    lastSwitchState2 = serialData.switchState2;
+    toggleMapScene(serialData.switchState2, 'switch2');
+  }
 }
 
 // keyboard commands, mirror spdt switch functionality
@@ -3116,9 +3129,10 @@ function logMeshData(group) {
 
           // add metadata to the meshes for raycaster triggers
           fillMesh.userData.gridCode = gridCode;
+          console.log("Setting gridCode userData for mesh:", gridCode);
           wireframeMesh.userData.gridCode = gridCode;
           flatWireframeMesh.userData.gridCode = gridCode;
-
+          
           // Group to hold both meshes
           var group = new THREE.Group();
           group.add(wireframeMesh);
