@@ -441,11 +441,20 @@ function getRandomSampleIndex(excludeIndex) {
   }
   return newIndex;
 }
+// function changeSampleToIndex(index) {
+//   currentSampleIndex = index;
+//   checkAndStartPlayback();
+//   console.log(`Switched to sample: ${currentSampleIndex}`);
+// }
+
 function changeSampleToIndex(index) {
   currentSampleIndex = index;
   checkAndStartPlayback();
+  updateLoopStart(radioTuner); // Update loop start for radio tuner
   console.log(`Switched to sample: ${currentSampleIndex}`);
 }
+
+
 function updatePolygonSampleMap(uniqueId) {
   if (!polygonSampleMap.has(uniqueId)) {
       if (polygonSampleMap.size >= maxEntries) {
@@ -489,6 +498,17 @@ function updatePlaybackPosition(channelValue) {
   noiseTuner.start(nextTime + 0.01, newNoisePosition);
 }
 
+function updateLoopStart(grainPlayer) {
+  if (grainPlayer && grainPlayer.buffer && grainPlayer.buffer.loaded) {
+      grainPlayer.loopStart = Math.random() * grainPlayer.buffer.duration;
+      console.log(`Updated loopStart to: ${grainPlayer.loopStart}`);
+  } else {
+      console.error("Buffer not loaded; cannot set loopStart.");
+  }
+}
+
+
+
 
 let noiseBuffer;
 new Tone.Buffer("/assets/sounds/amRadioTuning.mp3", function(buffer) {
@@ -508,6 +528,7 @@ function setupNoiseTuner() {
       url: noiseBuffer, // Use the loaded Tone.Buffer
       loop: true,
      playbackRate: 1.666,
+     loopStart: Math.random(0),
      grainSize: 0.35, 
      overlap: 1.5,
      drift: 0.25, // Random timing variations between grains
@@ -518,6 +539,8 @@ function setupNoiseTuner() {
 
  noiseTuner.onload = () => {
   console.log('noisetuner sample loaded successfully');
+  // Set a random loop start once the buffer is loaded
+  noiseTuner.loopStart = Math.random() * noiseTuner.buffer.duration;
   if (typeof lastChannelValue === 'number') {
       updatePlaybackPosition(lastChannelValue);
   }
@@ -669,7 +692,7 @@ let audioChannels = {
       muted: true
   },
   digitalChannel: {
-      synths: ['membraneSynth', 'droneSynth'],
+      synths: ['membraneSynth', 'droneSynth', 'noiseTuner'],
       volume: -10,
       muted: true
   },
@@ -986,6 +1009,7 @@ function getColorFromVUMeter(vuMeterValue) {
 }
 
 let currentColor = 0x00ff00;  // Default color, will be updated dynamically
+console.log("color is:" + currentColor)
 
 function updateColorFromVUMeter() {
   const vuMeterValue = Math.round(meter.getValue(), 1);
@@ -1411,18 +1435,34 @@ function raycastCellServiceVertex(intersection, maxCellTowerRays = 1) {
 
 function updateCellAudioParams(distance, gridCode) {
   const cellRayMi = distance / 5280;
-  console.log(cellRayMi)
+  // console.log(cellRayMi)
   // Normalize distance to a 0-1 scale for audio parameter use
   let normalizedCellDistance = Math.max(0, Math.min(1, (cellRayMi - 0.1) / (10 - 0.1)));
-  console.log("normalized: " + normalizedCellDistance)
-  console.log("current grid code is " + gridCode)
+  // console.log("normalized: " + normalizedCellDistance)
 
+  
   switch (gridCode) {
     case '0':
       synths.membraneSynth.set({
           // detune: -1200 * normalizedCellDistance, // Example: detune more as distance increases
           volume: Tone.gainToDb(0) // Quieter as distance increases
       });
+      synths.droneSynth.set({
+        harmonicity: 1 + 2 * normalizedCellDistance, // More harmonicity as distance increases
+      });
+      synths.droneSynth.frequency.rampTo(110, 1)
+      droneLP.frequency.rampTo(700, 1.5);
+      droneLP.Q.rampTo(3, 1);
+      noiseBP.frequency.rampTo(8000, 1.5);
+      noiseBP.Q.rampTo(3, 1);
+      if (noiseTuner) { 
+        noiseTuner.playbackRate = 0.5; // Directly set playback rate
+        noiseTuner.grainSize = 0.1;
+        noiseTuner.loopStart = 120;
+        noiseTuner.overlap = 0;
+        noiseTuner.detune = 3
+        noiseTuner.volume.value = Tone.gainToDb(1);
+      }
       break;
     case '1':
       synths.membraneSynth.set({
@@ -1433,12 +1473,23 @@ function updateCellAudioParams(distance, gridCode) {
           harmonicity: 1 + 2 * normalizedCellDistance, // More harmonicity as distance increases
           volume: Tone.gainToDb(0.5 - 0.5 * normalizedCellDistance) // Quieter as distance increases
       });
+      synths.droneSynth.frequency.rampTo(220, 1)
+      droneLP.frequency.rampTo(250, 1.5);
+      droneLP.Q.rampTo(3, 1);
+      noiseBP.frequency.rampTo(5000, 1.5);
+      noiseBP.Q.rampTo(0, 1);
       synths.noiseSynth.set({
           playbackRate: 1 + normalizedCellDistance, // Faster playback as distance increases
           volume: Tone.gainToDb(normalizedCellDistance) // Louder as distance increases
       });
+      if (noiseTuner) { 
+        noiseTuner.playbackRate = 1 + normalizedCellDistance; // Directly set playback rate
+        noiseTuner.volume.value = Tone.gainToDb(normalizedCellDistance); // Directly set volume in decibels
+      }
       break;
   }
+  console.log(`current grid code is ${gridCode}`)
+
 }
 
 function normalizedCellRayDistance(distance) {
@@ -3847,6 +3898,7 @@ function addCellTowerPts(geojson) {
   
   // Update label position on slider input
   document.getElementById('fm-channel-slider').addEventListener('input', function() {
+    new Tone.Delay(0.01)
     updateLabelPosition(parseInt(this.value, 10));
   });
   
