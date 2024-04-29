@@ -9,6 +9,7 @@ import path from 'path';
 import cors from 'cors';
 
 
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -44,7 +45,54 @@ const wsServer = new WebSocketServer({
     autoAcceptConnections: false,
 });
 
-wsServer.on('request', (request) => {
+// update config to use ur own teensy
+async function findTeensyPort() {
+  const ports = await SerialPort.list();
+  const teensyPort = ports.find(port => port.productId === '0x0483' || port.serialNumber === '8266340');
+  if (teensyPort) {
+      return teensyPort.path;
+  } else {
+      throw new Error('Teensy not found');
+  }
+}
+
+function initializeSerialPort(connection) {
+  findTeensyPort().then(path => {
+      const serialPort = new SerialPort({ path: path, baudRate: 9600 });
+      const parser = serialPort.pipe(new ReadlineParser());
+      parser.on('data', data => {
+          console.log('Received data:', data);
+          processData(data, connection);
+      });
+      serialPort.on('error', err => {
+          console.error('Serial Port Error:', err);
+      });
+  }).catch(error => {
+      console.error('Failed to initialize serial port:', error);
+  });
+}
+
+
+function processData(data, connection) {
+  const parts = data.split(',');
+  if (parts.length >= 10) {
+    const structuredData = {
+      switchState1: parseInt(parts[0], 10),
+      switchState2: parseInt(parts[1], 10),
+      deltaLeft: parseInt(parts[2], 10),
+      deltaRight: parseInt(parts[3], 10),
+      deltaLeftPressed: parseInt(parts[4], 10),
+      deltaRightPressed: parseInt(parts[5], 10),
+      buttonPressedLeft: parts[6] === '1',
+      buttonPressedRight: parts[7] === '1',
+      LEDpotValue: parseInt(parts[8], 10),
+      zoomPotValue: parseInt(parts[9], 10),
+  };
+    connection.sendUTF(JSON.stringify(structuredData));
+  }
+}
+
+wsServer.on('request', request => {
   if (request.origin !== 'http://localhost:5173') {
     request.reject();
     console.log('Connection from origin ' + request.origin + ' rejected.');
@@ -52,31 +100,5 @@ wsServer.on('request', (request) => {
   }
   const connection = request.accept(null, request.origin);
   console.log('WebSocket connection accepted');
-
-  const serialPort = new SerialPort({ path: '/dev/tty.usbmodem82663401', baudRate: 9600 });
-  const parser = serialPort.pipe(new ReadlineParser());
-
-  parser.on('data', (data) => {
-    console.log('Received data:', data);
-    // Assume the data is comma-separated values
-    const parts = data.split(',');
-    if (parts.length >= 8) { // Adjust based on your actual data format
-      // Parse and structure the data as needed
-      const structuredData = {
-        switchState1: parseInt(parts[0], 10),
-        switchState2: parseInt(parts[1], 10),
-        deltaLeft: parseInt(parts[2], 10),
-        deltaRight: parseInt(parts[3], 10),
-        deltaLeftPressed: parseInt(parts[4], 10),
-        deltaRightPressed: parseInt(parts[5], 10),
-        buttonPressedLeft: parts[6] === '1',
-        buttonPressedRight: parts[7] === '1',
-        LEDpotValue: parseInt(parts[8], 10),
-        zoomPotValue: parseInt(parts[9], 10),
-      };
-      // Send structured data as a JSON string to the connected WebSocket client
-      connection.sendUTF(JSON.stringify(structuredData));
-    }
-  });
-
+  initializeSerialPort(connection);
 });
