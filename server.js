@@ -88,8 +88,13 @@ function processData(data, connection) {
       LEDpotValue: parseInt(parts[8], 10),
       zoomPotValue: parseInt(parts[9], 10),
   };
+  if (structuredData.buttonPressedLeft) {
+    const payload = { type: "buttonPress", key: "a" };
+    connection.sendUTF(JSON.stringify(payload));
+  } else {
     connection.sendUTF(JSON.stringify(structuredData));
   }
+}
 }
 
 wsServer.on('request', request => {

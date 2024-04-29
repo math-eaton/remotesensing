@@ -88,8 +88,6 @@ export function gfx() {
   let switchState1 = 0;
   let switchState2 = 0;
 
-  let audioContext;
-
   // geometry for raycaster intersection point
   let rayOrigin;
   const reticuleSize = 0.0075;
@@ -266,7 +264,7 @@ function setupFx() {
   // Connect reverb to the global volume
   outputEQ.connect(reverbSend);    // Connect EQ before the global volume in the routing chain
 
-  bitCrusher = new Tone.BitCrusher(16); 
+  bitCrusher = new Tone.BitCrusher(12); 
   reverbSend.connect(bitCrusher);
   bitCrusher.connect(globalVolume); // Connect the BitCrusher to the global volume
 
@@ -415,7 +413,7 @@ function setupRadioTuner() {
  radioTuner.onload = () => {
      console.log('radioTuner sample loaded successfully');
      if (typeof lastChannelValue === 'number') {
-         updatePlaybackPosition(lastChannelValue);
+        //  updatePlaybackPosition(lastChannelValue);
      }
  };
  radioTuner.onerror = (e) => {
@@ -432,7 +430,7 @@ function checkAndStartPlayback() {
   const currentBuffer = sampleBuffers[currentSampleIndex];
   if (currentBuffer && currentBuffer.loaded) {
       radioTuner.buffer = currentBuffer.buffer;
-      radioTuner.start(Tone.now());
+      radioTuner.start(getNextEventTime(Tone.now()));
       console.log('Playback started with loaded buffer.');
   } else {
       console.error('Attempted to play a sample that is not loaded yet.');
@@ -498,8 +496,8 @@ function updatePlaybackPosition(channelValue) {
   }
 
   // Start or change playback for both tuners
-  radioTuner.start(nextTime, newRadioPosition);
-  noiseTuner.start(nextTime + 0.01, newNoisePosition);
+  radioTuner.start(nextTime + 0.05, newRadioPosition);
+  noiseTuner.start(nextTime + 0.05, newNoisePosition);
 }
 
 function updateLoopStart(radioTuner) {
@@ -546,7 +544,7 @@ function setupNoiseTuner() {
   // Set a random loop start once the buffer is loaded
   noiseTuner.loopStart = Math.random() * noiseTuner.buffer.duration;
   if (typeof lastChannelValue === 'number') {
-      updatePlaybackPosition(lastChannelValue);
+      // updatePlaybackPosition(lastChannelValue);
   }
 };
 
@@ -1434,7 +1432,7 @@ function raycastCellServiceVertex(intersection, maxCellTowerRays = 1) {
   const nearestTowers = findNearestCellTowers(intersectPoint, maxCellTowerRays);
   const gridCode = intersection.object.userData.gridCode || 'unknown';  // Default to 'unknown' if not provided
 
-  console.log("Intersected gridCode:", gridCode);  // Log the current gridCode at intersection
+  // console.log("Intersected gridCode:", gridCode);  // Log the current gridCode at intersection
 
   if (nearestTowers.length > 0) {
       // Only use the nearest tower for audio parameters and ray drawing
@@ -1505,7 +1503,7 @@ function updateCellAudioParams(distance, gridCode) {
       }
       break;
   }
-  console.log(`current grid code is ${gridCode}`)
+  // console.log(`current grid code is ${gridCode}`)
 
 }
 
@@ -1535,7 +1533,7 @@ function drawcellRayLine(start, end, maxCellTowerRays, towerId, gridCode, distan
   scene.add(line);
   currentRayLines.push(line);
 
-  console.log("tower ID: " + towerId + ", last tower ID: " + lastTowerId + ", tower gridCode: " + gridCode);
+  // console.log("tower ID: " + towerId + ", last tower ID: " + lastTowerId + ", tower gridCode: " + gridCode);
 
   // Trigger the membrane synth only if gridCode is not 0 and it's a new tower
   if (gridCode !== '0' && lastTowerId !== towerId) {
@@ -2051,7 +2049,7 @@ function updateActiveRaycasterRays() {
             updateAccessAudioParams(nearestVertex.distance, parseInt(gridCode));
         }
 
-        console.log(`Nearest vertex distance: ${nearestVertex.distance}, Vertex: ${JSON.stringify(nearestVertex.vertex)}, Grid Code: ${gridCode}`);
+        // console.log(`Nearest vertex distance: ${nearestVertex.distance}, Vertex: ${JSON.stringify(nearestVertex.vertex)}, Grid Code: ${gridCode}`);
     } else {
         console.log('No vertices data found in userData');
     }
@@ -2061,9 +2059,14 @@ function updateAccessAudioParams(distance, gridCode) {
   const accessRayMi = distance / 5280;
   let normalizedCellDistance = Math.max(0, Math.min(1, (accessRayMi - 0.1) / (10 - 0.1)));
 
+  // init bits
+  let bitDepth = 12;
+
   // Calculate BitCrusher settings based on gridCode
-  const scaleFactor = gridCode / 5;
-  const bitDepth = Math.ceil(2 + 7 * scaleFactor);  // Scale bit depth from 1 to 8
+  if (gridCode !== undefined && gridCode !== 'unknown' && !isNaN(gridCode) && gridCode >= 0 && gridCode <= 5) {
+    const scaleFactor = gridCode / 5;
+    bitDepth = Math.ceil(2 + 7 * scaleFactor);  // Scale bit depth from 1 to 8
+}
 
   bitCrusher.bits.rampTo(bitDepth, 0.5);  // Ramp the wet level to smooth transitions
 
@@ -2305,6 +2308,8 @@ function updateScaleBar(scaleBar, camera) {
           camera.lookAt(controls.target);
 
           updateActiveRaycasterRays();
+          
+          unlockAudioContext();
 
           Tone.Transport.cancel(Tone.now() + 0.1);  // Cancels all scheduled events 0.1 seconds ahead
 
@@ -2338,27 +2343,43 @@ function updateScaleBar(scaleBar, camera) {
 
   // unlock AudioContext with websocket interaction
   function unlockAudioContext() {
-    if (!audioContext) {
-      audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    }
     if (audioContext.state === 'suspended') {
-      audioContext.resume().then(() => {
-        console.log('AudioContext unlocked!');
+        audioContext.resume().then(() => {
+            console.log('AudioContext unlocked!');
+        }).catch((error) => {
+            console.error('Error resuming audio context:', error);
+        });
+    }
+}
+
+function initAudioContext() {
+  // Check if context is in suspended state (this is the usual state in modern browsers due to autoplay policy)
+  if (Tone.context.state === 'suspended') {
+      Tone.context.resume().then(() => {
+          console.log('AudioContext activated successfully');
+      }).catch((error) => {
+          console.log('Error activating AudioContext:', error);
       });
-    }
-    else if (audioContext.state !== 'suspended') {
-      console.log('idk?')
-    }
-console.log(audioContext.state)
   }
+}
+
+  // Event listener for the button
+  document.getElementById('audioControl').addEventListener('click', function() {
+    initAudioContext();
+    Tone.start() + 0.1; // Start Tone.js as well if not started
+  });
+
 
 
 var lastSwitchState1 = null; // Initialize last state for switch1
 var lastSwitchState2 = null; // Initialize last state for switch2
-  
+var audioContext = new (window.AudioContext || window.AudioContext)(); // Initialize audio context
+
 function initWebSocketConnection() {
+
+  
   var ws = new WebSocket('ws://localhost:8080');
-  unlockAudioContext(); // Attempt to unlock AudioContext on WebSocket connection
+  // unlockAudioContext(); // Attempt to unlock AudioContext on WebSocket connection
 
   ws.onopen = function() {
     console.log('Connected to WebSocket server');
@@ -2374,7 +2395,7 @@ function initWebSocketConnection() {
     }
   };
 
-  ws.onclose = function(event) {
+ws.onclose = function(event) {
     console.log(`WebSocket connection closed: ${event.code} ${event.reason}`);
     // Attempt to reconnect
     setTimeout(initWebSocketConnection, 5000);
@@ -2391,6 +2412,8 @@ function initWebSocketConnection() {
 
 function handleSerialData(serialData){
 
+  // console.log(serialData)
+
   let threeContainer = document.getElementById('gfx');
   // hide mouse cursor if/when data is received
   document.body.style.cursor = 'none';
@@ -2400,11 +2423,16 @@ function handleSerialData(serialData){
 
   // console.log('ws data:', serialData); // This will correctly log the object structure
 
+  // Check if the left button is pressed or if there's any movement on the left encoder
+  if (serialData.buttonPressedLeft || serialData.deltaLeft !== 0) {
+    document.getElementById('audioControl').click();
+    console.log('Triggered AudioContext unlock via button or encoder movement');
+}
+
+
 
   if (serialData.LEDpotValue !== undefined && !isDragging) {
-    console.log("Original LED pot value: ", serialData.LEDpotValue);
     const scaledValue = Math.round(remapValues(serialData.LEDpotValue, 201, 300, 300, 201));
-    console.log("Scaled LED pot value: ", scaledValue);
     const slider = document.getElementById('fm-channel-slider');
     slider.value = scaledValue; // Programmatically update slider value
     updateLabelPosition(scaledValue); 
@@ -2599,7 +2627,7 @@ function toggleMapScene(switchState, source) {
       await loadAllData();
       postLoadOperations();
       initWebSocketConnection();
-      unlockAudioContext(); // Attempt to unlock AudioContext on WebSocket connection
+      // unlockAudioContext(); // Attempt to unlock AudioContext on WebSocket connection
       enableInteraction();
       flipCamera();
   } catch (error) {
@@ -2647,6 +2675,7 @@ function toggleMapScene(switchState, source) {
       threeContainer.style.pointerEvents = 'auto';
 
 
+
       // Start the animation loop
       animate();
       document.addEventListener('keydown', onDocumentKeyDown, false); // Attach the keydown event handler
@@ -2659,6 +2688,7 @@ function toggleMapScene(switchState, source) {
   document.addEventListener('DOMContentLoaded', (event) => {
     initialize();
   });
+
 
   document.addEventListener('mousemove', function() {
     document.body.style.cursor = ''; // reset to default cursor if we got a mouse going
@@ -2877,7 +2907,7 @@ function toggleMapScene(switchState, source) {
     const minElevation = Math.min(...elevations);
     const maxElevation = Math.max(...elevations);
   
-    console.log(`Min Elevation: ${minElevation}, Max Elevation: ${maxElevation}, Mean Elevation: ${meanElevation}`);
+    // console.log(`Min Elevation: ${minElevation}, Max Elevation: ${maxElevation}, Mean Elevation: ${meanElevation}`);
   
     return meanElevation;
   }
@@ -3954,7 +3984,7 @@ function addCellTowerPts(geojson) {
     const slider = document.getElementById('fm-channel-slider');
     const label = document.getElementById('fm-frequency-display');
 
-    console.log(sliderValue)
+    // console.log(sliderValue)
   
     const min = parseInt(slider.min, 10);
     const max = parseInt(slider.max, 10);
@@ -4009,7 +4039,8 @@ function addCellTowerPts(geojson) {
       if (synths.radioTuner.loaded) {
         const sampleDuration = synths.radioTuner.buffer.duration;
         const newPosition = (channelValue / 100) * sampleDuration;
-        synths.radioTuner.start(0, newPosition);
+        const nextStartTime = getNextEventTime(); // Get the next valid start time using the new timing function
+        synths.radioTuner.start(nextStartTime, newPosition);
     } else {
         console.log("radioTuner buffer is not loaded yet");
     }
@@ -4033,7 +4064,7 @@ function addCellTowerPts(geojson) {
       updateDisplays(channelValue);
     });
 
-    console.log("init value: " + slider.value)
+    // console.log("init value: " + slider.value)
     
     // Initial update based on the slider's default value
     const initialChannelValue = Math.round(parseInt(slider.value, 10));

@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <Encoder.h>
+#include <Keyboard.h>
+
 // #include "TM1637Display.h"
 
 // Define the pins connected to the SPDT switch
@@ -100,9 +102,15 @@ void setup() {
     // Initialize zoompotsamples array
   for(int i = 0; i < numZoomSamples; i++) {
     ledPotSamples[i] = 0;
+
+
   }
 
+
+    Keyboard.begin();
+
 }
+
 
 
 
@@ -176,6 +184,8 @@ void loop() {
   if ((millis() - lastDebounceTimeLeft) > debounceDelay) {
     if (readingLeft != buttonPressedLeft) {
       buttonPressedLeft = readingLeft;
+          if (buttonPressedLeft) {
+          Serial.println("button_a_pressed");
     }
   }
 
