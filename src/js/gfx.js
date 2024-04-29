@@ -199,7 +199,7 @@ export function gfx() {
 
   function createRandomNoteSelector(scaleRange, offsetPct = 10) { // Default offset set to 10%
     // Calculate the full scale notes from tonal.js
-    const notes = Scale.rangeOf(scaleRange)("A1", "A4"); // Ensure you call this correctly
+    const notes = Scale.rangeOf(scaleRange)("F2", "F4"); // Ensure you call this correctly
     let lastIndex = -1; // No note has been selected initially
 
     return function randomNoteInRange() {
@@ -1438,7 +1438,7 @@ function updateCellAudioParams(distance, gridCode) {
   // console.log(cellRayMi)
   // Normalize distance to a 0-1 scale for audio parameter use
   let normalizedCellDistance = Math.max(0, Math.min(1, (cellRayMi - 0.1) / (10 - 0.1)));
-  // console.log("normalized: " + normalizedCellDistance)
+  console.log("normalized: " + normalizedCellDistance)
 
   
   switch (gridCode) {
@@ -1453,38 +1453,37 @@ function updateCellAudioParams(distance, gridCode) {
       synths.droneSynth.frequency.rampTo(110, 1)
       droneLP.frequency.rampTo(700, 1.5);
       droneLP.Q.rampTo(3, 1);
-      noiseBP.frequency.rampTo(8000, 1.5);
-      noiseBP.Q.rampTo(3, 1);
+      noiseBP.frequency.rampTo(7000, 1.5);
       if (noiseTuner) { 
         noiseTuner.playbackRate = 0.5; // Directly set playback rate
         noiseTuner.grainSize = 0.1;
         noiseTuner.loopStart = 120;
         noiseTuner.overlap = 0;
-        noiseTuner.detune = 3
+        noiseTuner.detune = 30
+        noiseTuner.reverse = true;
         noiseTuner.volume.value = Tone.gainToDb(1);
       }
       break;
     case '1':
       synths.membraneSynth.set({
-        // detune: -1200 * normalizedCellDistance, // Example: detune more as distance increases
-        volume: Tone.gainToDb(1) // Quieter as distance increases
+        detune: -1200 * normalizedCellDistance, // Example: detune more as distance increases
+        volume: Tone.gainToDb(1) 
       });
       synths.droneSynth.set({
           harmonicity: 1 + 2 * normalizedCellDistance, // More harmonicity as distance increases
-          volume: Tone.gainToDb(0.5 - 0.5 * normalizedCellDistance) // Quieter as distance increases
+          volume: Tone.gainToDb(0.75 - 0.5 * normalizedCellDistance), // Quieter as distance increases
+          frequency: 110 - normalizedCellDistance * 100
       });
-      synths.droneSynth.frequency.rampTo(220, 1)
-      droneLP.frequency.rampTo(250, 1.5);
-      droneLP.Q.rampTo(3, 1);
-      noiseBP.frequency.rampTo(5000, 1.5);
-      noiseBP.Q.rampTo(0, 1);
+      // synths.droneSynth.frequency.rampTo(220 - normalizedCellDistance * 5, 1)
+      droneLP.frequency.rampTo(250 + normalizedCellDistance, 0.5);
+      droneLP.Q.rampTo(4, 1);
+      noiseBP.frequency.rampTo(Math.abs(5000 - (normalizedCellDistance * 1000)), 0.5);
       synths.noiseSynth.set({
-          playbackRate: 1 + normalizedCellDistance, // Faster playback as distance increases
           volume: Tone.gainToDb(normalizedCellDistance) // Louder as distance increases
       });
       if (noiseTuner) { 
         noiseTuner.playbackRate = 1 + normalizedCellDistance; // Directly set playback rate
-        noiseTuner.volume.value = Tone.gainToDb(normalizedCellDistance); // Directly set volume in decibels
+        noiseTuner.volume.value = Tone.gainToDb(Math.abs(normalizedCellDistance - 0.25)); // Directly set volume in decibels
       }
       break;
   }
