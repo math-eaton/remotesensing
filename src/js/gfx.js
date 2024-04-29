@@ -727,9 +727,10 @@ function updateAudioChannels(audioChannelName, settings) {
 
 
 function switchSynth(activeChannel) {
+  new Tone.Delay(0.1) // adding a delay seems to help async issues
   Object.keys(audioChannels).forEach(audioChannelName => {
     const isMuted = audioChannelName !== activeChannel;
-    fadeOutVol(audioChannelName, isMuted ? 2 : 0); // Mute other channels
+    // fadeOutVol(audioChannelName, isMuted ? 2 : 0); // Mute other channels
     updateAudioChannels(audioChannelName, { muted: isMuted, volume: isMuted ? -Infinity : audioChannels[audioChannelName].volume });
   });
 
@@ -989,6 +990,7 @@ let currentColor = 0x00ff00;  // Default color, will be updated dynamically
 function updateColorFromVUMeter() {
   const vuMeterValue = Math.round(meter.getValue(), 1);
   currentColor = getColorFromVUMeter(vuMeterValue);
+  console.log("vu: " + vuMeterValue)
   updateAllLinesWithNewColor(currentColor);  // Update all lines with the new color
 }
 
@@ -1400,7 +1402,7 @@ function raycastCellServiceVertex(intersection, maxCellTowerRays = 1) {
       drawcellRayLine(intersectPoint, nearestTower.position, maxCellTowerRays, nearestTower.uniqueCellid, gridCode, nearestTower.distance, currentColor);
 
       // Update audio parameters based on distance and gridCode of the nearest tower
-      updateCellAudioParams(Math.round(nearestTower.distance,0), cellServiceRayMesh.gridcode);
+      updateCellAudioParams(Math.round(nearestTower.distance,0), gridCode);
   } else {
       console.log('No cell towers found or dead zone!');
       cellRayCleanup(maxCellTowerRays);
@@ -1410,23 +1412,32 @@ function raycastCellServiceVertex(intersection, maxCellTowerRays = 1) {
 function updateCellAudioParams(distance, gridCode) {
   const cellRayMi = distance / 5280;
   console.log(cellRayMi)
-  switch(gridCode) {
-      case 0:
-          synths.membraneSynth.Tone.now().set({
-              detune: -100 * cellRayMeters,
-              volume: Tone.gainToDb(1 - cellRayMi)
-          });
-          break;
-      case 1:
-          synths.droneSynth.Tone.now().set({
-              harmonicity: 1.5 * cellRayMi,
-              volume: Tone.gainToDb(0.5 - cellRayMi)
-          });
-          synths.noiseSynth.Tone.now().set({
-              playbackRate: 1 + cellRayMi,
-              volume: Tone.gainToDb(cellRayMi)
-          });
-          break;
+  // Normalize distance to a 0-1 scale for audio parameter use
+  let normalizedCellDistance = Math.max(0, Math.min(1, (cellRayMi - 0.1) / (10 - 0.1)));
+  console.log("normalized: " + normalizedCellDistance)
+  console.log("current grid code is " + gridCode)
+
+  switch (gridCode) {
+    case '0':
+      synths.membraneSynth.set({
+          // detune: -1200 * normalizedCellDistance, // Example: detune more as distance increases
+          volume: Tone.gainToDb(0) // Quieter as distance increases
+      });
+      break;
+    case '1':
+      synths.membraneSynth.set({
+        // detune: -1200 * normalizedCellDistance, // Example: detune more as distance increases
+        volume: Tone.gainToDb(1) // Quieter as distance increases
+      });
+      synths.droneSynth.set({
+          harmonicity: 1 + 2 * normalizedCellDistance, // More harmonicity as distance increases
+          volume: Tone.gainToDb(0.5 - 0.5 * normalizedCellDistance) // Quieter as distance increases
+      });
+      synths.noiseSynth.set({
+          playbackRate: 1 + normalizedCellDistance, // Faster playback as distance increases
+          volume: Tone.gainToDb(normalizedCellDistance) // Louder as distance increases
+      });
+      break;
   }
 }
 
@@ -1456,7 +1467,7 @@ function drawcellRayLine(start, end, maxCellTowerRays, towerId, gridCode, distan
 
   // Trigger the membrane synth only if gridCode is not 0 and it's a new tower
   if (gridCode !== '0' && lastTowerId !== towerId) {
-      triggerMembraneSynth(distance);
+      triggerMembraneSynth();
       lastTowerId = towerId;
   }
 
@@ -1509,7 +1520,7 @@ function findNearestCellTowers(intersectPoint, maxCellTowerRays = 1) {
   return towers.sort((a, b) => a.distance - b.distance).slice(0, maxCellTowerRays);
 }
 
-function triggerMembraneSynth(distance) {
+function triggerMembraneSynth() {
   const note = DmalkosRandomNote(); 
   safeTriggerSound(membraneSynth, note, "0.15"); 
   console.log(`triggering " + ${note}`); // Log the same note
