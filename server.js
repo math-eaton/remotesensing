@@ -45,7 +45,7 @@ const wsServer = new WebSocketServer({
 });
 
 wsServer.on('request', (request) => {
-  if (request.origin !== 'expectedOrigin') {
+  if (request.origin !== 'http://localhost:5173') {
     request.reject();
     console.log('Connection from origin ' + request.origin + ' rejected.');
     return;

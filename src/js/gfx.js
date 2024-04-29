@@ -689,25 +689,33 @@ accessChannel: {
 // Function to update channel volume or mute state
 function updateAudioChannels(audioChannelName, settings) {
   const audioChannel = audioChannels[audioChannelName];
-  if (settings.volume !== undefined) {
-    audioChannel.volume = settings.volume;
-    audioChannel.synths.forEach(synthName => {
-      if (synths[synthName] && synths[synthName].volume) {
-        synths[synthName].volume.value = settings.volume;
-      // } else if (synthName === 'harmonicOscillator') { // Special handling for the harmonic oscillator
-        // setHarmonicOscillatorVolume(settings.volume);
-      }
-    });
+  const scheduleTime = Tone.now() + 0.1; // Schedule updates to avoid timing conflicts
+
+  if (settings.volume !== undefined && !isNaN(settings.volume)) {
+      audioChannel.volume = settings.volume;
+      audioChannel.synths.forEach(synthName => {
+          const synth = synths[synthName];
+          if (synth && synth.volume) {
+              synth.volume.setValueAtTime(settings.volume, scheduleTime);
+          }
+      });
+  } else {
+      console.error("Invalid volume setting:", settings.volume);
   }
+
   if (settings.muted !== undefined) {
-    audioChannel.muted = settings.muted;
-    audioChannel.synths.forEach(synthName => {
-      if (synths[synthName] && synths[synthName].volume) {
-        synths[synthName].volume.value = settings.muted ? -Infinity : audioChannel.volume;
-      // } else if (synthName === 'harmonicOscillator') { // Special handling for the harmonic oscillator
-        // setHarmonicOscillatorVolume(settings.muted ? -Infinity : audioChannel.volume);
+      audioChannel.muted = settings.muted;
+      const muteVolume = settings.muted ? -Infinity : audioChannel.volume;
+      if (!isNaN(muteVolume)) {
+          audioChannel.synths.forEach(synthName => {
+              const synth = synths[synthName];
+              if (synth && synth.volume) {
+                  synth.volume.setValueAtTime(muteVolume, scheduleTime);
+              }
+          });
+      } else {
+          console.error("Invalid mute volume:", muteVolume);
       }
-    });
   }
 }
 
@@ -719,29 +727,14 @@ function updateAudioChannels(audioChannelName, settings) {
 
 
 function switchSynth(activeChannel) {
-  // Mute all channels by ramping down their volume
   Object.keys(audioChannels).forEach(audioChannelName => {
-      if (audioChannelName !== activeChannel) {
-          fadeOutVol(audioChannelName); // Ramp down and mute
-      }
+    const isMuted = audioChannelName !== activeChannel;
+    fadeOutVol(audioChannelName, isMuted ? 2 : 0); // Mute other channels
+    updateAudioChannels(audioChannelName, { muted: isMuted, volume: isMuted ? -Infinity : audioChannels[audioChannelName].volume });
   });
 
-  // Check and unmute the selected channel
-  if (audioChannels[activeChannel]) {
-      const channel = audioChannels[activeChannel];
-      channel.synths.forEach(synthName => {
-          const synth = synths[synthName];
-          if (synth && synth.volume) {
-              synth.volume.cancelScheduledValues(Tone.now());
-              synth.volume.rampTo(channel.volume, 2); // Ensure ramp to actual channel volume
-          }
-      });
-
-      updateAudioChannels(activeChannel, { muted: false, volume: channel.volume }); // Ensure volume is updated in the config
-      console.log(`Activated channel: ${activeChannel} with synths ${channel.synths}`);
-  } else {
-      console.error(`Channel ${activeChannel} not initialized or not found`);
-  }
+  // Log the activation
+  console.log(`Activated channel: ${activeChannel} with synths ${audioChannels[activeChannel].synths}`);
 }
 
 let lastEventTime = Tone.now();
@@ -765,21 +758,16 @@ const time = getNextEventTime();
 synth.triggerAttackRelease(note, duration, time);
 }
 
-function fadeOutVol(audioChannelName, duration = 2) {
+function fadeOutVol(audioChannelName, duration) {
   const channel = audioChannels[audioChannelName];
-  if (channel && !channel.muted) {
-      channel.synths.forEach(synthName => {
-          const synth = synths[synthName];
-          if (synth && synth.volume) {
-              // Assuming volume is a Tone.Param or similar
-              synth.volume.rampTo(-Infinity, duration); // Ramp to silence over 3 seconds
-          }
-      });
-
-      // Set a timeout to mark the channel as muted after the ramp down is complete
-      setTimeout(() => {
-          updateAudioChannels(audioChannelName, { muted: true });
-      }, duration * 2);
+  if (channel) {
+    channel.synths.forEach(synthName => {
+      const synth = synths[synthName];
+      if (synth && synth.volume) {
+        const targetVolume = channel.muted ? -Infinity : audioChannels[audioChannelName].volume;
+        synth.volume.rampTo(targetVolume, duration, Tone.now() + 0.2);
+      }
+    });
   }
 }
 
@@ -1402,12 +1390,12 @@ function raycastCellServiceVertex(intersection, maxCellTowerRays = 1) {
   const nearestTowers = findNearestCellTowers(intersectPoint, maxCellTowerRays);
   const gridCode = intersection.object.userData.gridCode || 'unknown';  // Default to 'unknown' if not provided
 
-  console.log("Intersected gridCode:", gridCode);  // Log the current gridCode at intersection
+  // console.log("Intersected gridCode:", gridCode);  // Log the current gridCode at intersection
 
   if (nearestTowers.length > 0) {
       // Only use the nearest tower for audio parameters and ray drawing
       const nearestTower = nearestTowers[0];
-      console.log("nearest tower: ", JSON.stringify(nearestTower.distance))
+      // console.log("nearest tower: ", JSON.stringify(nearestTower.distance))
 
       drawcellRayLine(intersectPoint, nearestTower.position, maxCellTowerRays, nearestTower.uniqueCellid, cellServiceMesh.gridCode, nearestTower.distance, currentColor);
 
@@ -1420,23 +1408,23 @@ function raycastCellServiceVertex(intersection, maxCellTowerRays = 1) {
 }
 
 function updateCellAudioParams(distance, gridCode) {
-  const cellRayMeters = distance;
-  console.log(cellRayMeters)
+  const cellRayKM = distance / 1000;
+  // console.log(cellRayKM)
   switch(gridCode) {
       case 0:
-          synths.membraneSynth.set({
+          synths.membraneSynth.Tone.now().set({
               detune: -100 * cellRayMeters,
-              volume: Tone.gainToDb(1 - cellRayMeters)
+              volume: Tone.gainToDb(1 - cellRayKM)
           });
           break;
       case 1:
-          synths.droneSynth.set({
-              harmonicity: 1.5 * cellRayMeters,
-              volume: Tone.gainToDb(0.5 - cellRayMeters)
+          synths.droneSynth.Tone.now().set({
+              harmonicity: 1.5 * cellRayKM,
+              volume: Tone.gainToDb(0.5 - cellRayKM)
           });
-          synths.noiseSynth.set({
-              playbackRate: 1 + cellRayMeters,
-              volume: Tone.gainToDb(cellRayMeters)
+          synths.noiseSynth.Tone.now().set({
+              playbackRate: 1 + cellRayKM,
+              volume: Tone.gainToDb(cellRayKM)
           });
           break;
   }
@@ -2323,6 +2311,11 @@ function initWebSocketConnection() {
     }
   }
 
+//   ws.on('close', (reasonCode, description) => {
+//     console.log('WebSocket connection closed. Reason:', reasonCode, description);
+// });
+
+
 
   ws.onerror = function(event) {
     console.error('WebSocket error:', event);
@@ -2353,7 +2346,7 @@ function onDocumentKeyDown(event) {
 // scene layer toggles
 function toggleMapScene(switchState, source) {
   const canvas = document.getElementById('gfx');
-  let activeSynthType;  // Declare variable at function scope
+  let activeAudioChannel;  // Declare variable at function scope
   let isDecaying;
 
   if (source === 'switch1') {
@@ -2361,6 +2354,9 @@ function toggleMapScene(switchState, source) {
     digitalGroup.visible = false;
     // channelSlider.domElement.style.cssText = 'visible:false,';
     let channelSlider = document.getElementById('fm-channel-controls');
+
+    // analog if switch is in pos1, otherwise digital
+    activeAudioChannel = switchState === 1 ? 'analogChannel' : 'digitalChannel';
 
 
     // raycasterDict.cellServiceMesh.enabled = false;
@@ -2384,7 +2380,6 @@ function toggleMapScene(switchState, source) {
         fmTransmitterPoints.visible = true;  
         raycasterDict.fmTransmitterPoints.enabled = true;
         raycasterDict.cellTransmitterPoints.enabled = false;
-        activeSynthType = 'analogChannel';
         channelSlider.style.visibility = "visible";
         // synths.droneSynth.triggerRelease(Tone.now()+ 0.1)
         synths.droneSynth.triggerAttack("F2", Tone.now() + 0.2);
@@ -2406,7 +2401,7 @@ function toggleMapScene(switchState, source) {
         // raycasterDict.cellServiceMesh.enabled = true;
         raycasterDict.cellTransmitterPoints.enabled = true;
         raycasterDict.fmTransmitterPoints.enabled = false;
-        activeSynthType = 'digitalChannel';
+        activeAudioChannel = 'digitalChannel';
         // synths.droneSynth.triggerRelease(Tone.now()+ 0.1)
         synths.droneSynth.triggerAttack("A3", Tone.now() + 0.2);
         // safeTriggerSound(droneSynth, "A3", "0.5"); 
@@ -2422,35 +2417,39 @@ function toggleMapScene(switchState, source) {
         break;
     }
 
-    // Use the activeSynthType determined by the switch
-    if (activeSynthType) {
-      switchSynth(activeSynthType);
+    // Use the activeAudioChannel determined by the switch
+    if (activeAudioChannel) {
+      switchSynth(activeAudioChannel);  // Use the consolidated switching function
     } else {
-      console.error("No active synth type was set for switch1");
+      console.error("No active audio channel was set for " + source);
     }
-
+  
   } else if (source === 'switch2') {
+
+    activeAudioChannel = switchState === 1 ? 'elevationChannel' : 'accessChannel';
+
+
     switch (switchState) {
       case 1:
         elevContourLines.visible = true;
         accessGroup.visible = false;
         raycasterDict.accessibilityMesh.enabled = false;
-        activeSynthType = 'elevationChannel'; // This should match an existing channel or be defined similarly
+        activeAudioChannel = 'elevationChannel'; // This should match an existing channel or be defined similarly
         break;
 
       case 2:
         accessGroup.visible = true;
         elevContourLines.visible = false;
         raycasterDict.accessibilityMesh.enabled = true;
-        activeSynthType = 'accessChannel'; // This should match an existing channel or be defined similarly
+        activeAudioChannel = 'accessChannel'; // This should match an existing channel or be defined similarly
         break;
     }
 
-    // Use the activeSynthType determined by the switch
-    if (activeSynthType) {
-      switchSynth(activeSynthType);
+    // Use the activeAudioChannel determined by the switch
+    if (activeAudioChannel) {
+      switchSynth(activeAudioChannel);  // Use the consolidated switching function
     } else {
-      console.error("No active synth type was set for switch2");
+      console.error("No active audio channel was set for " + source);
     }
   }
 }
