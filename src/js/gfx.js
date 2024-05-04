@@ -1137,7 +1137,7 @@ function monitorSynths() {
     stats = new Stats();
     stats.showPanel(2); 
     stats.domElement.style.cssText = 'position:absolute;bottom:0px;left:0px;scale:70%;';
-    document.getElementById('stats').appendChild(stats.domElement);
+    // document.getElementById('stats').appendChild(stats.domElement);
 
     // scaleBar = createScaleBar(scene);  // Ensure this is called after scene is defined
 
@@ -4490,19 +4490,14 @@ async function loadAllData() {
     const urls = [
       'src/assets/data/elevation_contours_shaved.geojson',
       'src/assets/data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson',
-      // 'src/assets/data/FmTowers_FeaturesToJSON_AOI_20231204.geojson',
       'src/assets/data/ne_50m_coastline_aoiClip.geojson',
-      // 'src/assets/data/cellServiceCentroids_2000m_20231210.geojson',
       'src/assets/data/fm_freq_dict.json',
       'src/assets/data/FM_transmitter_sites.geojson',
       'src/assets/data/fm_contours_shaved.geojson',
       'src/assets/data/ne_50m_ocean_aoiClip.geojson',
-      // 'src/assets/data/compositeSurface_polygon_surface.geojson',
       'src/assets/data/NYS_fullElevDEM_boundingBox.geojson',
       'src/assets/data/cellService_contours_5KM_pts_20240407.geojson',
-      // 'src/assets/data/cellService_contours_5KM_explode_mini.geojson',
       'src/assets/data/accessService_contours_5KM_pts_20240407.geojson',
-      // 'src/assets/data/AccessHexTesselation_lvl5_nodata.geojson',
       // 'src/assets/sounds/presets.json',
       'src/assets/data/study_area_admin0clip.geojson'
     ];
