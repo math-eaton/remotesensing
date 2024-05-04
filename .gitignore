@@ -35,5 +35,5 @@ secret.js
 presentations
 *.code-workspace
 
-data
-sounds
+# data
+# sounds
