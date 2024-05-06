@@ -478,27 +478,27 @@ function getRandomSampleIndex() {
   return newIndex;
 }
 // update FM radio player based on slider tuning
-function updatePlaybackPosition(channelValue) {
-  // Calculate new positions based on the channel value scaled by the buffer durations
-  const radioSampleDuration = radioTuner.buffer.duration;
-  const noiseSampleDuration = noiseTuner.buffer.duration;
+// function updatePlaybackPosition(channelValue) {
+//   // Calculate new positions based on the channel value scaled by the buffer durations
+//   const radioSampleDuration = radioTuner.buffer.duration;
+//   const noiseSampleDuration = noiseTuner.buffer.duration;
   
-  const newRadioPosition = (channelValue / 100) * radioSampleDuration;
-  const newNoisePosition = (channelValue / 100) * noiseSampleDuration;
+//   const newRadioPosition = (channelValue / 100) * radioSampleDuration;
+//   const newNoisePosition = (channelValue / 100) * noiseSampleDuration;
   
-  const currentTime = Tone.now();
-  const nextTime = getNextEventTime(currentTime);
+//   const currentTime = Tone.now();
+//   const nextTime = getNextEventTime(currentTime);
 
-  // Ensure the new positions are scheduled correctly
-  if (nextTime < currentTime) {
-      console.warn('Adjusted nextTime to avoid scheduling error.');
-      nextTime = currentTime + 0.1;
-  }
+//   // Ensure the new positions are scheduled correctly
+//   if (nextTime < currentTime) {
+//       console.warn('Adjusted nextTime to avoid scheduling error.');
+//       nextTime = currentTime + 0.1;
+//   }
 
-  // Start or change playback for both tuners
-  radioTuner.start(nextTime + 0.05, newRadioPosition);
-  noiseTuner.start(nextTime + 0.05, newNoisePosition);
-}
+//   // Start or change playback for both tuners
+//   radioTuner.start(nextTime + 0.05, newRadioPosition);
+//   noiseTuner.start(nextTime + 0.05, newNoisePosition);
+// }
 
 function updateLoopStart(radioTuner) {
   if (radioTuner && radioTuner.buffer && radioTuner.buffer.loaded) {
@@ -513,8 +513,7 @@ let noiseBuffer;
 
 async function loadAllAudioFiles() {
   try {
-      await loadSampleUrls(); // Assuming loadSampleUrls() loads all necessary audio files
-      await loadNoiseBuffer();
+      await loadSampleUrls();
       console.log("All audio files loaded successfully.");
   } catch (error) {
       console.error('Failed to load audio files:', error);
@@ -522,6 +521,7 @@ async function loadAllAudioFiles() {
 }
 
 async function loadNoiseBuffer() {
+  console.log("loading noise buffer")
   try {
       noiseBuffer = await Tone.ToneAudioBuffer.fromUrl("/remotesensing/assets/sounds/amRadioTuning.mp3");
       console.log("Noise buffer loaded successfully.");
@@ -1742,7 +1742,7 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
 
   // only drone
   if (audioComponent === synths.droneSynth) {
-    audioComponent.volume.rampTo(Tone.gainToDb(normalizedDistance / 2), 0.5);
+    audioComponent.volume.rampTo(Tone.gainToDb(normalizedDistance), 0.5);
     // console.log(audioComponent.volume)
     audioComponent.harmonicity.rampTo((1 - (normalizedDistance)), 0.5);
 
@@ -1755,7 +1755,9 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
 
     // only primary sample player
   } else if (audioComponent === synths.radioTuner) {
-    audioComponent.volume.rampTo(targetSampleVolume_log - 0.5, 0.45);
+    const reducedVolume = targetNoiseVolume_log - 22;
+    audioComponent.volume.rampTo(reducedVolume, 0.45);
+
 
     // Conditional logic based on the threshold
     if (normalizedDistance < 0.3) {
@@ -1764,8 +1766,8 @@ function updateParamsBasedOnDistFM(audioComponent, filterComponent, shortestDist
         // Switch to normal playback settings
         audioComponent.set({
           grainSize: 1.0,
-          playbackRate: 1.0,
-          overlap: 1,
+          playbackRate: 0.5,
+          overlap: 2,
         });
       }
     } else {
@@ -2598,14 +2600,15 @@ function toggleMapScene(switchState, source) {
         elevContourLines.visible = true;
         accessGroup.visible = false;
         raycasterDict.accessibilityMesh.enabled = false;
-        activeAudioChannel = 'elevationChannel'; // This should match an existing channel or be defined similarly
+        bitCrusher.bits.rampTo(12, 0.5); 
+        activeAudioChannel = 'elevationChannel'; 
         break;
 
       case 2:
         accessGroup.visible = true;
         elevContourLines.visible = false;
         raycasterDict.accessibilityMesh.enabled = true;
-        activeAudioChannel = 'accessChannel'; // This should match an existing channel or be defined similarly
+        activeAudioChannel = 'accessChannel';
         break;
 
         default:
@@ -2629,7 +2632,7 @@ function toggleMapScene(switchState, source) {
   // Function to initialize the scene and other components
   async function initialize() {
     initThreeJS();
-    await loadAllAudioFiles(); // Wait for all audio files to be loaded
+    await loadAllData();
     initToneJS();
 
     // Initialize pixelationFactor
@@ -2639,7 +2642,6 @@ function toggleMapScene(switchState, source) {
 
     // Load GeoJSON data and then enable interaction
     try {
-      await loadAllData();
       postLoadOperations();
       initWebSocketConnection();
       // unlockAudioContext(); // Attempt to unlock AudioContext on WebSocket connection
@@ -4490,11 +4492,12 @@ let currentBufferIndex = 0;
 
 async function loadAllData() {
   // Fetch all URLs including GeoJSON and sample URLs
+  const noiseBufferPromise = loadNoiseBuffer();
   const sampleUrlsPromise = loadSampleUrls();  // Load sample URLs
   const geoJsonPromise = loadGeoJSONData();  // Adjust this function to return a promise
   
   // Wait for both promises to complete
-  await Promise.all([geoJsonPromise, sampleUrlsPromise]);
+  await Promise.all([noiseBufferPromise, geoJsonPromise, sampleUrlsPromise]);
   console.log("All data loaded successfully.");
 }
 
@@ -4513,7 +4516,7 @@ async function loadAllData() {
       'assets/data/NYS_fullElevDEM_boundingBox.geojson',
       'assets/data/cellService_contours_5KM_pts_20240407.geojson',
       'assets/data/accessService_contours_5KM_pts_20240407.geojson',
-      // 'src/assets/sounds/presets.json',
+      'assets/sounds/sounds.json',
       'assets/data/study_area_admin0clip.geojson'
     ];
 
@@ -4653,9 +4656,9 @@ async function loadAllData() {
 
       /////////////////////// sound
 
-      case 'src/assets/sounds/presets.json':
-        synthPresets = data;
-        loadSynthPresets(data);
+      case 'src/assets/sounds/sounds.json':
+        soundURLs = data;
+        loadSoundURLs(data);
         break;
   
       //////////////////// ancillary
@@ -4698,9 +4701,9 @@ async function loadAllData() {
   // alt version which uses simpler npm build script to ref
   async function loadSampleUrls() {
     try {
-      const response = await fetch('/remotesensing/sounds.json');
+      const response = await fetch('/remotesensing/assets/sounds.json');
       if (!response.ok) {
-        throw new Error('Network response was not ok');
+        throw new Error('Network response was not ok!!');
       }
       const sampleUrls = await response.json();
       await Promise.all(sampleUrls.map(url => loadSample(url)));
