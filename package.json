@@ -65,6 +65,6 @@
     "tone": "^14.7.77",
     "vite-plugin-static-copy": "^1.0.4",
     "websocket": "^1.0.34",
-    "ws": "^8.16.0"
+    "ws": "^8.17.0"
   }
 }
