@@ -15,7 +15,7 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
-  /* cursor: url("/src/cursor/arrow.cur"), auto; */
+  cursor: url("/src/cursor/whiteCrosshair.cur"), auto; /* 15% transparent cursor */
   overscroll-behavior: none;
   overflow: hidden;
   overflow-y: auto;
@@ -452,10 +452,10 @@ p, ul{
   margin: 0 auto;
   text-align: center;
   overflow: hidden;
-  /* cursor: url("/src/cursor/whiteCrosshair.cur"), auto; */
+  cursor: url("/src/cursor/whiteCrosshair.cur"), auto;
   transition: filter 0.05s linear;
   image-rendering: pixelated;
-  cursor: none;
+  /* cursor: none; */
   /* filter: hue-rotate(180deg) */
   /* z-index: 1;  */
 }
@@ -502,6 +502,7 @@ p, ul{
   opacity: 0.7;
   -webkit-transition: 0.2s;
   transition: opacity 0.2s;
+  cursor: url("/src/cursor/point.cur"), auto;
 }
 
 #fm-channel-display{
@@ -524,7 +525,7 @@ p, ul{
   background: #ececec; /* Keep the thumb's visual background */
   border: 10px solid rgba(0, 0, 0, 0); /* Transparent border */
   box-sizing: border-box; /* Ensures the border is included in width/height calculations */
-  cursor: pointer;
+  cursor: url("/src/cursor/point.cur"), auto;
 }
 
 #fm-channel-slider::-moz-range-thumb {

@@ -4516,7 +4516,7 @@ async function loadAllData() {
       'assets/data/NYS_fullElevDEM_boundingBox.geojson',
       'assets/data/cellService_contours_5KM_pts_20240407.geojson',
       'assets/data/accessService_contours_5KM_pts_20240407.geojson',
-      'assets/sounds/sounds.json',
+      // 'assets/sounds/sounds.json',
       'assets/data/study_area_admin0clip.geojson'
     ];
 

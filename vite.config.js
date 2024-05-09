@@ -8,12 +8,6 @@ export default defineConfig({
   build: {
     outDir: 'dist',
   },
-  plugins: [
-    eslint({
-      cache: false,
-      fix: true,
-    }),
-  ],
   server: {
     proxy: {
       '/api': {
