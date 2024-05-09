@@ -1,13 +1,8 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+const fs = require('fs');
+const path = require('path');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const soundsDir = path.join(__dirname, './public/assets/sounds');
-const outputPath = path.join(__dirname, './public/assets/sounds/sounds.json');
+const soundsDir = path.join(__dirname, '../public/assets/sounds');
+const outputPath = path.join(__dirname, '../public/sounds.json');
 const baseUrl = '/remotesensing/assets/sounds/';
 
 fs.readdir(soundsDir, (err, files) => {
