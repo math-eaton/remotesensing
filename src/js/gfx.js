@@ -1,14 +1,14 @@
 // Import modules
 import * as THREE from 'three';
-import { MapControls } from 'three/examples/jsm/controls/MapControls.js';
-// import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import * as Tone from 'tone';
+import { MapControls } from 'three/examples/jsm/controls/MapControls';
+// import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils';
 import proj4 from 'proj4';
 import hull from 'convex-hull';
 import Delaunator from 'delaunator';
 import { GeoJSON } from 'geojson';
-import { Earcut } from 'three/src/extras/Earcut.js'
-import Stats from 'three/addons/libs/stats.module.js'
-import * as Tone from 'tone';
+import { Earcut } from 'three/src/extras/Earcut'
+import Stats from 'three/addons/libs/stats.module'
 import { Chord, Interval, Note, Scale } from "tonal";
 // import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
 // import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
@@ -513,7 +513,7 @@ let noiseBuffer;
 
 async function loadAllAudioFiles() {
   try {
-      await loadSampleUrls(); // Assuming loadSampleUrls() loads all necessary audio files
+      await loadSampleUrls(); 
       await loadNoiseBuffer();
       console.log("All audio files loaded successfully.");
   } catch (error) {
@@ -523,7 +523,7 @@ async function loadAllAudioFiles() {
 
 async function loadNoiseBuffer() {
   try {
-      noiseBuffer = await Tone.ToneAudioBuffer.fromUrl("/remotesensing/assets/sounds/amRadioTuning.mp3");
+      noiseBuffer = await Tone.ToneAudioBuffer.fromUrl("assets/sounds/amRadioTuning.mp3");
       console.log("Noise buffer loaded successfully.");
   } catch (error) {
       console.error('Failed to load the noise buffer:', error);
@@ -4490,11 +4490,13 @@ let currentBufferIndex = 0;
 
 async function loadAllData() {
   // Fetch all URLs including GeoJSON and sample URLs
-  const sampleUrlsPromise = loadSampleUrls();  // Load sample URLs
+  // const sampleUrlsPromise = loadSampleUrls();  // Load sample URLs
   const geoJsonPromise = loadGeoJSONData();  // Adjust this function to return a promise
   
   // Wait for both promises to complete
-  await Promise.all([geoJsonPromise, sampleUrlsPromise]);
+  // await Promise.all([geoJsonPromise, sampleUrlsPromise]);
+  // or not
+  await Promise.all([geoJsonPromise]);
   console.log("All data loaded successfully.");
 }
 
@@ -4698,7 +4700,9 @@ async function loadAllData() {
   // alt version which uses simpler npm build script to ref
   async function loadSampleUrls() {
     try {
-      const response = await fetch('/remotesensing/sounds.json');
+      const response = await fetch('assets/sounds/sounds.json');
+      // remove response for silent transmissions
+      // const response = await fetch('');
       if (!response.ok) {
         throw new Error('Network response was not ok');
       }
