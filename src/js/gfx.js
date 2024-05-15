@@ -2643,7 +2643,7 @@ function toggleMapScene(switchState, source) {
     try {
       await loadAllData();
       postLoadOperations();
-      initWebSocketConnection();
+      // initWebSocketConnection();
       // unlockAudioContext(); // Attempt to unlock AudioContext on WebSocket connection
       enableInteraction();
       flipCamera();
@@ -4657,10 +4657,10 @@ async function loadAllData() {
 
       /////////////////////// sound
 
-      case 'src/assets/sounds/presets.json':
-        synthPresets = data;
-        loadSynthPresets(data);
-        break;
+      // case 'src/assets/sounds/presets.json':
+      //   synthPresets = data;
+      //   loadSynthPresets(data);
+      //   break;
   
       //////////////////// ancillary
 
