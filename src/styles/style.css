@@ -15,7 +15,7 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
-  cursor: url("/src/cursor/whiteCrosshair.cur"), auto; /* 15% transparent cursor */
+  cursor: url("/assets/cursor/whiteCrosshair.cur"), auto; /* 15% transparent cursor */
   overscroll-behavior: none;
   overflow: hidden;
   overflow-y: auto;
@@ -195,7 +195,7 @@ button {
   color: cyan;
   padding: 5px;
   margin: 1%;
-  cursor: url("/src/cursor/point.cur"), auto;
+  cursor: url("/assets/cursor/point.cur"), auto;
   border-style: groove;
   border-width: 2px;
   border-color: cyan;
@@ -452,7 +452,7 @@ p, ul{
   margin: 0 auto;
   text-align: center;
   overflow: hidden;
-  cursor: url("/src/cursor/whiteCrosshair.cur"), auto;
+  cursor: url("/assets/cursor/whiteCrosshair.cur"), auto;
   transition: filter 0.05s linear;
   image-rendering: pixelated;
   /* cursor: none; */
@@ -502,7 +502,7 @@ p, ul{
   opacity: 0.7;
   -webkit-transition: 0.2s;
   transition: opacity 0.2s;
-  cursor: url("/src/cursor/point.cur"), auto;
+  cursor: url("/assets/cursor/point.cur"), auto;
 }
 
 #fm-channel-display{
@@ -525,7 +525,7 @@ p, ul{
   background: #ececec; /* Keep the thumb's visual background */
   border: 10px solid rgba(0, 0, 0, 0); /* Transparent border */
   box-sizing: border-box; /* Ensures the border is included in width/height calculations */
-  cursor: url("/src/cursor/point.cur"), auto;
+  cursor: url("/assets/cursor/point.cur"), auto;
 }
 
 #fm-channel-slider::-moz-range-thumb {
@@ -619,7 +619,7 @@ p, ul{
   border-radius: 5px;
   font-size: medium; /* Adjust the font size as needed */
   max-width: 250px; /* Set a max-width for the container */
-  cursor: url("/src/cursor/point.cur"), auto;
+  cursor: url("/assets/cursor/point.cur"), auto;
 }
 
 #info-container ul {
@@ -654,7 +654,7 @@ button#start-button {
   background-color: #000000;
   color: white;
   border: none;
-  cursor: url("/src/cursor/point.cur"), auto;
+  cursor: url("/assets/cursor/point.cur"), auto;
 }
 
 .hidden {
@@ -675,7 +675,7 @@ button {
   padding: 5px;
   margin: 1%;
   z-index: 5000001;
-  cursor: url("/src/cursor/point.cur"), auto;
+  cursor: url("/assets/cursor/point.cur"), auto;
   filter: none;
   border-style: groove;
   border-width: 2px;
@@ -686,7 +686,7 @@ button {
   font-weight: 500;
   font-family: inherit;
   background-color: #1a1a1a;
-  cursor: url("/src/cursor/point.cur"), auto;
+  cursor: url("/assets/cursor/point.cur"), auto;
   transition: border-color 0.25s;
 }
 button:hover {
@@ -770,7 +770,7 @@ button:focus-visible {
 .custom-checkbox-label {
   display: flex;
   align-items: center;
-  cursor: url("/src/cursor/point.cur"), auto;
+  cursor: url("/assets/cursor/point.cur"), auto;
   margin-right: 5px;
 }
 
@@ -810,12 +810,12 @@ button:focus-visible {
 }
 
 .cursor-default {
-  cursor: url("/src/cursor/whiteCrosshair.cur"), auto; /* 15% transparent cursor */
+  cursor: url("/assets/cursor/whiteCrosshair.cur"), auto; /* 15% transparent cursor */
   opacity: 85%;
 }
 
 #terrainContainer1 {
-  cursor: url("/src/cursor/point.cur"), auto;
+  cursor: url("/assets/cursor/point.cur"), auto;
   position: absolute; /* Make it positioned absolutely */
   top: 0;
   left: 0;
@@ -826,7 +826,7 @@ button:focus-visible {
 }
 
 #isoCubeContainer1 {
-  cursor: url("/src/cursor/point.cur"), auto;
+  cursor: url("/assets/cursor/point.cur"), auto;
   margin: 2%;
   /* filter: grayscale(1); */
 }

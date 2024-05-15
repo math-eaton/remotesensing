@@ -1,15 +1,17 @@
 // Import modules
 import * as THREE from 'three';
 import * as Tone from 'tone';
-import { MapControls } from 'three/examples/jsm/controls/MapControls';
+import { MapControls } from 'three/examples/jsm/controls/MapControls.js';
 // import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils';
 import proj4 from 'proj4';
-import hull from 'convex-hull';
+// import hull from 'convex-hull';
 import Delaunator from 'delaunator';
-import { GeoJSON } from 'geojson';
-import { Earcut } from 'three/src/extras/Earcut'
-import Stats from 'three/addons/libs/stats.module'
-import { Chord, Interval, Note, Scale } from "tonal";
+// import { GeoJSON } from 'geojson';
+import { Earcut } from 'three/src/extras/Earcut.js'
+// import Stats from 'three/addons/libs/stats.module'
+// import { Chord, Interval, Note, Scale } from "tonal";
+import { Scale } from "tonal";
+
 // import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
 // import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 // import { GeoJSON } from 'geojson';
@@ -487,7 +489,7 @@ function updatePlaybackPosition(channelValue) {
   const newNoisePosition = (channelValue / 100) * noiseSampleDuration;
   
   const currentTime = Tone.now();
-  const nextTime = getNextEventTime(currentTime);
+  let nextTime = getNextEventTime(currentTime);
 
   // Ensure the new positions are scheduled correctly
   if (nextTime < currentTime) {
@@ -1148,9 +1150,9 @@ function monitorSynths() {
 
 
 
-    stats = new Stats();
-    stats.showPanel(2); 
-    stats.domElement.style.cssText = 'position:absolute;bottom:0px;left:0px;scale:70%;';
+    // stats = new Stats();
+    // stats.showPanel(2); 
+    // stats.domElement.style.cssText = 'position:absolute;bottom:0px;left:0px;scale:70%;';
     // document.getElementById('stats').appendChild(stats.domElement);
 
     // scaleBar = createScaleBar(scene);  // Ensure this is called after scene is defined
@@ -2338,7 +2340,7 @@ function updateScaleBar(scaleBar, camera) {
       }
 
 
-      stats.update();  
+      // stats.update();  
 
       delta = delta % interval;
     }
