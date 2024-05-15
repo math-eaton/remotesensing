@@ -401,7 +401,7 @@ function setupRadioTuner() {
 }
 
   radioTuner = new Tone.GrainPlayer({
-     // url: "src/assets/sounds/iddqd_loopy.WAV",
+     // url: "sounds/iddqd_loopy.WAV",
      url: sampleBuffers[0], // Start with the first preloaded buffer
      loop: true,
      grainSize: 1, 
@@ -525,7 +525,7 @@ async function loadAllAudioFiles() {
 
 async function loadNoiseBuffer() {
   try {
-      noiseBuffer = await Tone.ToneAudioBuffer.fromUrl("assets/sounds/amRadioTuning.mp3");
+      noiseBuffer = await Tone.ToneAudioBuffer.fromUrl("/remotesensing/assets/sounds/amRadioTuning.mp3");
       console.log("Noise buffer loaded successfully.");
   } catch (error) {
       console.error('Failed to load the noise buffer:', error);
@@ -2630,8 +2630,9 @@ function toggleMapScene(switchState, source) {
   
   // Function to initialize the scene and other components
   async function initialize() {
-    initThreeJS();
+    console.log("initializing")
     await loadAllAudioFiles(); // Wait for all audio files to be loaded
+    initThreeJS();
     initToneJS();
 
     // Initialize pixelationFactor
@@ -2702,14 +2703,16 @@ function toggleMapScene(switchState, source) {
     visualizationReady = true;
   }
 
-  document.addEventListener('DOMContentLoaded', (event) => {
+
+  if (document.readyState !== 'loading') {
+    console.log("g2g");
     initialize();
-  });
-
-
-  document.addEventListener('mousemove', function() {
-    document.body.style.cursor = ''; // reset to default cursor if we got a mouse going
-  });
+} else {
+    document.addEventListener('DOMContentLoaded', function () {
+        console.log('document was not ready, now initializing');
+        initialize();
+    });
+}
   
   ///////////////////////////////////////////////////
   // MOUSEOVER TRANSITIONS /////////////////////////
@@ -4491,14 +4494,15 @@ let sampleBuffers = [];
 let currentBufferIndex = 0;
 
 async function loadAllData() {
+  console.log("attempting to load data...")
   // Fetch all URLs including GeoJSON and sample URLs
-  // const sampleUrlsPromise = loadSampleUrls();  // Load sample URLs
+  const sampleUrlsPromise = loadSampleUrls();  // Load sample URLs
   const geoJsonPromise = loadGeoJSONData();  // Adjust this function to return a promise
   
   // Wait for both promises to complete
-  // await Promise.all([geoJsonPromise, sampleUrlsPromise]);
+  await Promise.all([geoJsonPromise, sampleUrlsPromise]);
   // or not
-  await Promise.all([geoJsonPromise]);
+  // await Promise.all([geoJsonPromise]);
   console.log("All data loaded successfully.");
 }
 
@@ -4507,18 +4511,18 @@ async function loadAllData() {
   async function loadGeoJSONData() {
     // console.log("loading...")
     const urls = [
-      'assets/data/elevation_contours_shaved.geojson',
-      'assets/data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson',
-      'assets/data/ne_50m_coastline_aoiClip.geojson',
-      'assets/data/fm_freq_dict.json',
-      'assets/data/FM_transmitter_sites.geojson',
-      'assets/data/fm_contours_shaved.geojson',
-      // 'assets/data/ne_50m_ocean_aoiClip.geojson',
-      'assets/data/NYS_fullElevDEM_boundingBox.geojson',
-      'assets/data/cellService_contours_5KM_pts_20240407.geojson',
-      'assets/data/accessService_contours_5KM_pts_20240407.geojson',
-      // 'assets/sounds/sounds.json',
-      'assets/data/study_area_admin0clip.geojson'
+      '/remotesensing/assets/data/elevation_contours_shaved.geojson',
+      '/remotesensing/assets/data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson',
+      '/remotesensing/assets/data/ne_50m_coastline_aoiClip.geojson',
+      '/remotesensing/assets/data/fm_freq_dict.json',
+      '/remotesensing/assets/data/FM_transmitter_sites.geojson',
+      '/remotesensing/assets/data/fm_contours_shaved.geojson',
+      // '/remotesensing/assets/data/ne_50m_ocean_aoiClip.geojson',
+      '/remotesensing/assets/data/NYS_fullElevDEM_boundingBox.geojson',
+      '/remotesensing/assets/data/cellService_contours_5KM_pts_20240407.geojson',
+      '/remotesensing/assets/data/accessService_contours_5KM_pts_20240407.geojson',
+      // 'sounds/sounds.json',
+      '/remotesensing/assets/data/study_area_admin0clip.geojson'
     ];
 
     try {
@@ -4582,14 +4586,14 @@ async function loadAllData() {
 
       ////////////////// lines
 
-      case 'assets/data/elevation_contours_shaved.geojson':
+      case '/remotesensing/assets/data/elevation_contours_shaved.geojson':
         contourGeojsonData = data;
         const meanElevation = calculateMeanContourElevation(data);
         // console.log(`mean elevation: ${meanElevation}`)
         addElevContourLines(data);
         break;
 
-      case 'assets/data/fm_contours_shaved.geojson':
+      case '/remotesensing/assets/data/fm_contours_shaved.geojson':
         fmContoursGeojsonData = data;
         // run on pageload with default channel 201 as filter
         addFMpropagation3D(data, channelFilter, fmPropagationContours)
@@ -4598,24 +4602,24 @@ async function loadAllData() {
         break;
   
 
-      case 'assets/data/NYS_fullElevDEM_boundingBox.geojson':
+      case '/remotesensing/assets/data/NYS_fullElevDEM_boundingBox.geojson':
         boundingBoxGeojsonData = data;
         getBoundingBoxOfGeoJSON(data);
         break;
 
-      case 'assets/data/ne_50m_coastline_aoiClip.geojson':
+      case '/remotesensing/assets/data/ne_50m_coastline_aoiClip.geojson':
         coastlineGeojsonData = data;
         addCoastline(data);
         break;
 
-      case 'assets/data/cellService_contours_5KM_pts_20240407.geojson':
+      case '/remotesensing/assets/data/cellService_contours_5KM_pts_20240407.geojson':
         cellServiceGeojsonData = data;
         addCellServiceMesh(data);
         digitalGroup.add(cellServiceMesh);
         digitalGroup.add(cellServiceRayMesh);
         break;
 
-      case 'assets/data/accessService_contours_5KM_pts_20240407.geojson':
+      case '/remotesensing/assets/data/accessService_contours_5KM_pts_20240407.geojson':
         accessibilityMeshGeojsonData = data;
         addAccessibilityMesh(data);
         accessGroup.add(accessibilityMesh);
@@ -4624,7 +4628,7 @@ async function loadAllData() {
 
       ////////////////////// polygons
 
-      // case 'assets/data/AccessHexTesselation_lvl5_nodata.geojson':
+      // case '/remotesensing/assets/data/AccessHexTesselation_lvl5_nodata.geojson':
       //   accessibilityHexGeojsonData = data;
       //   drawAccessibilityHex(data);
       //   accessGroup.add(accessibilityHex);
@@ -4632,7 +4636,7 @@ async function loadAllData() {
 
       //////////////////////// points
 
-      case 'assets/data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson':
+      case '/remotesensing/assets/data/CellularTowers_FeaturesToJSON_HIFLD_AOI_20231204.geojson':
         cellTowerGeojsonData = data;
         addCellTowerPts(data);
         digitalGroup.add(cellTransmitterPoints);
@@ -4641,7 +4645,7 @@ async function loadAllData() {
 
 
       // updated points using fm contour origins
-      case 'assets/data/FM_transmitter_sites.geojson':
+      case '/remotesensing/assets/data/FM_transmitter_sites.geojson':
         fmTransmitterGeojsonData = data;
         addFMTowerPts(data, channelFilter, fmTransmitterPoints)
         analogGroup.add(fmTransmitterPoints);
@@ -4650,32 +4654,32 @@ async function loadAllData() {
   
       /////////////////// raster
 
-      case 'assets/data/NYS_cellTower_viewshed_20231130.jpg':
+      case '/remotesensing/assets/data/NYS_cellTower_viewshed_20231130.jpg':
         accessibilityRaster = data;
         // loadAndPositionRaster(data);
         break;
 
       /////////////////////// sound
 
-      // case 'src/assets/sounds/presets.json':
+      // case 'sounds/presets.json':
       //   synthPresets = data;
       //   loadSynthPresets(data);
       //   break;
   
       //////////////////// ancillary
 
-      // case 'assets/data/ne_50m_ocean_aoiClip.geojson':
+      // case '/remotesensing/assets/data/ne_50m_ocean_aoiClip.geojson':
       //   waterPolyGeojsonData = data;
       //   // addWaterPoly(data);
       //   break;
 
-      case 'assets/data/study_area_admin0clip.geojson':
+      case '/remotesensing/assets/data/study_area_admin0clip.geojson':
         boundingBoxGeojsonData = data;
         // visualizeBoundingBoxGeoJSON(data);
         break;
     
   
-      case 'assets/data/fm_freq_dict.json':
+      case '/remotesensing/assets/data/fm_freq_dict.json':
         fmFreqDictionaryJson = data;
         break;
   
@@ -4702,7 +4706,7 @@ async function loadAllData() {
   // alt version which uses simpler npm build script to ref
   async function loadSampleUrls() {
     try {
-      const response = await fetch('assets/sounds/sounds.json');
+      const response = await fetch('/remotesensing/assets/sounds/sounds.json');
       // remove response for silent transmissions
       // const response = await fetch('');
       if (!response.ok) {
@@ -4710,6 +4714,7 @@ async function loadAllData() {
       }
       const sampleUrls = await response.json();
       await Promise.all(sampleUrls.map(url => loadSample(url)));
+      console.log(sampleUrls)
       console.log("All samples loaded successfully.");
     } catch (error) {
       console.error('Failed to fetch sample URLs:', error);
