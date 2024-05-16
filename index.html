@@ -1,0 +1,34 @@
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="./assets/images/icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>iso 3D</title>
+    <!-- <base href="/remotesensing/"> -->
+    <script type="module" crossorigin src="/remotesensing/assets/index-DdcEqSL5.js"></script>
+    <link rel="modulepreload" crossorigin href="/remotesensing/assets/three-h4xrzdNO.js">
+    <link rel="modulepreload" crossorigin href="/remotesensing/assets/tone-qs0l8JK-.js">
+    <link rel="stylesheet" crossorigin href="/remotesensing/assets/index-Ce4S6NF9.css">
+  </head>
+  <body>
+    <!-- three.js map -->
+    <div id="gfx" class="background crosshair">
+      <div id="three-container" class="pixelated">
+        <canvas id="canvas" width="800" height="480" style="background:black;"></canvas>
+        <button id="audioControl" style="display:none;">Unmute</button>
+        <!-- <div id="stats"></div> -->
+      </div> 
+    </div>
+
+    <div id="fm-channel-controls">
+      <div id="fm-channel-display">FM channel: 201</div>
+      <input type="range" id="fm-channel-slider" min="201" max="300" step="1" value="201">
+      <div id="fm-frequency-display" style="position: absolute; bottom: -5vh;">88.1 MHz</div>
+      <!-- <p id="fm-channel-display">88.1 MHz</p> -->
+    </div>
+
+    <div id="latLonDisplay"></div>
+
+  </body>
+  </html>
+  
