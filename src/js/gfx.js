@@ -525,7 +525,7 @@ async function loadAllAudioFiles() {
 
 async function loadNoiseBuffer() {
   try {
-      noiseBuffer = await Tone.ToneAudioBuffer.fromUrl("/remotesensing/assets/sounds/amRadioTuning.mp3");
+      noiseBuffer = await Tone.ToneAudioBuffer.fromUrl("/remotesensing/assets/sounds/background/amRadioTuning.mp3");
       console.log("Noise buffer loaded successfully.");
   } catch (error) {
       console.error('Failed to load the noise buffer:', error);

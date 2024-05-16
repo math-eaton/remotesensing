@@ -1,23 +1,18 @@
 import { defineConfig } from 'vite';
-import path from 'path';
+// import path from 'path';
 
 export default defineConfig({
-  base: process.env.NODE_ENV === 'production' ? '/remotesensing/' : '/',
-  // base: '/remotesensing/',
+  base: '/remotesensing/',
   build: {
-    // rollupOptions: {
-    //   input: './index.html',
-    //   output: {
-    //     manualChunks: {
-    //       vendor: ['three', 'tone'], // Split these dependencies into a separate chunk
-    //     },
-    //   },
-    // },
-  },
-  resolve: {
-    alias: {
-      'three': path.resolve(__dirname, 'node_modules/three'),
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'three': ['three'],
+          'tone': ['tone'],
+        }
+      }
     },
+    chunkSizeWarningLimit: 1000,
   },
   // server: {
   //   proxy: {
