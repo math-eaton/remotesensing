@@ -67,6 +67,7 @@ export function gfx() {
 
 
   let scaleBar;
+  let infoVisible;
   // analog = fmtransmitter, fmPropagationContours, 
   // digital = cellServiceMesh, cellTransmitterPoints, cellMSTLines
 
@@ -127,6 +128,84 @@ export function gfx() {
     cellRayColor: '#3b3b3b',
 
   };
+
+
+  /////////////////////////////////////
+///////// MAP LEGEND ///////////////
+
+
+// Function to hide the information container and show the info button
+function hideInfoBox() {
+  const infoContainer = document.getElementById('info-container');
+  const infoButton = document.getElementById('info-button');
+
+  infoContainer.style.opacity = '0'; // Start the fade out
+  infoContainer.style.pointerEvents = 'none'; // Make it non-interactive immediately
+  infoVisible = false;
+
+  // Begin fade-in effect for the info-button
+  infoButton.style.opacity = 0;
+  infoButton.style.transition = 'opacity 10ms ease-in-out';
+  infoButton.style.display = 'block';
+
+  setTimeout(() => {
+    infoButton.style.opacity = 1;
+  }, 90); // Slight delay to ensure the transition effect is applied
+}
+
+// Add an event listener to the hide legend element
+document.getElementById('hide-legend').addEventListener('click', hideInfoBox);
+
+
+// Function to show the information container and hide the info button
+function showInfoBox() {
+  const infoContainer = document.getElementById('info-container');
+  const infoButton = document.getElementById('info-button');
+  infoContainer.style.opacity = '1'; // Start the fade in
+  infoContainer.style.visibility = 'visible'; // Make it visible immediately
+  infoContainer.style.pointerEvents = 'auto'; // Make it interactive again
+  infoButton.style.display = 'none'; // Hide the info button
+  infoContainer.style.display = 'block';
+  infoVisible = true;
+  infoContainer.classList.remove("hidden");
+}
+
+// Add the transitionend event listener
+document.getElementById('info-container').addEventListener('transitionend', function(event) {
+  if (event.propertyName === 'opacity' && getComputedStyle(this).opacity == 0) {
+    this.style.visibility = 'hidden'; // Hide the container after transition
+  }
+});
+
+// Set up event listeners for mousedown and keypress events to hide the info box
+// Existing event listeners
+document.addEventListener('mousedown', (event) => {
+  // Get the info-container element
+  const infoContainer = document.getElementById('info-container');
+
+  // Check if the click is outside the info-container
+  if (!infoContainer.contains(event.target) && event.target.id !== 'info-button' && infoContainer.style.visibility !== 'hidden') {
+    hideInfoBox();
+  }
+});
+
+
+document.addEventListener('keypress', () => {
+  // Get the info-container element
+  const infoContainer = document.getElementById('info-container');
+
+  // Check if the click is outside the info-container
+  if (infoContainer.style.visibility !== 'hidden') {
+    hideInfoBox();
+  }
+});
+
+
+
+// Event listener for the info button to unhide the info box
+document.getElementById('info-button').addEventListener('click', function () {
+    showInfoBox();
+});
 
 
 ///////////////////////// MAP /////////////////////////////
@@ -2644,8 +2723,8 @@ function toggleMapScene(switchState, source) {
     try {
       await loadAllData();
       postLoadOperations();
-      // initWebSocketConnection();
-      // unlockAudioContext(); // Attempt to unlock AudioContext on WebSocket connection
+      initWebSocketConnection(); // comment out if not using hardware
+      unlockAudioContext(); // Attempt to unlock AudioContext on WebSocket connection
       enableInteraction();
       flipCamera();
   } catch (error) {

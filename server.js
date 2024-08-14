@@ -50,6 +50,7 @@ async function findTeensyPort() {
   const ports = await SerialPort.list();
   const teensyPort = ports.find(port => port.productId === '0x0483' || port.serialNumber === '8266340');
   if (teensyPort) {
+      // console.log("OK! TEENSY")
       return teensyPort.path;
   } else {
       throw new Error('Teensy not found');

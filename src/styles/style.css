@@ -581,40 +581,42 @@ p, ul{
   text-align: right;
   position: absolute;
   bottom: 5%;
-  right: 1%;
+  left: 1%;
   display: block;
   margin: 0.5em;
+  z-index: 9999;
+  cursor: url('/remotesensing/assets/cursor/point.cur'), auto;
 }
 
 
 /* Hide the info-button when the background class is active on the parent */
-#gfx.background #info-button {
+/* #gfx.background #info-button {
   visibility: hidden;
   opacity: 0;
   transition:
     visibility 0s,
     opacity 0.5s linear;
-}
+} */
 
 /* Show the info-button when the background class is not active */
-#gfx:not(.background) #info-button {
+/* #gfx:not(.background) #info-button {
   visibility: visible;
   opacity: 1;
   transition:
     visibility 0s,
     opacity 0.5s linear;
-}
+} */
 
 #info-container {
   opacity: 1; /* Start fully visible */
   visibility: visible;
   transition: opacity 0.15s ease; /* Smooth transition for fade effect */
-  position: absolute;
-  bottom: 1%;
-  left: 5%; /* Adjust this to position the box to the right of the pan controls */
-  z-index: 10;
+  position: fixed;
+  z-index: 9999;
   color: white;
   background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+  left: 5%; /* Adjust this to position the box to the right of the pan controls */
+  top: 12%;
   /* padding: 10px; */
   border-radius: 5px;
   font-size: medium; /* Adjust the font size as needed */
@@ -627,6 +629,14 @@ p, ul{
   opacity: 1; /* Start fully visible */
   visibility: visible;
 }
+/* 
+#legend-popup{
+  bottom: 10%;
+}
+
+#slider-popup{
+  bottom: 90%;
+} */
 
 /* #camera-lock{
 
@@ -634,8 +644,7 @@ p, ul{
 } */
 
 #three-container,
-#pan-controls,
-#info-button {
+#pan-controls{
   pointer-events: none;
   opacity: 0.5; /* Make it look disabled */
 }

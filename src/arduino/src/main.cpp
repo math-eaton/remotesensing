@@ -187,8 +187,8 @@ void loop() {
           if (buttonPressedLeft) {
           Serial.println("button_a_pressed");
     }
+    }
   }
-
 
   // Debounce logic for right button
   bool readingRight = !digitalRead(buttonPinRight);
