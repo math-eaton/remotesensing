@@ -3,17 +3,33 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="./assets/images/icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>iso 3D</title>
+    <title>remote sensing</title>
     <!-- <base href="/remotesensing/"> -->
-    <script type="module" crossorigin src="/remotesensing/assets/index-DdcEqSL5.js"></script>
+    <script type="module" crossorigin src="/remotesensing/assets/index-DhPgLVP8.js"></script>
     <link rel="modulepreload" crossorigin href="/remotesensing/assets/three-h4xrzdNO.js">
     <link rel="modulepreload" crossorigin href="/remotesensing/assets/tone-qs0l8JK-.js">
-    <link rel="stylesheet" crossorigin href="/remotesensing/assets/index-Ce4S6NF9.css">
+    <link rel="stylesheet" crossorigin href="/remotesensing/assets/index-BVHV_pkL.css">
   </head>
   <body>
     <!-- three.js map -->
+
+    <!-- legend elements -->
+    <button id="info-button">legend</button>
+    <a href="/remotesensing/about.html">
+      <button id="about-button">?</button>
+    </a>
+    <div id="info-container" class="hidden">
+      <ul>
+        <div id="legend-controls">
+          <!-- legend items added here in js -->
+        </div>
+      </ul>
+      <span id="hide-legend" class="small-text">close</span>
+  </div>
+
     <div id="gfx" class="background crosshair">
       <div id="three-container" class="pixelated">
+
         <canvas id="canvas" width="800" height="480" style="background:black;"></canvas>
         <button id="audioControl" style="display:none;">Unmute</button>
         <!-- <div id="stats"></div> -->
