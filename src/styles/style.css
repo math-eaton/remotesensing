@@ -255,6 +255,13 @@ button:hover {
 
 }
 
+#about-content {
+  position: relative;
+  width: 100%;
+  height: auto;
+  margin: 0vh 50vw 25vw 25vh;
+}
+
 #intro.span {
   /* bottom: 500px; */
   /* background: linear-gradient(to bottom, rgba(20, 20, 20, 0.5) 66%, rgba(50, 50, 50, 0) 100%);  */
@@ -577,16 +584,27 @@ p, ul{
     visibility 0.25s; /* Transition for both opacity and visibility */
 }
 
-#info-button {
+#info-button, #about-button {
   display: block;
   opacity: 1;
   text-align: right;
   position: absolute;
-  bottom: 2%;
   left: 1%;
   margin: 0.5em;
   z-index: 9999;
   cursor: url('/remotesensing/assets/cursor/point.cur'), auto;
+}
+
+#info-button {
+  bottom: 7vh;
+}
+
+#about-button {
+  bottom: 2vh;
+}
+
+#info-button:hover, #about-button:hover {
+  filter: grayscale()
 }
 
 
@@ -618,18 +636,18 @@ p, ul{
   color: white;
   background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
   left: 1%;
-  bottom: 1%;
+  bottom: 10%;
   /* padding: 10px; */
   border-radius: 5px;
   font-size: medium; /* Adjust the font size as needed */
-  max-width: 250px; /* Set a max-width for the container */
-  cursor: url('/remotesensing/assets/cursor/point.cur'), auto;
+  max-width: 25vw;
 }
 
 #info-container ul {
   padding-left: 20px;
   opacity: 1; /* Start fully visible */
   visibility: visible;
+  cursor: url('/remotesensing/assets/cursor/point.cur'), auto;
 }
 
 /* radio button checkboxes */
@@ -670,6 +688,18 @@ p, ul{
   /* color: #ffffff; */
 }
 
+#hide-legend {
+  font-size: 1em;
+  color: white;
+  padding: 5px;
+  background-color: rgba(0, 0, 0, 0);
+  border-radius: 3px;
+  z-index: 10000; 
+}
+
+#hide-legend:hover {
+  color: aqua;
+}
 
 
 /* 

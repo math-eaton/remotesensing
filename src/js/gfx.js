@@ -144,6 +144,7 @@ export function gfx() {
 function hideInfoBox() {
   const infoContainer = document.getElementById('info-container');
   const infoButton = document.getElementById('info-button');
+  const aboutButton = document.getElementById('about-button');
 
   infoContainer.style.opacity = '0'; // Start the fade out
   infoContainer.style.pointerEvents = 'none'; // Make it non-interactive immediately
@@ -153,6 +154,13 @@ function hideInfoBox() {
   infoButton.style.opacity = 0;
   infoButton.style.transition = 'opacity 10ms ease-in-out';
   infoButton.style.display = 'block';
+  aboutButton.style.display = 'block';
+  aboutButton.style.opacity = 1;
+
+  // Redirect to about.html on clicking the about button
+  aboutButton.addEventListener('click', function() {
+    window.location.href = 'about.html';
+  });
 
   setTimeout(() => {
     infoButton.style.opacity = 1;
@@ -183,39 +191,11 @@ document.getElementById('info-container').addEventListener('transitionend', func
   }
 });
 
-// Set up event listeners for mousedown and keypress events to hide the info box
-// Existing event listeners
-document.addEventListener('mousedown', (event) => {
-  // Get the info-container element
-  const infoContainer = document.getElementById('info-container');
-
-  // Check if the click is outside the info-container
-  if (!infoContainer.contains(event.target) && event.target.id !== 'info-button' && infoContainer.style.visibility !== 'hidden') {
-    hideInfoBox();
-  }
-});
-
-
-document.addEventListener('keypress', () => {
-  // Get the info-container element
-  const infoContainer = document.getElementById('info-container');
-
-  // Check if the click is outside the info-container
-  if (infoContainer.style.visibility !== 'hidden') {
-    hideInfoBox();
-  }
-});
-
-
 
 // Event listener for the info button to unhide the info box
 document.getElementById('info-button').addEventListener('click', function () {
     showInfoBox();
 });
-
-
-// TODO: 
-// legend toggling for mobile ///////////////////////////////////////////////////////
 
 // Function to add radio buttons for layer visibility control
 function addLayerVisibilityControls() {
