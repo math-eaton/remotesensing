@@ -571,18 +571,6 @@ p, ul{
   /* margin: 20%; */
 }
 
-#fullscreenButton {
-  position: fixed;
-  text-align: right;
-  bottom: 0%;
-  right: 1%;
-  z-index: 1000000000;
-  opacity: 0; /* Start fully transparent */
-  visibility: hidden; /* Start invisible */
-  transition:
-    opacity 0.25s,
-    visibility 0.25s; /* Transition for both opacity and visibility */
-}
 
 #info-button, #about-button {
   display: block;
@@ -637,10 +625,10 @@ p, ul{
   background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
   left: 1%;
   bottom: 10%;
-  /* padding: 10px; */
+  padding-bottom: 20px;
+  padding-right: 20px;
   border-radius: 5px;
-  font-size: medium; /* Adjust the font size as needed */
-  max-width: 25vw;
+  /* max-width: 25vw; */
 }
 
 #info-container ul {
@@ -689,12 +677,15 @@ p, ul{
 }
 
 #hide-legend {
-  font-size: 1em;
   color: white;
   padding: 5px;
   background-color: rgba(0, 0, 0, 0);
+  position: absolute;
+  bottom: 5%;
+  right: 5%; 
   border-radius: 3px;
   z-index: 10000; 
+  cursor: url('/remotesensing/assets/cursor/point.cur'), auto;
 }
 
 #hide-legend:hover {
@@ -746,8 +737,8 @@ button#start-button {
 }
 
 .small-text {
-  font-size: 14; /* Smaller text for additional info */
-  opacity: 0.8; /* Slightly faded text */
+  font-size: 0.75em;
+  opacity: 0.8; 
 }
 
 button {
