@@ -126,8 +126,14 @@ export function gfx() {
     cellServiceYes: '#3b3b3b',
     fmRayColor: '#3b3b3b',
     cellRayColor: '#3b3b3b',
+    elevationLegend: '#0062ff',
+    accessibilityLegend: '#0dfa50',
 
   };
+
+
+  /////////////////////////////////////
+///////// MAP LEGEND ///////////////
 
 
   /////////////////////////////////////
@@ -206,6 +212,130 @@ document.addEventListener('keypress', () => {
 document.getElementById('info-button').addEventListener('click', function () {
     showInfoBox();
 });
+
+
+// TODO: 
+// legend toggling for mobile ///////////////////////////////////////////////////////
+
+// Function to add radio buttons for layer visibility control
+function addLayerVisibilityControls() {
+  const legendControls = document.getElementById('legend-controls');
+  const layerGroups = [
+    {
+      name: 'switch1',
+      layers: [
+        { name: 'fm propagation curve', color: colorScheme.polygonColor, switchState: 1 },
+        { name: 'cell service dead zone', color: colorScheme.cellServiceNo, switchState: 2 },
+      ],
+    },
+    {
+      name: 'switch2',
+      layers: [
+        { name: 'elevation contours', color: colorScheme.elevationLegend, switchState: 1 },
+        { name: 'composite accessibility', color: colorScheme.accessibilityLegend, switchState: 2 },
+      ],
+    },
+  ];
+
+  layerGroups.forEach(group => {
+    const groupContainer = document.createElement('div');
+    groupContainer.className = 'custom-radio-group';
+
+    group.layers.forEach(layer => {
+      const container = document.createElement('div');
+      container.className = 'custom-radio-container';
+
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = group.name;
+      radio.id = layer.name;
+      radio.className = 'hidden-radio';
+      radio.checked = false;
+
+      const label = document.createElement('label');
+      label.htmlFor = layer.name;
+      label.className = 'custom-radio-label';
+
+      const customRadio = document.createElement('span');
+      customRadio.className = 'custom-radio';
+
+      const labelText = document.createElement('span');
+      labelText.textContent = layer.name;
+      labelText.style.color = layer.color;
+
+      label.appendChild(customRadio);
+      label.appendChild(labelText);
+      container.appendChild(radio);
+      container.appendChild(label);
+      groupContainer.appendChild(container);
+
+      // Add event listener to toggle layer visibility
+      radio.addEventListener('change', function() {
+        if (this.checked) {
+          toggleMapScene(layer.switchState, group.name);
+
+          // Update the checkmark display with the correct color
+          const allRadios = document.querySelectorAll(`[name=${group.name}]`);
+          allRadios.forEach(r => {
+            r.nextSibling.firstChild.classList.remove('checked');
+            r.nextSibling.firstChild.style.color = ''; // Reset color
+          });
+
+          customRadio.classList.add('checked');
+          customRadio.style.color = layer.color; // Set the color for the X
+        }
+      });
+    });
+
+    legendControls.appendChild(groupContainer);
+  });
+}
+
+
+// map these to the names used in the checkboxes
+const layerObjects = {
+  'fm transmitter points': fmTransmitterPoints,
+  'fm minimum spanning tree lines': fmMSTLines,
+  'cell transmitter points': cellTransmitterPoints,
+  'cell MST lines': cellMSTLines,
+
+};
+
+// function toggleCellServiceMeshVisibility(isVisible) {
+//   cellServiceMesh.visible = isVisible;
+//   cellServiceMesh.children.forEach(group => {
+//       group.children.forEach(mesh => {
+//           mesh.visible = isVisible;
+//       });
+//   });
+// }
+
+// Function to toggle layer visibility
+// function toggleLayerVisibility(layerName, isVisible) {
+//   if (layerObjects[layerName]) {
+//     layerObjects[layerName].visible = isVisible;
+
+//     // Special handling for cellServiceMesh
+//     // if (layerName === 'cell dead zones') {
+//     //   cellServiceMesh.children.forEach(group => {
+//     //     group.visible = isVisible; // Set visibility for each group
+//     //     group.children.forEach(mesh => {
+//     //       mesh.visible = isVisible; // Set visibility for each mesh within the group
+//     //     });
+//     //   });
+//     // }
+
+//     // Update the checkbox state
+//     const checkbox = document.getElementById(layerName);
+//     if (checkbox) {
+//       checkbox.checked = isVisible;
+//     }
+//   } else {
+//     console.warn(`Layer "${layerName}" not found in the scene.`);
+//   }
+
+//   renderer.render(scene, camera);
+// }
 
 
 ///////////////////////// MAP /////////////////////////////
@@ -4858,15 +4988,29 @@ async function loadAllData() {
 
     // console.log(`analog group: ${analogGroup}`)
 
-    // init switch settings
-    toggleMapScene(1, 'switch1'); // init fm on pageload
-    toggleMapScene(1, 'switch2'); // init elev contours
+    addLayerVisibilityControls();
 
-    // loadSampleUrls(); // load sound sample URLs from node.js server
+  // init switch settings
+  toggleMapScene(1, 'switch1'); // init FM on page load
+  toggleMapScene(1, 'switch2'); // init elevation contours on page load
 
-    controls.update();
+  // Sync legend buttons with the initial scene
+  const fmRadioButton = document.querySelector('input[name="switch1"][id="fm propagation curve"]');
+  const elevRadioButton = document.querySelector('input[name="switch2"][id="elevation contours"]');
+  
+  fmRadioButton.checked = true;
+  fmRadioButton.nextSibling.firstChild.classList.add('checked');
+  fmRadioButton.nextSibling.firstChild.style.color = colorScheme.polygonColor; // Set the color
+
+  elevRadioButton.checked = true;
+  elevRadioButton.nextSibling.firstChild.classList.add('checked');
+  elevRadioButton.nextSibling.firstChild.style.color = colorScheme.elevationLegend; // Set the color
+
+  // loadSampleUrls(); // load sound sample URLs from node.js server
+
+  controls.update();
+
+  }
 }
-}
-
 // Export visualizationReady for access from main.js
 export { visualizationReady };
