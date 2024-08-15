@@ -144,7 +144,7 @@ export function gfx() {
 function hideInfoBox() {
   const infoContainer = document.getElementById('info-container');
   const infoButton = document.getElementById('info-button');
-  const aboutButton = document.getElementById('about-button');
+  // const aboutButton = document.getElementById('about-button');
 
   infoContainer.style.opacity = '0'; // Start the fade out
   infoContainer.style.pointerEvents = 'none'; // Make it non-interactive immediately
@@ -154,13 +154,13 @@ function hideInfoBox() {
   infoButton.style.opacity = 0;
   infoButton.style.transition = 'opacity 10ms ease-in-out';
   infoButton.style.display = 'block';
-  aboutButton.style.display = 'block';
-  aboutButton.style.opacity = 1;
+  // aboutButton.style.display = 'block';
+  // aboutButton.style.opacity = 1;
 
-  // Redirect to about.html on clicking the about button
-  aboutButton.addEventListener('click', function() {
-    window.location.href = 'about.html';
-  });
+  // // Redirect to about.html on clicking the about button
+  // aboutButton.addEventListener('click', function() {
+  //   window.location.href = 'about.html';
+  // });
 
   setTimeout(() => {
     infoButton.style.opacity = 1;

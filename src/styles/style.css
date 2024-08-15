@@ -17,7 +17,7 @@
   -webkit-text-size-adjust: 100%;
   cursor: url('/remotesensing/assets/cursor/whiteCrosshair.cur'), auto; /* 15% transparent cursor */
   overscroll-behavior: none;
-  overflow: hidden;
+  /* overflow: hidden; */
   overflow-y: auto;
   margin: 0;
   padding: 0;
@@ -28,7 +28,6 @@
   text-overflow: ellipsis;
   display: inline-block;
   min-width: 100vw;
-  overflow: hidden;
   /* mix-blend-mode: screen; */
   /* filter: grayscale(1); */
   /* filter: hue-rotate(270deg); */
