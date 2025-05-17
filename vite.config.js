@@ -14,13 +14,13 @@ export default defineConfig({
     },
     chunkSizeWarningLimit: 1000,
   },
-  // server: {
-  //   proxy: {
-  //     '/api': {
-  //       target: 'http://localhost:8080',
-  //       changeOrigin: true,
-  //       secure: false,
-  //     },
-  //   },
-  // },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
 });

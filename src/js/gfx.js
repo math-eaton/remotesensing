@@ -2452,6 +2452,7 @@ function updateScaleBar(scaleBar, camera) {
   ////////////////////////////////
 
 
+
   // Function to animate your scene
   function animate() {
     delta += clock.getDelta();

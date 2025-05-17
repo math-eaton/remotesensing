@@ -22,6 +22,8 @@
   ],
   "scripts": {
     "dev": "vite --host --open",
+    "start:server": "node server.js",
+    "start:dev": "concurrently \"npm run dev\" \"npm run start:server\"",
     "lint": "eslint --ext .js ./",
     "lint:fix": "eslint --fix --ext .js ./",
     "format": "prettier --write \"./**/*.{js,jsx,json,css}\"",
@@ -53,7 +55,7 @@
     "geojson": "^0.5.0",
     "geojson-vt": "^3.2.1",
     "howler": "^2.2.4",
-    "httpserver": "^0.0.5",
+    "httpserver": "^0.3.0",
     "node": "^22.1.0",
     "path": "^0.12.7",
     "proj4": "^2.10.0",
